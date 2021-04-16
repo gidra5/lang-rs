@@ -1,33 +1,54 @@
 extern crate automata;
+extern crate either;
 extern crate itertools;
+extern crate rustyline;
+extern crate regex;
 
-mod args;
+#[macro_use]
+extern crate clap;
+
+mod common;
+mod interactive_mode;
 mod token;
 
 fn main() {
-    // extract file content
-    let file = {
-        let mut args = std::env::args().skip(1);
+  let yaml = load_yaml!("cli.yml");
+  let matches = clap::App::from_yaml(yaml).get_matches();
+  let code = {
+    if let Some(filename) = matches.value_of("SRC_FILE") {
+      // extract file content
+      let file = match std::fs::read(filename) {
+        Ok(file) => file,
+        Err(err) => {
+          use std::io::ErrorKind::*;
 
-        match args.next() {
-            Some(filename) => match std::fs::read(filename) {
-                Ok(file) => file,
-                Err(err) => {
-                    use std::io::ErrorKind::*;
-                    println!("{}", match err.kind() {
-                        NotFound => "Invalid file",
-                        PermissionDenied => "Permission denied",
-                        _ => "Unexpected IO error",
-                    });
+          println!("{}", match err.kind() {
+            NotFound => "No such file",
+            PermissionDenied => "Permission denied, maybe try running as administrator/sudo",
+            _ => "Unexpected IO error",
+          });
 
-                    return;
-                }
-            },
-            None => { println!("No arguments given, please specify input file"); return; }
-        }
-    };
+          return;
+        },
+      };
 
-    let code = String::from_utf8(file).expect("failed to parse as utf8 text");
+      Some(String::from_utf8(file).expect("Failed to parse as utf8 text"))
+    } else {
+      None
+    }
+  };
 
+  if matches.is_present("interactive") {
+    use interactive_mode::*;
+
+    let mut im = InteractiveMode::new();
+
+    if let Some(code) = code {
+      im.exec(code);
+    }
+
+    im.run();
+  } else {
     todo!();
+  }
 }

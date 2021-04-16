@@ -1,92 +1,154 @@
 #![allow(unused)]
-use crate::itertools::{ multipeek, Either };
 
-pub struct Span {
-  file: Box<std::path::Path>,
-  line: u64,
-  column: u64,
-  length: u64,
+use crate::common::*;
+use crate::regex::Regex;
+
+#[derive(Clone)]
+pub enum Literal {
+  Float(f64),
+  Integer(i64),
+  BigInteger(String),
+  Boolean(bool),
+  Char(char),
+  String(String),
 }
 
-enum Status {
-  Success,
-  Fail,
-  Computing
-}
-trait Try<I: Iterator>
-  where Self: Sized
-{
-  //iterate computing function on each element until it fails or succseeds
-  //if fails keep iterator as it was before call, else consume it
-  fn try_foreach(&self, f: fn(&I::Item) -> Status) -> Self {
-
-
-    todo!()
-  }
+#[derive(Clone)]
+pub enum BracketSide {
+  Left,
+  Right,
 }
 
-pub trait TokenTrait<U: Iterator<Item = char>>
-  where Self: Sized
-{
-  fn to_token(stream: &mut U) -> Option<(Self, Span)>;
+#[derive(Clone)]
+pub enum Operator {
+  Add,
+  Sub,
+  Mult,
+  Div,
+  Pow,
+  Mod,
 }
 
-pub struct TokenStream<U: Iterator<Item = char>, T: TokenTrait<U>> {
-  char_stream: U,
-  _marker: std::marker::PhantomData<T>,
+#[derive(Clone)]
+pub enum Punct {
+  MultilineComment(BracketSide),
+  AngleBracket(BracketSide),
+  Parenthesis(BracketSide),
+  Bracket(BracketSide),
+  Brace(BracketSide),
+  EndOfLine,
+  Semicolon,
+  Comment,
+  Period,
+  Colon,
+  Comma,
 }
 
-impl<U: Iterator<Item = char>, T: TokenTrait<U>> TokenStream<U, T> {
-  fn new(char_stream: U) -> Self {
-    Self {
-      char_stream,
-      _marker: std::marker::PhantomData::default(),
-    }
-  }
-}
-
-impl<U: Iterator<Item = char>, T: TokenTrait<U>> Iterator for TokenStream<U, T> {
-  type Item = (T, Span);
-
-  fn next(&mut self) -> Option<Self::Item> {
-    T::to_token(&mut self.char_stream)
-  }
-}
-
-impl<V: Iterator<Item = char>, T: TokenTrait<V>, U: TokenTrait<V>> TokenTrait<V> for Either<T, U> {
-  fn to_token(stream: &mut V) -> Option<(Self, Span)>
-    {
-    if let Some((res, span)) = T::to_token(stream) {
-      return Some((Self::Left(res), span));
-    }
-    if let Some((res, span)) = U::to_token(stream) {
-      return Some((Self::Right(res), span));
-    }
-
-    None
-  }
-}
-
-enum Keyword {
+#[derive(Clone)]
+pub enum Keyword {
   Let,
-  Placeholder
-}
-struct Identifier(String);
-struct Wrapped<U: Iterator<Item = char>, T: TokenTrait<U>> {
-  template: String,
-  inner: TokenStream<U, T>,
+  Quit,
+  Entry,
+  Placeholder,
 }
 
-enum Token<U: Iterator<Item = char>> {
+#[derive(Clone)]
+pub enum Token {
+  Identifier(String),
+  Operator(Operator),
   Keyword(Keyword),
-  Identifier(Identifier),
-  Wrapped(Wrapped<U, Self>),
-  Separator(String)
+  Literal(Literal),
+  Punct(Punct),
 }
 
-impl<U: Iterator<Item = char>> TokenTrait<U> for Token<U> {
-  fn to_token(stream: &mut U) -> Option<(Self, Span)> {
+impl Tokenizable for Token {
+  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
+    if let Some(token) = Keyword::tokenize(stream) {
+      Some(Self::Keyword(token))
+    } else if let Some(token) = Operator::tokenize(stream) {
+      Some(Self::Operator(token))
+    } else if let Some(token) = Literal::tokenize(stream) {
+      Some(Self::Literal(token))
+    } else if let Some(token) = Punct::tokenize(stream) {
+      Some(Self::Punct(token))
+    } else if let Some(token) = stream.check(Regex::new(r"\b[^\b]+\b").unwrap()) {
+      Some(Self::Identifier(token))
+    } else { None }
+  }
+}
 
-    todo!()
+impl Tokenizable for Operator {
+  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
+    if stream.check_char('+') {
+      Some(Self::Add)
+    } else if stream.check_char('-') {
+      Some(Self::Sub)
+    } else if stream.check_char('*') {
+      Some(Self::Mult)
+    } else if stream.check_char('/') {
+      Some(Self::Div)
+    } else if stream.check_char('^') {
+      Some(Self::Pow)
+    } else if stream.check_char('%') {
+      Some(Self::Mod)
+    } else { None }
+  }
+}
+
+impl Tokenizable for Keyword {
+  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
+    if let Some(_) = stream.check(Regex::new(r"let").unwrap()) {
+      Some(Self::Let)
+    } else if let Some(_) = stream.check(Regex::new(r"quit").unwrap()) {
+      Some(Self::Quit)
+    } else if let Some(_) = stream.check(Regex::new(r"entry").unwrap()) {
+      Some(Self::Entry)
+    } else if let Some(_) = stream.check(Regex::new(r"_").unwrap()) {
+      Some(Self::Placeholder)
+    } else { None }
+  }
+}
+
+impl Tokenizable for Literal {
+  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
+    if let Some(token) = stream.check(Regex::new(r"[+\-]?[[:digit:]]{1,10}").unwrap()) {
+      // todo convert to int
+      Some(Self::Integer(token))
+    } else if let Some(token) = stream.check(Regex::new(r"[+\-]?[[:digit:]]+").unwrap()) {
+      Some(Self::BigInteger(token))
+    } else if let Some(token) = stream.check(Regex::new(r"[+\-]?([[:digit:]]+.[[:digit:]]*|[[:digit:]]+f)").unwrap()) {
+      // todo convert to float
+      Some(Self::Float(token))
+    } else if let Some(token) = stream.check(Regex::new(r"true|false").unwrap()) {
+      if token == "true" {
+        Some(Self::Boolean(true))
+      } else {
+        Some(Self::Boolean(false))
+      }
+    } else if let Some(token) = stream.check(Regex::new(r"'.'").unwrap()) {
+      Some(Self::Char(token.chars().next().unwrap()))
+    } else if let Some(token) = stream.check(Regex::new(r"\".*\"").unwrap()) {
+      Some(Self::String(token))
+    } else if stream.check_char('%') {
+      Some(Self::Mod)
+    } else { None }
+  }
+}
+
+impl Tokenizable for Punct {
+  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
+    if stream.check_char('+') {
+      Some(Self::Add)
+    } else if stream.check_char('-') {
+      Some(Self::Sub)
+    } else if stream.check_char('*') {
+      Some(Self::Mult)
+    } else if stream.check_char('/') {
+      Some(Self::Div)
+    } else if stream.check_char('^') {
+      Some(Self::Pow)
+    } else if stream.check_char('%') {
+      Some(Self::Mod)
+    } else { None }
   }
 }

@@ -1,0 +1,16 @@
+name: lang-rs
+version: "0.1"
+author: me
+about: lang-rs compiler and interpreter, maybe some other stuff too
+
+settings:
+    - ArgRequiredElseHelp
+    
+args:
+    - interactive:
+        short: i
+        long: interactive
+        help: Lets you enter interactive mode
+
+    - SRC_FILE:
+        help: The source file compile or execute before entering interactive mode
