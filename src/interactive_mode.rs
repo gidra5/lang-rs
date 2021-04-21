@@ -1,3 +1,7 @@
+use crate::token::Token;
+use crate::common::*;
+use crate::ast::Program;
+use crate::evaluator::Evaluator;
 use rustyline::{error::*, *};
 use rustyline_derive::*;
 
@@ -21,12 +25,14 @@ impl InteractiveMode {
     inst
   }
 
+  /// executes given code in interpreter
   pub fn exec(&mut self, code: String) {
     let _lines = code.lines();
 
     todo!();
   }
 
+  /// runs interpreter in interactive mode
   pub fn run(&mut self) {
     loop {
       let readline = self.rl.readline(">> ");
@@ -36,6 +42,12 @@ impl InteractiveMode {
           if line == "quit" {
             break;
           }
+
+          let mut tokens = ReversableStream::<Token>::from(line.clone());
+          let parsed = Program::parse(&mut tokens);
+          let result = Evaluator::evaluate(parsed.ok().unwrap());
+
+          println!("{}", result);
 
           self.rl.add_history_entry(line.as_str());
         },

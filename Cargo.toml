@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 automata = { git = "https://github.com/gidra5/automata_rs.git" }
-tokenizable-derive = { path = "tokenizable-derive" }
+# tokenizable-derive = { path = "tokenizable-derive" }
 itertools = "*"
 either = "*"
 executors = "*"

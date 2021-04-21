@@ -10,7 +10,7 @@ args:
     - interactive:
         short: i
         long: interactive
-        help: Lets you enter interactive mode
+        help: Enter interactive mode
 
     - SRC_FILE:
-        help: The source file compile or execute before entering interactive mode
+        help: The source file to compile or execute before entering interactive mode

@@ -1,0 +1,26 @@
+(*) - optional
+0+ - zero or more
+* | k=1.. - 
+
+Data-type is a partition of fixed size chunk of memory into a hierarcy.
+
+Possible syntax is:
+data-type = "["data-partition, 0+"]" | data-point-size data-point-count
+data-partition = data-point-size data-point-count "," 0+ | data-type | type-identifier
+
+Data-type can be aliased.
+Aliased data-types can have associated functions. Those together are called type
+Functions can be assembly code (or target language code).
+
+Possible syntax is: 
+type = "type" type-identifier "=" data-type ("{" function-list "}")
+associated-function-declaration = type-identifier "{" function-list "}"
+
+There can be declared a variable of some order. Variable of order k have associated variable of order k+1 that restricts its values and describes value-distribution. 
+Variable of order 1 is a data-variable and is the bottom of sequence, and variable of order 2 is a type-variable, of order 3 is type-constraint.
+Type-variable is a type and value distribution for every data-partition of associated data-type. 
+Also since variable of order k can be considered as variable of order k+1 that constraints to one possible value 
+then every variable can be considered being of infinite order.
+
+Possible syntax is:
+variable-declaration = variable-k-declaration | k = 1.. 

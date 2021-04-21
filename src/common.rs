@@ -1,14 +1,14 @@
 #![allow(unused)]
 use crate::regex::Regex;
-use crate::either::Either;
+pub use crate::either::Either;
 
 pub trait ReversableIterator {
-  type Item: PartialEq;
+  type Item;
 
   /// Returns next `size` items in iterator
   fn next_ext(&mut self, size: usize) -> Vec<Self::Item>;
 
-  /// Returns next item in iterator
+  /// Returns next item
   fn next(&mut self) -> Option<Self::Item> { self.next_ext(1).pop() }
 
   /// Returns next `size` items without consuming iterator
@@ -17,10 +17,22 @@ pub trait ReversableIterator {
   /// Returns next item without consuming iterator
   fn peek(&mut self) -> Option<Self::Item> { self.peek_ext(1).pop() }
 
-  fn expect_next(&mut self, item: Self::Item, err_msg: String) {
-    if self.next() != Some(item) {
-      panic!(err_msg)
-    }
+  // fn expect_next(&mut self, item: Self::Item, err_msg: String) {
+  //   if self.next_ext(1).pop() != Some(item) {
+  //     panic!(err_msg)
+  //   }
+  // }
+  fn check<T, U>(&mut self, f: fn(&mut Self) -> Result<T, U>) -> Result<T, U> {
+    self.remember();
+
+    let res = f(self);
+
+    match res {
+      Ok(_) => self.accept(),
+      Err(_) => self.decline(),
+    };
+
+    res
   }
 
   /// Remembers current state of iterator.
@@ -34,23 +46,6 @@ pub trait ReversableIterator {
   /// Restores last remembered state
   fn decline(&mut self);
 }
-
-trait Helper: ReversableIterator {
-  fn check<T, U>(&mut self, f: fn(&mut Self) -> Result<T, U>) -> Result<T, U> {
-    self.remember();
-
-    let res = f(self);
-
-    match res {
-      Ok(_) => self.accept(),
-      Err(_) => self.decline(),
-    };
-
-    res
-  }
-}
-
-impl<T: ReversableIterator> Helper for T {}
 
 #[derive(Clone)]
 pub struct Span {
@@ -67,13 +62,31 @@ pub struct Span {
   length: u64,
 }
 
-pub struct ReversableStream<T: Clone> {
+pub struct ReversableStream<T: Clone + PartialEq> {
   data:   Vec<T>,
   stack:  Vec<usize>,
   pos:    usize,
 }
 
-impl<T: Clone> ReversableIterator for ReversableStream<T> {
+impl<T: Clone + PartialEq> ReversableStream<T> {
+  pub fn data(&self) -> &Vec<T> {
+    &self.data
+  }
+  
+  pub fn pos(&self) -> usize {
+    self.pos
+  }
+
+  pub fn new(data: Vec<T>) -> ReversableStream<T> {
+    ReversableStream {
+      data,
+      stack: vec![],
+      pos: 0
+    }
+  }
+}
+
+impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
   type Item = T;
 
   fn next_ext(&mut self, size: usize) -> Vec<Self::Item> {
@@ -113,7 +126,8 @@ impl<T: Clone> ReversableIterator for ReversableStream<T> {
 }
 
 impl ReversableStream<char> {
-  pub fn check(&mut self, regex: Regex) -> Option<String> {
+  pub fn check(&mut self, regex: &str) -> Option<String> {
+    let regex = Regex::new(regex).unwrap();
     let string =  self
       .data
       .iter()
@@ -123,7 +137,7 @@ impl ReversableStream<char> {
 
     match regex.find(&string) {
       Some(mat) => {
-        if mat.start() != 0 {
+        if mat.start() != 0 || mat.start() == mat.end() {
           return None;
         }
 
@@ -143,39 +157,81 @@ impl ReversableStream<char> {
       true
     } else { false }
   }
+  pub fn check_string(&mut self, s: &str) -> bool {
+    let string =  self
+      .data
+      .iter()
+      .skip(self.pos)
+      .take(s.len())
+      .cloned()
+      .collect::<String>();
+    
+    if s == string {
+      self.pos += s.len();
+      true
+    } else { false }
+  }
 }
+
+impl From<&str> for ReversableStream<char> {
+  fn from(s: &str) -> Self {
+    Self::new(s.chars().collect::<Vec<_>>())
+  }
+} 
+
+impl From<String> for ReversableStream<char> {
+  fn from(s: String) -> Self {
+    Self::from(s.as_str())
+  }
+} 
 
 pub trait Tokenizable
 where
-  Self: Sized + Clone,
+  Self: Sized + Clone + PartialEq,
 {
   fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self>;
 }
 
-type TokenStream<T: Tokenizable> = ReversableStream<T>;
+// struct TokenStream<T: Tokenizable>(ReversableStream<T>);
+// pub type TokenStream<T: Tokenizable> = ReversableStream<T>;
+pub type TokenStream<T> = ReversableStream<T>;
 
-impl<T: Tokenizable> TokenStream<T> {
-  fn new(
-    mut char_stream: ReversableStream<char>,
-  ) -> Result<Self, T::TokenizationError> {
+// impl<T: Tokenizable> TokenStream<T> {
+//   fn wrapped(&self, left: T, right: T) -> Option<Self> {
+//     if self.data[0] == left {
+//       let i = 1;
+//       while self.data[i] != None
+//     } else { None }
+//   }
+
+//   fn split(&self, separator: T) -> Vec<Self> {
+
+//   }
+// }
+
+impl<T: Tokenizable> From<ReversableStream<char>> for  TokenStream<T> {
+  fn from(mut char_stream: ReversableStream<char>) -> Self {
     let mut tokens = vec![];
 
-    while char_stream.peek() != None {
-      tokens.push(T::tokenize(&mut char_stream)?);
+    while let Some(token) = T::tokenize(&mut char_stream) {
+      tokens.push(token);
+      while char_stream.peek() == Some(' ') { char_stream.next(); }
     }
 
-    Ok(Self {
-      data: tokens,
-      stack: vec![],
-      pos: 0,
-    })
+    Self::new(tokens)
   }
 }
 
-impl<T: Tokenizable> Iterator for TokenStream<T> {
-  type Item = T;
+impl<T: Tokenizable> From<String> for  TokenStream<T> {
+  fn from(s: String) -> Self {
+    Self::from(ReversableStream::<char>::from(s))
+  }
+}
 
-  fn next(&mut self) -> Option<Self::Item> { <TokenStream<T> as ReversableIterator>::next(self) }
+impl<T: Tokenizable> From<&str> for  TokenStream<T> {
+  fn from(s: &str) -> Self {
+    Self::from(ReversableStream::<char>::from(s))
+  }
 }
 
 impl<T: Tokenizable, U: Tokenizable> Tokenizable for Either<T, U> {

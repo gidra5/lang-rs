@@ -10,6 +10,8 @@ extern crate clap;
 mod common;
 mod interactive_mode;
 mod token;
+mod ast;
+mod evaluator;
 
 fn main() {
   let yaml = load_yaml!("cli.yml");
