@@ -31,7 +31,7 @@ pub enum Operator {
   Div,
   Pow,
   Mod,
-  Equal
+  Equal,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -66,6 +66,8 @@ pub enum Token {
   Punct(Punct),
 }
 
+pub type TokenStream = ReversableStream<Token>;
+
 impl Tokenizable for Token {
   fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
     if let Some(token) = Keyword::tokenize(stream) {
@@ -78,7 +80,9 @@ impl Tokenizable for Token {
       Some(Self::Operator(token))
     } else if let Some(token) = stream.check(r"[A-Za-z0-9_]+") {
       Some(Self::Identifier(token))
-    } else { None }
+    } else {
+      None
+    }
   }
 }
 
@@ -98,7 +102,9 @@ impl Tokenizable for Operator {
       Some(Self::Mod)
     } else if stream.check_char('=') {
       Some(Self::Equal)
-    } else { None }
+    } else {
+      None
+    }
   }
 }
 
@@ -112,7 +118,9 @@ impl Tokenizable for Keyword {
       Some(Self::Entry)
     } else if stream.check(r"\b_\b") != None {
       Some(Self::Placeholder)
-    } else { None }
+    } else {
+      None
+    }
   }
 }
 
@@ -127,10 +135,12 @@ impl Tokenizable for Literal {
         Some(Self::Boolean(false))
       }
     } else if let Some(token) = stream.check(r"'.'") {
-      Some(Self::Char(token.chars().skip(1).next().unwrap()))
+      Some(Self::Char(token.chars().nth(1).unwrap()))
     } else if let Some(token) = stream.check(r#"".*""#) {
       Some(Self::String(token[1..token.len() - 1].to_string()))
-    } else { None }
+    } else {
+      None
+    }
   }
 }
 
@@ -168,6 +178,8 @@ impl Tokenizable for Punct {
       Some(Self::Colon)
     } else if stream.check_char(',') {
       Some(Self::Comma)
-    } else { None }
+    } else {
+      None
+    }
   }
 }

@@ -11,7 +11,7 @@ automata = { git = "https://github.com/gidra5/automata_rs.git" }
 # tokenizable-derive = { path = "tokenizable-derive" }
 itertools = "*"
 either = "*"
-executors = "*"
+futures = "0.3"
 clap = { version = "~2.33", features = ["yaml"] }
 rustyline = "*"
 rustyline-derive = "*"

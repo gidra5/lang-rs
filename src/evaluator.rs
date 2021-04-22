@@ -1,8 +1,10 @@
+#![allow(unused)]
 use crate::ast::Program;
 
-pub struct Evaluator {
+#[path = "tests/evaluator.rs"]
+mod tests;
 
-}
+pub struct Evaluator {}
 
 impl Evaluator {
   pub fn evaluate(ast: Program) -> f64 {

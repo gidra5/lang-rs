@@ -1,17 +1,17 @@
 extern crate automata;
 extern crate either;
 extern crate itertools;
-extern crate rustyline;
 extern crate regex;
+extern crate rustyline;
 
 #[macro_use]
 extern crate clap;
 
+mod ast;
 mod common;
+mod evaluator;
 mod interactive_mode;
 mod token;
-mod ast;
-mod evaluator;
 
 fn main() {
   let yaml = load_yaml!("cli.yml");
@@ -23,15 +23,16 @@ fn main() {
         Ok(file) => file,
         Err(err) => {
           use std::io::ErrorKind::*;
-
-          println!("{}", match err.kind() {
+          let msg = match err.kind() {
             NotFound => "No such file",
-            PermissionDenied => "Permission denied, maybe try running as administrator/sudo",
+            PermissionDenied => "Permission denied, maybe try running as administrator/sudo or add 'executable' flag",
             _ => "Unexpected IO error",
-          });
+          };
+
+          println!("{}", msg);
 
           return;
-        },
+        }
       };
 
       Some(String::from_utf8(file).expect("Failed to parse as utf8 text"))
