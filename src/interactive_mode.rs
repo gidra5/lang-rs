@@ -10,11 +10,12 @@ pub struct InteractiveModeHelper {}
 
 pub struct InteractiveMode {
   rl: Editor<InteractiveModeHelper>,
+  evaluator: Evaluator,
 }
 
 impl InteractiveMode {
   pub fn new() -> Self {
-    let mut inst = Self { rl: Editor::new() };
+    let mut inst = Self { rl: Editor::new(), evaluator: Evaluator::new() };
 
     inst.rl.set_helper(Some(InteractiveModeHelper {}));
     inst
@@ -29,10 +30,11 @@ impl InteractiveMode {
     // let _lines = code.lines();
 
     let mut tokens = ReversableStream::<Token>::from(code);
-    let parsed = Program::parse(&mut tokens).unwrap();
-    println!("{:?}", parsed);
-
-    // todo!();
+    let parsed = match Program::parse(&mut tokens) {
+      Ok(parsed) => parsed,
+      Err(e) => { println!("{}", e); return; },
+    }; 
+    self.evaluator.evaluate(parsed);
   }
 
   /// runs interpreter in interactive mode
@@ -46,13 +48,14 @@ impl InteractiveMode {
             break;
           }
 
-          let mut tokens = ReversableStream::<Token>::from(line.clone());
-          let parsed = Program::parse(&mut tokens).unwrap();
-          let result = Evaluator::evaluate(parsed);
-
-          println!("{}", result);
-
           self.rl.add_history_entry(line.as_str());
+
+          let mut tokens = ReversableStream::<Token>::from(line);
+          let parsed = match Program::parse(&mut tokens) {
+            Ok(parsed) => parsed,
+            Err(e) => { println!("{}", e); continue; },
+          }; 
+          self.evaluator.evaluate(parsed);
         }
         Err(ReadlineError::Interrupted) => break,
         Err(_) => println!("No input"),
