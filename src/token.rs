@@ -1,185 +1,218 @@
 #![allow(unused)]
-
 use crate::common::*;
-use crate::regex::Regex;
 
 #[path = "tests/token.rs"]
 mod tests;
 
-pub type Number = String;
-pub type Identifier = String;
+#[derive(Clone, Debug)]
+pub struct Span<'a> {
+  /// File which is spanned
+  file: &'a str,
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum Literal {
-  Number(Number),
+  /// Pos in file at which span begins
+  pos: usize,
+
+  /// Length of span in symbols
+  length: usize,
+}
+
+impl<'a> std::fmt::Display for Span<'a> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match std::fs::read(self.file) {
+      Ok(file) => {
+        let mut stream = CharStream::from_string(String::from_utf8(file).expect("Failed to parse as utf8 text"));
+        let mut line = 0;
+        let mut column = 0;
+    
+        while let Some(c) = stream.next() {
+          match c {
+            '\n' => line += 1,
+            _ => column += 1,
+          }
+        }
+    
+        write!(f, "line {}, column {}, len {} in file {}", line, column, self.length, self.file)
+      },
+      Err(_) => Err(std::fmt::Error)
+    }
+  }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Value {
+  Identifier(String),
+  String(String),
+  Number(f64),
   Boolean(bool),
   Char(char),
-  String(String),
+  None
+}
+
+#[derive(Clone, Debug)]
+pub struct TokenExt<'a, T: PartialEq>(pub T, pub String, pub Span<'a>);
+
+impl<T: PartialEq> PartialEq for TokenExt<'_, T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.0 == other.0
+  }
+}
+
+impl TokenExt<'_, Token> {
+  fn value(&self) -> Value {
+    Value::None
+  }
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum BracketSide {
-  Left,
-  Right,
-}
+pub enum Token {
+  // Keywords
+  Let,
+  Return,
+  Entry,
+  Placeholder,
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum Operator {
+  // Punct
+  LAngleBracket,
+  LParenthesis,
+  LBracket,
+  LBrace,
+  RAngleBracket,
+  RParenthesis,
+  RBracket,
+  RBrace,
+  Semicolon,
+  Period,
+  Colon,
+  Comma,
+  
+  // Operators
+  Pipe,
+  Appersand,
+  QuestionMark,
+  Bang,
+  Hash,
+  Dollar,
+  At,
   Add,
   Sub,
+  Dec,
+  Inc,
   Mult,
   Div,
   Pow,
   Mod,
   Equal,
+  EqualEqual,
+  LessEqual,
+  GreaterEqual,
+
+  // Literals
+  Number,
+  Boolean,
+  Char,
+  String,
+
+  // Identifier
+  Identifier,
+
+  Skip,
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum Punct {
-  MultilineComment(BracketSide),
-  AngleBracket(BracketSide),
-  Parenthesis(BracketSide),
-  Bracket(BracketSide),
-  Brace(BracketSide),
-  EndOfLine,
-  Semicolon,
-  Comment,
-  Period,
-  Colon,
-  Comma,
-}
+impl<'a> Tokenizable<'a> for Token {
+  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a, Self>> {
+    use Token::*;
+    let mut span = Span::<'a> { file: stream.file, pos: stream.pos(), length: 1 };
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum Keyword {
-  Let,
-  Return,
-  Entry,
-  Placeholder,
-}
+    Some(TokenExt(match stream.next()? {
+        ' ' | '\t' | '\r' | '\n' => Skip,
+        '<' => if stream.is_next('=') { LessEqual } else { LAngleBracket },
+        '>' => if stream.is_next('=') { GreaterEqual } else { RAngleBracket },
+        '(' => LParenthesis,
+        ')' => RParenthesis,
+        '{' => LBracket,
+        '}' => RBracket,
+        '[' => LBrace,
+        ']' => RBrace,
+        ';' => Semicolon,
+        ':' => Colon,
+        ',' => Comma,
+        '|' => Pipe,
+        '&' => Appersand,
+        '?' => QuestionMark,
+        '!' => Bang,
+        '#' => Hash,
+        '$' => Dollar,
+        '@' => At,
+        '+' => if stream.is_next('=') { Inc } else { Add },
+        '-' => if stream.is_next('=') { Dec } else { Sub },
+        '*' => Mult,
+        '/' => if stream.is_next('/') { while stream.is_not_next('\n') { } Skip } 
+          else if stream.is_next('*') { while stream.next() != Some('*') || stream.next() != Some('/') { println!("{:?}", stream.peek()) } Skip } else { Div },
+        '^' => Pow,
+        '%' => Mod,
+        '=' => if stream.is_next('=') { EqualEqual } else { Equal },
+        '\'' => if stream.check_next(|c| c.is_ascii_alphabetic()) != None 
+                && stream.is_next('\'') { Char } else { Logger::error(); return None },
+        '"' => { while stream.next() != Some('"') { } String },
+        '.' => if stream.check_next(|c| c.is_ascii_digit()) != None {
+          while stream.check_next(|c| c.is_ascii_digit()) != None {}
+          Number
+        } else { Period },
+        
+        c => if c.is_ascii_digit() { 
+          while stream.check_next(|c| c.is_ascii_digit()) != None {}
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum Token {
-  Identifier(Identifier),
-  Operator(Operator),
-  Keyword(Keyword),
-  Literal(Literal),
-  Punct(Punct),
-}
+          if stream.is_next('.') {
+            while stream.check_next(|c| c.is_ascii_digit()) != None {}
+          }
 
-pub type TokenStream = ReversableStream<Token>;
+          Number
+        } else if c.is_ascii_alphabetic() || c == '_' { 
+          if stream.check(|c| c.is_ascii_alphanumeric()) {
+            while stream.check_next(|c| c.is_ascii_alphanumeric()) != None {}
 
-impl Tokenizable for Token {
-  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
-    if let Some(token) = Keyword::tokenize(stream) {
-      Some(Self::Keyword(token))
-    } else if let Some(token) = Literal::tokenize(stream) {
-      Some(Self::Literal(token))
-    } else if let Some(token) = Punct::tokenize(stream) {
-      Some(Self::Punct(token))
-    } else if let Some(token) = Operator::tokenize(stream) {
-      Some(Self::Operator(token))
-    } else if let Some(token) = stream.check(r"[A-Za-z0-9_]+") {
-      Some(Self::Identifier(token))
-    } else {
-      None
-    }
+            match stream.substring(span.pos, stream.pos()).as_str() {
+              "entry" => Entry,
+              "let" => Let,
+              "return" => Return,
+              "true" | "false" => Boolean,
+              _ => Identifier
+            }
+          } else { Placeholder }
+        } else { Logger::error(); return None },
+      }, 
+      stream.substring(span.pos, { span.length = stream.pos() - span.pos; stream.pos() }),
+      span
+    ))
   }
 }
 
-impl Tokenizable for Operator {
-  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
-    if stream.check_char('+') {
-      Some(Self::Add)
-    } else if stream.check_char('-') {
-      Some(Self::Sub)
-    } else if stream.check_char('*') {
-      Some(Self::Mult)
-    } else if stream.check_char('/') {
-      Some(Self::Div)
-    } else if stream.check_char('^') {
-      Some(Self::Pow)
-    } else if stream.check_char('%') {
-      Some(Self::Mod)
-    } else if stream.check_char('=') {
-      Some(Self::Equal)
-    } else {
-      None
-    }
-  }
+pub trait Tokenizable<'a>
+where
+  Self: Sized + Clone + PartialEq,
+{
+  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a, Self>>;
 }
 
-impl Tokenizable for Keyword {
-  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
-    if stream.check(r"\blet\b") != None {
-      Some(Self::Let)
-    } else if stream.check(r"\breturn\b") != None {
-      Some(Self::Return)
-    } else if stream.check(r"\bentry\b") != None {
-      Some(Self::Entry)
-    } else if stream.check(r"\b_\b") != None {
-      Some(Self::Placeholder)
-    } else {
-      None
-    }
-  }
+pub struct TokenStream<'a> {
+  pub stream: ReversableStream<TokenExt<'a, Token>>,
 }
 
-impl Tokenizable for Literal {
-  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
-    if let Some(token) = stream.check(r"[1-9][0-9]*(\.[0-9]*)?") {
-      Some(Self::Number(token))
-    } else if let Some(token) = stream.check(r"true|false") {
-      if token == "true" {
-        Some(Self::Boolean(true))
-      } else {
-        Some(Self::Boolean(false))
+impl<'a> TokenStream<'a> {
+  pub fn new(mut char_stream: CharStream<'a>) -> Option<TokenStream> {
+    let mut tokens = vec![];
+    let mut had_error = false;
+
+    while char_stream.peek() != None {
+      match Token::tokenize(&mut char_stream) {
+        Some(TokenExt(Token::Skip, _, _)) => continue,
+        Some(token) => tokens.push(token),
+        None => had_error = true
       }
-    } else if let Some(token) = stream.check(r"'.'") {
-      Some(Self::Char(token.chars().nth(1).unwrap()))
-    } else if let Some(token) = stream.check(r#"".*""#) {
-      Some(Self::String(token[1..token.len() - 1].to_string()))
-    } else {
-      None
-    }
-  }
-}
+    } 
 
-impl Tokenizable for Punct {
-  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
-    if stream.check_string("/*") {
-      Some(Self::MultilineComment(BracketSide::Left))
-    } else if stream.check_string("*/") {
-      Some(Self::MultilineComment(BracketSide::Right))
-    } else if stream.check_char('<') {
-      Some(Self::AngleBracket(BracketSide::Left))
-    } else if stream.check_char('>') {
-      Some(Self::AngleBracket(BracketSide::Right))
-    } else if stream.check_char('(') {
-      Some(Self::Parenthesis(BracketSide::Left))
-    } else if stream.check_char(')') {
-      Some(Self::Parenthesis(BracketSide::Right))
-    } else if stream.check_char('{') {
-      Some(Self::Bracket(BracketSide::Left))
-    } else if stream.check_char('}') {
-      Some(Self::Bracket(BracketSide::Right))
-    } else if stream.check_char('[') {
-      Some(Self::Brace(BracketSide::Left))
-    } else if stream.check_char(']') {
-      Some(Self::Brace(BracketSide::Right))
-    } else if stream.check_char('\n') {
-      Some(Self::EndOfLine)
-    } else if stream.check_char(';') {
-      Some(Self::Semicolon)
-    } else if stream.check_string("//") {
-      Some(Self::Comment)
-    } else if stream.check_char('.') {
-      Some(Self::Period)
-    } else if stream.check_char(':') {
-      Some(Self::Colon)
-    } else if stream.check_char(',') {
-      Some(Self::Comma)
-    } else {
-      None
+    if had_error { None } else {
+      Some(Self { stream: ReversableStream::<TokenExt<Token>>::new(tokens) })
     }
   }
 }

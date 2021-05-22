@@ -1,78 +1,75 @@
 #![allow(unused)]
 pub use crate::either::Either;
-use crate::regex::Regex;
+use fancy_regex::Regex;
+pub use crate::token::*;
 
 #[path = "tests/common.rs"]
 mod tests;
 
+pub struct Logger;
+impl Logger {
+  pub fn log() {
+
+  }
+  
+  pub fn warning() {
+
+  }
+
+  pub fn error() {
+
+  }
+}
+
 pub trait ReversableIterator {
-  type Item;
+  type Item: PartialEq + Clone;
+
+  /// Returns previous `size` items in iterator
+  fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
+
+  /// Returns previous item
+  fn prev(&self) -> Option<Self::Item>  {
+    self.prev_ext(1).pop().flatten()
+  }
 
   /// Returns next `size` items in iterator
-  fn next_ext(&mut self, size: usize) -> Vec<Self::Item>;
+  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>>;
 
   /// Returns next item
-  fn next(&mut self) -> Option<Self::Item> {
-    self.next_ext(1).pop()
+  fn next(&mut self) -> Option<Self::Item>  {
+    self.next_ext(1).pop().flatten()
   }
 
   /// Returns next `size` items without consuming iterator
-  fn peek_ext(&mut self, size: usize) -> Vec<Self::Item>;
+  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
 
-  /// Returns next item without consuming iterator
-  fn peek(&mut self) -> Option<Self::Item> {
-    self.peek_ext(1).pop()
+  /// Returns next item without consuming iterator (aka peeks next item)
+  fn peek(&self) -> Option<Self::Item> {
+    self.peek_ext(1).pop().flatten()
   }
 
-  // fn expect_next<U>(&mut self, item: Self::Item, err: U) -> Result<T, U> {
-  //   self.check(|stream| {
-
-  //   })
-  // }
-
-  fn check<T, U, F: FnOnce(&mut Self) -> Result<T, U>>(&mut self, f: F) -> Result<T, U> {
-    self.remember();
-
-    let res = f(self);
-
-    match res {
-      Ok(_) => self.accept(),
-      Err(_) => self.decline(),
-    };
-
-    res
+  fn check(&self, next: Self::Item) -> bool {
+    self.peek() == Some(next)
+  }
+  
+  fn is_next(&mut self, next: Self::Item) -> bool {
+    if self.check(next) { self.next() != None } else { false }
   }
 
-  /// Remembers current state of iterator.
-  /// If called several time in a row
-  /// then remembers all of states with which it was called
-  fn remember(&mut self);
-
-  /// Forgets last remembered state
-  fn accept(&mut self);
-
-  /// Restores last remembered state
-  fn decline(&mut self);
+  fn is_not_next(&mut self, next: Self::Item) -> bool {
+    if !self.check(next) { self.next() != None } else { false }
+  }
 }
 
-#[derive(Clone)]
-pub struct Span {
-  /// File which is spanned
-  file: Box<std::path::Path>,
-
-  /// Line in file at which span begins
-  line: u64,
-
-  /// Column in line at which span begins
-  column: u64,
-
-  /// Length of span in symbols
-  length: u64,
+macro_rules! check_any {
+  ($self: expr, $next: expr, $($rest: expr),*) => {
+    $self.check($next) || check_next_all!($self, $($rest),*)
+  }
 }
 
+#[derive(Debug)]
 pub struct ReversableStream<T: Clone + PartialEq> {
   data: Vec<T>,
-  stack: Vec<usize>,
   pos: usize,
 }
 
@@ -88,7 +85,6 @@ impl<T: Clone + PartialEq> ReversableStream<T> {
   pub fn new(data: Vec<T>) -> ReversableStream<T> {
     ReversableStream {
       data,
-      stack: vec![],
       pos: 0,
     }
   }
@@ -97,43 +93,35 @@ impl<T: Clone + PartialEq> ReversableStream<T> {
 impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
   type Item = T;
 
-  fn next_ext(&mut self, size: usize) -> Vec<Self::Item> {
-    let next_tokens = self
+  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> {
+    let mut next_tokens_iter = self
       .data
       .iter()
       .skip(self.pos)
-      .take(size)
-      .cloned()
-      .collect();
+      .cloned();
+    let next_tokens = (0..size).map(|_| next_tokens_iter.next()).collect();
 
     self.pos += size;
 
     next_tokens
   }
 
-  fn peek_ext(&mut self, size: usize) -> Vec<Self::Item> {
-    self
+  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
+    let mut next_tokens_iter = self
       .data
       .iter()
       .skip(self.pos)
-      .take(size)
-      .cloned()
-      .collect()
+      .cloned();
+    (0..size).map(|_| next_tokens_iter.next()).collect()
   }
 
-  fn remember(&mut self) {
-    self.stack.push(self.pos);
-  }
-
-  fn accept(&mut self) {
-    self.stack.pop();
-  }
-
-  fn decline(&mut self) {
-    self.pos = self
-      .stack
-      .pop()
-      .expect("Declined before remembered, stack was empty");
+  fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
+    let mut prev_tokens_iter = self
+      .data
+      .iter()
+      .skip(self.pos - size)
+      .cloned();
+    (0..size).map(|_| prev_tokens_iter.next()).collect()
   }
 }
 
@@ -142,7 +130,7 @@ impl ReversableStream<char> {
     let regex = Regex::new(regex).unwrap();
     let string = self.data.iter().skip(self.pos).cloned().collect::<String>();
 
-    if let Some(mat) = regex.find(&string) {
+    if let Some(mat) = regex.find(&string).unwrap() {
       if mat.start() == 0 && mat.start() != mat.end() {
         self.pos += mat.end();
 
@@ -152,33 +140,6 @@ impl ReversableStream<char> {
       }
     } else {
       None
-    }
-  }
-  pub fn check_char(&mut self, c: char) -> bool {
-    let c2 = self.data.get(self.pos).cloned();
-
-    if c2 == Some(c) {
-      self.pos += 1;
-
-      true
-    } else {
-      false
-    }
-  }
-  pub fn check_string(&mut self, s: &str) -> bool {
-    let string = self
-      .data
-      .iter()
-      .skip(self.pos)
-      .take(s.len())
-      .cloned()
-      .collect::<String>();
-
-    if s == string {
-      self.pos += s.len();
-      true
-    } else {
-      false
     }
   }
 }
@@ -195,66 +156,104 @@ impl From<String> for ReversableStream<char> {
   }
 }
 
-pub trait Tokenizable
-where
-  Self: Sized + Clone + PartialEq,
-{
-  fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self>;
+pub struct CharStream<'a> {
+  stream: ReversableStream<char>,
+  pub file: &'a str,
 }
 
-// impl<T: Tokenizable> TokenStream<T> {
-//   fn wrapped(&self, left: T, right: T) -> Option<Self> {
-//     if self.data[0] == left {
-//       let i = 1;
-//       while self.data[i] != None
-//     } else { None }
-//   }
-
-//   fn split(&self, separator: T) -> Vec<Self> {
-
-//   }
-// }
-
-impl<T: Tokenizable> From<ReversableStream<char>> for ReversableStream<T> {
-  fn from(mut char_stream: ReversableStream<char>) -> Self {
-    let mut tokens = vec![];
-
-    while let Some(token) = T::tokenize(&mut char_stream) {
-      tokens.push(token);
-      while char_stream.peek() == Some(' ') {
-        char_stream.next();
+impl CharStream<'_> {
+  pub fn new(filename: &str) -> Result<CharStream, &str> {
+    std::fs::read(filename)
+    .map(|file| {
+      let mut stream = CharStream::from_string(String::from_utf8(file).expect("Failed to parse as utf8 text"));
+      stream.file = filename;
+      stream
+    })
+    .map_err(|err| {
+      use std::io::ErrorKind::*;
+      match err.kind() {
+        NotFound => "No such file",
+        PermissionDenied => {
+          "Permission denied, maybe try running as administrator/sudo or add 'executable' flag"
+        }
+        _ => "Unexpected IO error",
       }
+    })
+  }
+
+  pub fn from_string<'a>(s: String) -> CharStream<'a> {
+    CharStream {
+      stream: ReversableStream::<char>::from(s),
+      file: ".",
     }
+  }
 
-    Self::new(tokens)
+  pub fn from_str<'a>(s: &str) -> CharStream<'a> {
+    CharStream {
+      stream: ReversableStream::<char>::from(s),
+      file: ".",
+    }
+  }
+
+  pub fn pos(&self) -> usize { self.stream.pos }
+  pub fn stream(&self) -> &ReversableStream<char> { &self.stream }
+
+  pub fn line(&self) -> usize {
+    1 + self
+      .stream
+      .data()
+      .iter()
+      .take(self.pos())
+      .filter(|&&c| c == '\n')
+      .count()
+  }
+
+  pub fn column(&self) -> usize {
+    let mut col = 0;
+    self
+      .stream
+      .data()
+      .iter()
+      .take(self.pos())
+      .for_each(|&c| if c == '\n' { col = 0 } else { col += 1 });
+    col
+  }
+
+  pub fn substring(&self, left: usize, right: usize) -> String {
+    self
+    .stream
+    .data()
+    .iter()
+    .skip(left)
+    .take(right - left)
+    .collect::<std::string::String>()
+  }
+
+  pub fn check<F: FnOnce(char) -> bool>(&self, f: F) -> bool {
+    self.stream.peek().map(f) == Some(true)
+  }
+  pub fn check_next<F: FnOnce(char) -> bool>(&mut self, f: F) -> Option<char> {
+    if self.check(f) { self.next() } else { None }
   }
 }
 
-impl<T: Tokenizable> From<String> for ReversableStream<T> {
-  fn from(s: String) -> Self {
-    Self::from(ReversableStream::<char>::from(s))
+impl ReversableIterator for CharStream<'_> {
+  type Item = char;
+
+  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> {
+    self.stream.next_ext(size)
+  }
+
+  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
+    self.stream.peek_ext(size)
+  }
+
+  fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
+    self.stream.prev_ext(size)
   }
 }
 
-impl<T: Tokenizable> From<&str> for ReversableStream<T> {
-  fn from(s: &str) -> Self {
-    Self::from(ReversableStream::<char>::from(s))
-  }
-}
-
-// impl<T: Tokenizable, U: Tokenizable> Tokenizable for Either<T, U> {
-//   fn tokenize(stream: &mut ReversableStream<char>) -> Option<Self> {
-//     if let Some(token) = T::tokenize(stream) {
-//       Some(Self::Left(token))
-//     } else if let Some(token) = U::tokenize(stream) {
-//       Some(Self::Right(token))
-//     } else {
-//       None
-//     }
-//   }
-// }
-
-pub trait Parseable<T: Tokenizable>
+pub trait Parseable<'a, T: Tokenizable<'a>>
 where
   Self: Sized,
 {
@@ -263,11 +262,11 @@ where
   fn parse(token_stream: &mut ReversableStream<T>) -> Result<Self, Self::ParsingError>;
 }
 
-impl<S, T, U> Parseable<S> for Either<T, U>
+impl<'a, S, T, U> Parseable<'a, S> for Either<T, U>
 where
-  S: Tokenizable,
-  T: Parseable<S>,
-  U: Parseable<S>,
+  S: Tokenizable<'a>,
+  T: Parseable<'a, S>,
+  U: Parseable<'a, S>,
 {
   type ParsingError = (T::ParsingError, U::ParsingError);
 
@@ -289,10 +288,10 @@ where
   }
 }
 
-impl<S, T> Parseable<S> for Vec<T>
+impl<'a, S, T> Parseable<'a, S> for Vec<T>
 where
-  S: Tokenizable,
-  T: Parseable<S>,
+  S: Tokenizable<'a>,
+  T: Parseable<'a, S>,
 {
   type ParsingError = ();
   // type ParsingError = T::ParsingError;
@@ -314,10 +313,10 @@ where
   }
 }
 
-impl<S, T> Parseable<S> for Option<T>
+impl<'a, S, T> Parseable<'a, S> for Option<T>
 where
-  S: Tokenizable,
-  T: Parseable<S>,
+  S: Tokenizable<'a>,
+  T: Parseable<'a, S>,
 {
   type ParsingError = ();
 

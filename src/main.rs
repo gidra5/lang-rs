@@ -1,7 +1,7 @@
 extern crate automata;
 extern crate either;
 extern crate itertools;
-extern crate regex;
+extern crate fancy_regex;
 extern crate rustyline;
 
 #[macro_use]
@@ -9,33 +9,20 @@ extern crate clap;
 
 mod ast;
 mod common;
-mod evaluator;
 mod interactive_mode;
 mod token;
+
+use crate::common::*;
 
 fn main() {
   let yaml = load_yaml!("cli.yml");
   let matches = clap::App::from_yaml(yaml).get_matches();
   let code = {
     if let Some(filename) = matches.value_of("SRC_FILE") {
-      // extract file content
-      let file = match std::fs::read(filename) {
-        Ok(file) => file,
-        Err(err) => {
-          use std::io::ErrorKind::*;
-          let msg = match err.kind() {
-            NotFound => "No such file",
-            PermissionDenied => "Permission denied, maybe try running as administrator/sudo or add 'executable' flag",
-            _ => "Unexpected IO error",
-          };
-
-          println!("{}", msg);
-
-          return;
-        }
-      };
-
-      Some(String::from_utf8(file).expect("Failed to parse as utf8 text"))
+      match CharStream::new(filename) {
+        Ok(s) => Some(s),
+        Err(_e) => { Logger::error(); None }
+      }
     } else {
       None
     }

@@ -1,7 +1,5 @@
 use crate::ast::Program;
 use crate::common::*;
-use crate::evaluator::Evaluator;
-use crate::token::Token;
 use rustyline::{error::*, *};
 use rustyline_derive::*;
 
@@ -10,12 +8,13 @@ pub struct InteractiveModeHelper {}
 
 pub struct InteractiveMode {
   rl: Editor<InteractiveModeHelper>,
-  evaluator: Evaluator,
 }
 
 impl InteractiveMode {
   pub fn new() -> Self {
-    let mut inst = Self { rl: Editor::new(), evaluator: Evaluator::new() };
+    let mut inst = Self {
+      rl: Editor::new(),
+    };
 
     inst.rl.set_helper(Some(InteractiveModeHelper {}));
     inst
@@ -26,15 +25,22 @@ impl InteractiveMode {
   }
 
   /// executes given code in interpreter
-  pub fn exec(&mut self, code: String) {
+  pub fn exec(&mut self, code: CharStream) {
     // let _lines = code.lines();
 
-    let mut tokens = ReversableStream::<Token>::from(code);
-    let parsed = match Program::parse(&mut tokens) {
-      Ok(parsed) => parsed,
-      Err(e) => { println!("{}", e); return; },
-    }; 
-    self.evaluator.evaluate(parsed);
+    let mut tokens = TokenStream::new(code).unwrap();
+    while let Some(token) = tokens.stream.next() {
+      println!("{:?}", token);
+    }
+    // let parsed = match Program::parse(&mut tokens) {
+    //   Ok(parsed) => parsed,
+    //   Err(e) => {
+    //     println!("{}", e);
+    //     return;
+    //   }
+    // };
+    // self.evaluator.evaluate(parsed);
+    todo!()
   }
 
   /// runs interpreter in interactive mode
@@ -50,12 +56,14 @@ impl InteractiveMode {
 
           self.rl.add_history_entry(line.as_str());
 
-          let mut tokens = ReversableStream::<Token>::from(line);
-          let parsed = match Program::parse(&mut tokens) {
-            Ok(parsed) => parsed,
-            Err(e) => { println!("{}", e); continue; },
-          }; 
-          self.evaluator.evaluate(parsed);
+          match TokenStream::new(CharStream::from_string(line)) {
+            Some(mut tokens) => {
+              while let Some(token) = tokens.stream.next() {
+                println!("{:?}", token);
+              }
+            },
+            None => println!("An error occured during tokenization"),
+          };
         }
         Err(ReadlineError::Interrupted) => break,
         Err(_) => println!("No input"),
