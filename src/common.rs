@@ -144,6 +144,12 @@ impl ReversableStream<char> {
   }
 }
 
+impl ReversableStream<TokenExt<'_>> {
+  pub fn check2(&mut self, token: Token) -> bool {
+    if self.peek().map(|t| t.token == token) == Some(true) { self.next(); true } else { false }
+  }
+}
+
 impl From<&str> for ReversableStream<char> {
   fn from(s: &str) -> Self {
     Self::new(s.chars().collect::<Vec<_>>())
@@ -262,65 +268,74 @@ where
   fn parse(token_stream: &mut ReversableStream<T>) -> Result<Self, Self::ParsingError>;
 }
 
-impl<'a, S, T, U> Parseable<'a, S> for Either<T, U>
-where
-  S: Tokenizable<'a>,
-  T: Parseable<'a, S>,
-  U: Parseable<'a, S>,
-{
-  type ParsingError = (T::ParsingError, U::ParsingError);
+// impl<'a, S, T, U> Parseable<'a, S> for Either<T, U>
+// where
+//   S: Tokenizable<'a>,
+//   T: Parseable<'a, S>,
+//   U: Parseable<'a, S>,
+// {
+//   type ParsingError = (T::ParsingError, U::ParsingError);
 
-  fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
-    Err((
-      match T::parse(token_stream) {
-        Ok(res) => {
-          return Ok(Self::Left(res));
-        }
-        Err(err) => err,
-      },
-      match U::parse(token_stream) {
-        Ok(res) => {
-          return Ok(Self::Right(res));
-        }
-        Err(err) => err,
-      },
-    ))
-  }
-}
+//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
+//     Err((
+//       match T::parse(token_stream) {
+//         Ok(res) => {
+//           return Ok(Self::Left(res));
+//         }
+//         Err(err) => err,
+//       },
+//       match U::parse(token_stream) {
+//         Ok(res) => {
+//           return Ok(Self::Right(res));
+//         }
+//         Err(err) => err,
+//       },
+//     ))
+//   }
+// }
 
-impl<'a, S, T> Parseable<'a, S> for Vec<T>
-where
-  S: Tokenizable<'a>,
-  T: Parseable<'a, S>,
-{
-  type ParsingError = ();
-  // type ParsingError = T::ParsingError;
+// impl<'a, S, T> Parseable<'a, S> for Vec<T>
+// where
+//   S: Tokenizable<'a>,
+//   T: Parseable<'a, S>,
+// {
+//   type ParsingError = ();
+//   // type ParsingError = T::ParsingError;
 
-  fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
-    let mut vec = vec![];
+//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
+//     let mut vec = vec![];
 
-    while let Ok(parsed) = T::parse(token_stream) {
-      vec.push(parsed);
-    }
-    // loop {
-    //   match T::parse(token_stream) {
-    //     Ok(parsed) => vec.push(parsed),
-    //     Err(err) => return Err(err),
-    //   }
-    // }
+//     while let Ok(parsed) = T::parse(token_stream) {
+//       vec.push(parsed);
+//     }
+//     // loop {
+//     //   match T::parse(token_stream) {
+//     //     Ok(parsed) => vec.push(parsed),
+//     //     Err(err) => return Err(err),
+//     //   }
+//     // }
 
-    Ok(vec)
-  }
-}
+//     Ok(vec)
+//   }
+// }
 
-impl<'a, S, T> Parseable<'a, S> for Option<T>
-where
-  S: Tokenizable<'a>,
-  T: Parseable<'a, S>,
-{
-  type ParsingError = ();
+// impl<'a, S, T> Parseable<'a, S> for Option<T>
+// where
+//   S: Tokenizable<'a>,
+//   T: Parseable<'a, S>,
+// {
+//   type ParsingError = ();
 
-  fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
-    Ok(T::parse(token_stream).ok())
-  }
-}
+//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
+//     Ok(T::parse(token_stream).ok())
+//   }
+// }
+
+
+// macro_rules! parse_sequence {
+//   ($stream:expr, $($list: expr)+) => {
+//     $(
+//       $list::parse($stream);
+//     )+
+//   }
+// }

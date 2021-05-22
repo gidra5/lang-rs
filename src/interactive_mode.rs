@@ -1,4 +1,4 @@
-use crate::ast::Program;
+use crate::ast::*;
 use crate::common::*;
 use rustyline::{error::*, *};
 use rustyline_derive::*;
@@ -29,9 +29,13 @@ impl InteractiveMode {
     // let _lines = code.lines();
 
     let mut tokens = TokenStream::new(code).unwrap();
-    while let Some(token) = tokens.stream.next() {
-      println!("{:?}", token);
-    }
+    // while let Some(token) = tokens.stream.next() {
+    //   println!("{:?}", token);
+    // }
+    match Expression::parse(&mut tokens, 0) {
+      Ok(tree) => println!("{:?}", tree),
+      Err(_) => {},
+    };
     // let parsed = match Program::parse(&mut tokens) {
     //   Ok(parsed) => parsed,
     //   Err(e) => {
@@ -58,9 +62,11 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line)) {
             Some(mut tokens) => {
-              while let Some(token) = tokens.stream.next() {
-                println!("{:?}", token);
-              }
+              println!("{:?}", tokens.stream.data());
+              match Expression::parse(&mut tokens, 0) {
+                Ok(tree) => println!("tree {:?}", tree),
+                Err(_) => println!("fuck"),
+              };
             },
             None => println!("An error occured during tokenization"),
           };

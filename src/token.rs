@@ -1,5 +1,6 @@
 #![allow(unused)]
 use crate::common::*;
+use std::hash::{Hash, Hasher};
 
 #[path = "tests/token.rs"]
 mod tests;
@@ -49,21 +50,21 @@ pub enum Value {
 }
 
 #[derive(Clone, Debug)]
-pub struct TokenExt<'a, T: PartialEq>(pub T, pub String, pub Span<'a>);
+pub struct TokenExt<'a>{ pub token: Token, pub src: String, pub span: Span<'a> }
 
-impl<T: PartialEq> PartialEq for TokenExt<'_, T> {
+impl PartialEq for TokenExt<'_> {
   fn eq(&self, other: &Self) -> bool {
-    self.0 == other.0
+    self.token == other.token && self.value() == other.value()
   }
 }
 
-impl TokenExt<'_, Token> {
-  fn value(&self) -> Value {
+impl TokenExt<'_> {
+  pub fn value(&self) -> Value {
     Value::None
   }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Token {
   // Keywords
   Let,
@@ -119,11 +120,11 @@ pub enum Token {
 }
 
 impl<'a> Tokenizable<'a> for Token {
-  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a, Self>> {
+  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a>> {
     use Token::*;
     let mut span = Span::<'a> { file: stream.file, pos: stream.pos(), length: 1 };
 
-    Some(TokenExt(match stream.next()? {
+    Some(TokenExt{ token: match stream.next()? {
         ' ' | '\t' | '\r' | '\n' => Skip,
         '<' => if stream.is_next('=') { LessEqual } else { LAngleBracket },
         '>' => if stream.is_next('=') { GreaterEqual } else { RAngleBracket },
@@ -181,9 +182,9 @@ impl<'a> Tokenizable<'a> for Token {
           } else { Placeholder }
         } else { Logger::error(); return None },
       }, 
-      stream.substring(span.pos, { span.length = stream.pos() - span.pos; stream.pos() }),
+      src: stream.substring(span.pos, { span.length = stream.pos() - span.pos; stream.pos() }),
       span
-    ))
+    })
   }
 }
 
@@ -191,11 +192,11 @@ pub trait Tokenizable<'a>
 where
   Self: Sized + Clone + PartialEq,
 {
-  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a, Self>>;
+  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a>>;
 }
 
 pub struct TokenStream<'a> {
-  pub stream: ReversableStream<TokenExt<'a, Token>>,
+  pub stream: ReversableStream<TokenExt<'a>>,
 }
 
 impl<'a> TokenStream<'a> {
@@ -205,14 +206,14 @@ impl<'a> TokenStream<'a> {
 
     while char_stream.peek() != None {
       match Token::tokenize(&mut char_stream) {
-        Some(TokenExt(Token::Skip, _, _)) => continue,
+        Some(TokenExt{ token: Token::Skip, src: _, span: _ }) => continue,
         Some(token) => tokens.push(token),
         None => had_error = true
       }
     } 
 
     if had_error { None } else {
-      Some(Self { stream: ReversableStream::<TokenExt<Token>>::new(tokens) })
+      Some(Self { stream: ReversableStream::<TokenExt>::new(tokens) })
     }
   }
 }
