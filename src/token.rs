@@ -239,9 +239,9 @@ impl<'a> Tokenizable<'a> for Token {
           }
         }
         '"' => {
-          while stream.peek() != Some('"') {
-            if stream.next() == None {
-              msg = "Unexpected end of string literal";
+          while stream.next() != Some('"') {
+            if stream.prev() == None {
+              msg = "Unexpected end of string";
               return None;
             }
           }

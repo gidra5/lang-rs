@@ -60,49 +60,62 @@ pub enum Expression {
 }
 
 impl Expression {
-  pub fn parse(token_stream: &mut TokenStream<'_>, precedence: usize) -> Result<Expression, ()> {
+  pub fn parse(
+    token_stream: &mut TokenStream<'_>,
+    precedence: usize,
+  ) -> Result<Expression, &'static str> {
     if precedence > 5 {
-      return Err(());
+      return Err("Precedance greater than 5");
     }
     let operators = &precedence_tokens()[5 - precedence];
 
     if let Some(token) = token_stream.stream.peek() {
-      if operators.contains(&token.token) {
-        if precedence == 5 {
+      if precedence == 5 {
+        if operators.contains(&token.token) {
           if token_stream.stream.check2(Token::LParenthesis) {
             let inner = Self::parse(token_stream, 0)?;
 
-            if !token_stream.stream.check2(Token::LParenthesis) {
-              return Err(());
+            if !token_stream.stream.check2(Token::RParenthesis) {
+              return Err("Missing closing parenthesis");
             }
 
             Ok(inner)
           } else {
             Ok(Self::Literal(token_stream.stream.next().unwrap().value()))
           }
-        } else if precedence == 4 {
+        } else {
+          Logger::error(&format!(
+            "Expected one of {:?}, got {:?}",
+            operators, token.token
+          ));
+          Err("")
+        }
+      } else if precedence == 4 {
+        if operators.contains(&token.token) {
           Ok(Self::UnaryPrefixExpression(
             token_stream.stream.next().unwrap().token,
             Box::new(Self::parse(token_stream, precedence + 1)?),
           ))
         } else {
-          let mut left = Self::parse(token_stream, precedence + 1)?;
-
-          while operators.contains(&token_stream.stream.peek().unwrap().token) {
-            left = Self::BinaryExpression(
-              Box::new(left),
-              token_stream.stream.next().unwrap().token,
-              Box::new(Self::parse(token_stream, precedence + 1)?),
-            );
-          }
-
-          Ok(left)
+          Self::parse(token_stream, precedence + 1)
         }
       } else {
-        Err(())
+        let mut left = Self::parse(token_stream, precedence + 1)?;
+
+        while token_stream.stream.peek() != None
+          && operators.contains(&token_stream.stream.peek().unwrap().token)
+        {
+          left = Self::BinaryExpression(
+            Box::new(left),
+            token_stream.stream.next().unwrap().token,
+            Box::new(Self::parse(token_stream, precedence + 1)?),
+          );
+        }
+
+        Ok(left)
       }
     } else {
-      Err(())
+      Err("Unexpected end of expression")
     }
   }
 }

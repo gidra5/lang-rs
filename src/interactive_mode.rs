@@ -29,7 +29,7 @@ impl InteractiveMode {
         println!("{:?}", tokens.stream.data());
         match Expression::parse(&mut tokens, 0) {
           Ok(tree) => println!("tree {:?}", tree),
-          Err(_) => println!("fuck"),
+          Err(msg) => println!("{}", msg),
         };
       }
       None => println!("Tokenization failed"),
@@ -51,10 +51,10 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line)) {
             Some(mut tokens) => {
-              println!("{:?}", tokens.stream.data());
+              // println!("{:?}", tokens.stream.data());
               match Expression::parse(&mut tokens, 0) {
                 Ok(tree) => println!("tree {:?}", tree),
-                Err(_) => println!("fuck"),
+                Err(msg) => println!("{}", msg),
               };
             }
             None => println!("Tokenization failed"),
