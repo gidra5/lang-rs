@@ -7,23 +7,26 @@ mod tests;
 
 #[derive(Clone, Debug)]
 pub struct Span<'a> {
-  /// File which is spanned
-  file: &'a str,
-
-  /// Pos in file at which span begins
-  pos: usize,
+  /// Stream snapshot where occured error
+  stream: CharStream<'a>,
 
   /// Length of span in symbols
   length: usize,
 }
 
+impl Span<'_> {
+  pub fn pos(&self) -> usize {
+    self.stream.pos()
+  }
+}
+
 impl<'a> std::fmt::Display for Span<'a> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match std::fs::read(self.file) {
-      Ok(file) => {
-        let mut src = String::from_utf8(file).expect("Failed to parse as utf8 text");
-        let mut stream = CharStream::from_string(src);
-        stream.set_pos(self.pos);
+    // match std::fs::read(self.file) {
+    //   Ok(file) => {
+        // let mut src = String::from_utf8(file).expect("Failed to parse as utf8 text");
+        let stream = &self.stream;
+        let src = stream.to_string();
         let line = stream.line();
         let column = stream.column();
         let line_src = match src.lines().skip(line).next() {
@@ -33,19 +36,26 @@ impl<'a> std::fmt::Display for Span<'a> {
             return Err(std::fmt::Error);
           }
         };
-        let mut underscore = format!("\u{001b}[{}C~", column as f64 - 0.5);
+        let mut underscore = format!("\u{001b}[{}C~", column + 4 + (line as f64).log10().ceil() as usize);
         for i in (1..self.length) {
           underscore += "\u{001b}[0.5C~";
         }
 
-        write!(
-          f,
-          "line {}, column {} in file {}: \n{}| {}\n{}",
-          line, column, self.file, line, line_src, underscore
-        )
-      }
-      Err(_) => Err(std::fmt::Error),
-    }
+        match self.stream.file {
+          "." => write!(
+            f,
+            "line {}, column {}: \n {}| {}\n{}",
+            line+1, column, line+1, line_src, underscore
+          ),
+          file => write!(
+            f,
+            "line {}, column {} in file {}: \n {}| {}\n{}",
+            line + 1, column + 1, file, line+1, line_src, underscore
+          )
+        }
+      // }
+  //     Err(_) => Err(std::fmt::Error),
+  //   }
   }
 }
 
@@ -98,6 +108,7 @@ pub enum Token {
   Semicolon,
   Period,
   Colon,
+  NewLine,
   Comma,
 
   // Operators
@@ -137,133 +148,139 @@ impl<'a> Tokenizable<'a> for Token {
   fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a>> {
     use Token::*;
     let mut span = Span::<'a> {
-      file: stream.file,
-      pos: stream.pos(),
+      stream: stream.clone(),
       length: 1,
+    };
+    let mut msg = "";
+    let token = (|| { Some(match stream.next()? {
+      ' ' | '\t' | '\r' | '\n' => Skip,
+      // ' ' | '\t' | '\r' => Skip,
+      // '\n' => NewLine,
+      '<' => {
+        if stream.is_next('=') {
+          LessEqual
+        } else {
+          LAngleBracket
+        }
+      }
+      '>' => {
+        if stream.is_next('=') {
+          GreaterEqual
+        } else {
+          RAngleBracket
+        }
+      }
+      '(' => LParenthesis,
+      ')' => RParenthesis,
+      '{' => LBracket,
+      '}' => RBracket,
+      '[' => LBrace,
+      ']' => RBrace,
+      ';' => Semicolon,
+      ':' => Colon,
+      ',' => Comma,
+      '|' => Pipe,
+      '&' => Appersand,
+      '?' => QuestionMark,
+      '!' => Bang,
+      '#' => Hash,
+      '$' => Dollar,
+      '@' => At,
+      '+' => {
+        if stream.is_next('+') {
+          Inc
+        } else {
+          Add
+        }
+      }
+      '-' => {
+        if stream.is_next('-') {
+          Dec
+        } else {
+          Sub
+        }
+      }
+      '*' => Mult,
+      '/' => {
+        if stream.is_next('/') {
+          while stream.is_not_next('\n') {}
+          Skip
+        } else if stream.is_next('*') {
+          while stream.next() != Some('*') || stream.next() != Some('/') {
+            println!("{:?}", stream.peek())
+          }
+          Skip
+        } else {
+          Div
+        }
+      }
+      '^' => Pow,
+      '%' => Mod,
+      '=' => {
+        if stream.is_next('=') {
+          EqualEqual
+        } else {
+          Equal
+        }
+      }
+      '\'' => {
+        if stream.next() != None && stream.is_next('\'') {
+          Char
+        } else {
+          msg = "Unexpected end of char literal";
+          return None;
+        }
+      }
+      '"' => {
+        while stream.peek() != Some('"') {
+          if stream.next() == None {
+            msg = "Unexpected end of string literal";
+            return None;
+          }
+        }
+        String
+      }
+      '.' => Period,
+
+      c => {
+        if c.is_ascii_digit() {
+          while stream.check_next(|c| c.is_ascii_digit()) != None {}
+
+          if stream.is_next('.') {
+            while stream.check_next(|c| c.is_ascii_digit()) != None {}
+          }
+
+          Number
+        } else if c.is_ascii_alphabetic() || c == '_' {
+          if stream.check(|c| c.is_ascii_alphanumeric()) {
+            while stream.check_next(|c| c.is_ascii_alphanumeric()) != None {}
+
+            match stream.substring(span.pos(), stream.pos()).as_str() {
+              "entry" => Entry,
+              "let" => Let,
+              "return" => Return,
+              "true" | "false" => Boolean,
+              _ => Identifier,
+            }
+          } else {
+            Placeholder
+          }
+        } else {
+          msg = "Unexpected character";
+          return None;
+        }
+      }
+    })})();
+    span.length = stream.pos() - span.pos();
+
+    let token = match token {
+      Some(t) => t,
+      None => { Logger::error_token(span, msg); return None; }
     };
 
     Some(TokenExt {
-      token: match stream.next()? {
-        ' ' | '\t' | '\r' | '\n' => Skip,
-        '<' => {
-          if stream.is_next('=') {
-            LessEqual
-          } else {
-            LAngleBracket
-          }
-        }
-        '>' => {
-          if stream.is_next('=') {
-            GreaterEqual
-          } else {
-            RAngleBracket
-          }
-        }
-        '(' => LParenthesis,
-        ')' => RParenthesis,
-        '{' => LBracket,
-        '}' => RBracket,
-        '[' => LBrace,
-        ']' => RBrace,
-        ';' => Semicolon,
-        ':' => Colon,
-        ',' => Comma,
-        '|' => Pipe,
-        '&' => Appersand,
-        '?' => QuestionMark,
-        '!' => Bang,
-        '#' => Hash,
-        '$' => Dollar,
-        '@' => At,
-        '+' => {
-          if stream.is_next('=') {
-            Inc
-          } else {
-            Add
-          }
-        }
-        '-' => {
-          if stream.is_next('=') {
-            Dec
-          } else {
-            Sub
-          }
-        }
-        '*' => Mult,
-        '/' => {
-          if stream.is_next('/') {
-            while stream.is_not_next('\n') {}
-            Skip
-          } else if stream.is_next('*') {
-            while stream.next() != Some('*') || stream.next() != Some('/') {
-              println!("{:?}", stream.peek())
-            }
-            Skip
-          } else {
-            Div
-          }
-        }
-        '^' => Pow,
-        '%' => Mod,
-        '=' => {
-          if stream.is_next('=') {
-            EqualEqual
-          } else {
-            Equal
-          }
-        }
-        '\'' => {
-          if stream.next() != None && stream.is_next('\'') {
-            Char
-          } else {
-            Logger::error("Unexpected end of char literal");
-            return None;
-          }
-        }
-        '"' => {
-          while stream.peek() != Some('"') {
-            if stream.next() == None {
-              Logger::error("Unexpected end of file");
-              break;
-            }
-          }
-          String
-        }
-        '.' => Period,
-
-        c => {
-          if c.is_ascii_digit() {
-            while stream.check_next(|c| c.is_ascii_digit()) != None {}
-
-            if stream.is_next('.') {
-              while stream.check_next(|c| c.is_ascii_digit()) != None {}
-            }
-
-            Number
-          } else if c.is_ascii_alphabetic() || c == '_' {
-            if stream.check(|c| c.is_ascii_alphanumeric()) {
-              while stream.check_next(|c| c.is_ascii_alphanumeric()) != None {}
-
-              match stream.substring(span.pos, stream.pos()).as_str() {
-                "entry" => Entry,
-                "let" => Let,
-                "return" => Return,
-                "true" | "false" => Boolean,
-                _ => Identifier,
-              }
-            } else {
-              Placeholder
-            }
-          } else {
-            Logger::error("Unexpected character");
-            return None;
-          }
-        }
-      },
-      src: stream.substring(span.pos, {
-        span.length = stream.pos() - span.pos;
-        stream.pos()
-      }),
+      token: token,
+      src: stream.substring(span.pos(), stream.pos()),
       span,
     })
   }

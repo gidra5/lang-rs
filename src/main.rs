@@ -1,7 +1,7 @@
 extern crate automata;
 extern crate either;
-extern crate itertools;
 extern crate fancy_regex;
+extern crate itertools;
 extern crate rustyline;
 
 #[macro_use]
@@ -21,7 +21,10 @@ fn main() {
     if let Some(filename) = matches.value_of("SRC_FILE") {
       match CharStream::new(filename) {
         Ok(s) => Some(s),
-        Err(_e) => { Logger::error(); None }
+        Err(e) => {
+          Logger::error(e);
+          None
+        }
       }
     } else {
       None

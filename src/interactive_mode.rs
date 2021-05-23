@@ -12,39 +12,28 @@ pub struct InteractiveMode {
 
 impl InteractiveMode {
   pub fn new() -> Self {
-    let mut inst = Self {
-      rl: Editor::new(),
-    };
+    let mut rl = Editor::new();
 
-    inst.rl.set_helper(Some(InteractiveModeHelper {}));
-    inst
-      .rl
-      .bind_sequence(KeyEvent(KeyCode::Enter, Modifiers::ALT), Cmd::Newline);
+    rl.set_helper(Some(InteractiveModeHelper {}));
+    rl.bind_sequence(KeyEvent(KeyCode::Enter, Modifiers::ALT), Cmd::Newline);
 
-    inst
+    Self { rl }
   }
 
   /// executes given code in interpreter
   pub fn exec(&mut self, code: CharStream) {
     // let _lines = code.lines();
 
-    let mut tokens = TokenStream::new(code).unwrap();
-    // while let Some(token) = tokens.stream.next() {
-    //   println!("{:?}", token);
-    // }
-    match Expression::parse(&mut tokens, 0) {
-      Ok(tree) => println!("{:?}", tree),
-      Err(_) => {},
+    match TokenStream::new(code) {
+      Some(mut tokens) => {
+        println!("{:?}", tokens.stream.data());
+        match Expression::parse(&mut tokens, 0) {
+          Ok(tree) => println!("tree {:?}", tree),
+          Err(_) => println!("fuck"),
+        };
+      }
+      None => println!("Tokenization failed"),
     };
-    // let parsed = match Program::parse(&mut tokens) {
-    //   Ok(parsed) => parsed,
-    //   Err(e) => {
-    //     println!("{}", e);
-    //     return;
-    //   }
-    // };
-    // self.evaluator.evaluate(parsed);
-    todo!()
   }
 
   /// runs interpreter in interactive mode
@@ -67,8 +56,8 @@ impl InteractiveMode {
                 Ok(tree) => println!("tree {:?}", tree),
                 Err(_) => println!("fuck"),
               };
-            },
-            None => println!("An error occured during tokenization"),
+            }
+            None => println!("Tokenization failed"),
           };
         }
         Err(ReadlineError::Interrupted) => break,

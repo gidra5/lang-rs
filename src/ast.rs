@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::common::*;
-use crate::token::{ Token::*, * }; 
-use std::collections::{ HashMap, HashSet };
+use crate::token::{Token::*, *};
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 #[path = "tests/ast.rs"]
@@ -46,9 +46,9 @@ fn precedence_tokens() -> Vec<HashSet<Token>> {
     set![Pow, Mod],
     set![Div, Mult],
     set![Add, Sub],
-    set![EqualEqual, LessEqual, GreaterEqual]
+    set![EqualEqual, LessEqual, GreaterEqual],
   ]
-} 
+}
 
 // pub struct Program;
 #[derive(Debug)]
@@ -56,12 +56,14 @@ pub enum Expression {
   BinaryExpression(Box<Expression>, Token, Box<Expression>),
   UnaryPrefixExpression(Token, Box<Expression>),
   UnaryPostfixExpression(Token, Box<Expression>),
-  Literal(Value)
+  Literal(Value),
 }
 
 impl Expression {
   pub fn parse(token_stream: &mut TokenStream<'_>, precedence: usize) -> Result<Expression, ()> {
-    if precedence > 5 { return Err(()); }
+    if precedence > 5 {
+      return Err(());
+    }
     let operators = &precedence_tokens()[5 - precedence];
 
     if let Some(token) = token_stream.stream.peek() {
@@ -70,26 +72,40 @@ impl Expression {
           if token_stream.stream.check2(Token::LParenthesis) {
             let inner = Self::parse(token_stream, 0)?;
 
-            if !token_stream.stream.check2(Token::LParenthesis) { return Err(()); }
+            if !token_stream.stream.check2(Token::LParenthesis) {
+              return Err(());
+            }
 
             Ok(inner)
-          } else { Ok(Self::Literal(token_stream.stream.next().unwrap().value())) }
+          } else {
+            Ok(Self::Literal(token_stream.stream.next().unwrap().value()))
+          }
         } else if precedence == 4 {
-          Ok(Self::UnaryPrefixExpression(token_stream.stream.next().unwrap().token, Box::new(Self::parse(token_stream, precedence + 1)?)))
+          Ok(Self::UnaryPrefixExpression(
+            token_stream.stream.next().unwrap().token,
+            Box::new(Self::parse(token_stream, precedence + 1)?),
+          ))
         } else {
           let mut left = Self::parse(token_stream, precedence + 1)?;
 
           while operators.contains(&token_stream.stream.peek().unwrap().token) {
-            left = Self::BinaryExpression(Box::new(left), token_stream.stream.next().unwrap().token, Box::new(Self::parse(token_stream, precedence + 1)?));
+            left = Self::BinaryExpression(
+              Box::new(left),
+              token_stream.stream.next().unwrap().token,
+              Box::new(Self::parse(token_stream, precedence + 1)?),
+            );
           }
 
           Ok(left)
         }
-      } else { Err(()) }
-    } else { Err(()) }
-  } 
+      } else {
+        Err(())
+      }
+    } else {
+      Err(())
+    }
+  }
 }
-
 
 // /// Program := (Declaration | Expression)*
 // #[derive(Debug)]

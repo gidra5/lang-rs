@@ -20,8 +20,8 @@ impl Logger {
     println!("Error: {}", msg);
   }
 
-  pub fn error_token(token: TokenExt<'_>, msg: &str) {
-    println!("Error: {}\n{}", token.span, msg);
+  pub fn error_token(span: Span<'_>, msg: &str) {
+    println!("Error: {}\n{}", span, msg);
   }
 }
 
@@ -79,7 +79,7 @@ macro_rules! check_any {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReversableStream<T: Clone + PartialEq> {
   data: Vec<T>,
   pos: usize,
@@ -164,6 +164,7 @@ impl From<String> for ReversableStream<char> {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct CharStream<'a> {
   stream: ReversableStream<char>,
   pub file: &'a str,
@@ -203,6 +204,13 @@ impl CharStream<'_> {
       file: ".",
     }
   }
+  pub fn to_string(&self) -> String {
+    self
+      .stream
+      .data()
+      .iter()
+      .collect::<std::string::String>()
+  }
 
   pub fn set_pos(&mut self, pos: usize) {
     self.stream.pos = pos;
@@ -215,7 +223,7 @@ impl CharStream<'_> {
   }
 
   pub fn line(&self) -> usize {
-    1 + self
+    self
       .stream
       .data()
       .iter()
