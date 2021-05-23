@@ -204,13 +204,6 @@ impl CharStream<'_> {
       file: ".",
     }
   }
-  pub fn to_string(&self) -> String {
-    self
-      .stream
-      .data()
-      .iter()
-      .collect::<std::string::String>()
-  }
 
   pub fn set_pos(&mut self, pos: usize) {
     self.stream.pos = pos;
@@ -262,6 +255,16 @@ impl CharStream<'_> {
     } else {
       None
     }
+  }
+}
+
+impl std::fmt::Display for CharStream<'_> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{}",
+      self.stream.data().iter().collect::<std::string::String>()
+    )
   }
 }
 
