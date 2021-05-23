@@ -20,8 +20,8 @@ impl Logger {
     println!("Error: {}", msg);
   }
 
-  pub fn error_token(span: Span<'_>, msg: &str) {
-    println!("Error: {}\n{}", span, msg);
+  pub fn error_token(err: TokenizationError<'_>) {
+    println!("Error: {}\n{}", err.span, err.msg);
   }
 }
 

@@ -145,9 +145,9 @@ pub enum Token {
 }
 
 impl<'a> Tokenizable<'a> for Token {
-  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a>> {
+  fn tokenize(stream: &mut CharStream<'a>) -> Result<TokenExt<'a>, TokenizationError<'a>> {
     use Token::*;
-    let mut span = Span::<'a> {
+    let mut span = Span {
       stream: stream.clone(),
       length: 1,
     };
@@ -275,10 +275,10 @@ impl<'a> Tokenizable<'a> for Token {
 
     let token = match token {
       Some(t) => t,
-      None => { Logger::error_token(span, msg); return None; }
+      None => { return Err(TokenizationError{ span, msg: msg.to_string()}) }
     };
 
-    Some(TokenExt {
+    Ok(TokenExt {
       token: token,
       src: stream.substring(span.pos(), stream.pos()),
       span,
@@ -286,11 +286,12 @@ impl<'a> Tokenizable<'a> for Token {
   }
 }
 
+pub struct TokenizationError<'a> { pub span: Span<'a>, pub msg: String }
 pub trait Tokenizable<'a>
 where
   Self: Sized + Clone + PartialEq,
 {
-  fn tokenize(stream: &mut CharStream<'a>) -> Option<TokenExt<'a>>;
+  fn tokenize(stream: &mut CharStream<'a>) -> Result<TokenExt<'a>, TokenizationError<'a>>;
 }
 
 pub struct TokenStream<'a> {
@@ -300,21 +301,46 @@ pub struct TokenStream<'a> {
 impl<'a> TokenStream<'a> {
   pub fn new(mut char_stream: CharStream<'a>) -> Option<TokenStream> {
     let mut tokens = vec![];
-    let mut had_error = false;
+    let mut had_err = false;
+    let mut err_info: Option<TokenizationError> = None;
 
     while char_stream.peek() != None {
       match Token::tokenize(&mut char_stream) {
-        Some(TokenExt {
+        Ok(TokenExt {
           token: Token::Skip,
           src: _,
           span: _,
-        }) => continue,
-        Some(token) => tokens.push(token),
-        None => had_error = true,
+        }) => { },
+        Ok(token) => { 
+          tokens.push(token);
+
+          if let Some(e) = err_info { 
+            Logger::error_token(e);
+            err_info = None;
+          }
+        },
+        Err(e) => { 
+          had_err = true; 
+          if let Some(mut e2) = err_info { 
+            if e2.msg == e.msg {
+              e2.span.length = 1 + e.span.stream.pos() - e2.span.stream.pos();
+              err_info = Some(e2);
+            } else {
+              Logger::error_token(e2);
+              err_info = Some(e);
+            }
+          } else {
+            err_info = Some(e); 
+          }
+        },
       }
     }
 
-    if had_error {
+    if had_err {
+      if let Some(e) = err_info { 
+        Logger::error_token(e);
+        err_info = None;
+      }
       None
     } else {
       Some(Self {
