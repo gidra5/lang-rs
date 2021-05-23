@@ -1,23 +1,27 @@
 #![allow(unused)]
 pub use crate::either::Either;
-use fancy_regex::Regex;
 pub use crate::token::*;
+use fancy_regex::Regex;
 
 #[path = "tests/common.rs"]
 mod tests;
 
 pub struct Logger;
 impl Logger {
-  pub fn log() {
-
-  }
-  
-  pub fn warning() {
-
+  pub fn log(msg: &str) {
+    println!("Log: {}", msg);
   }
 
-  pub fn error() {
+  pub fn warning(msg: &str) {
+    println!("Warning: {}", msg);
+  }
 
+  pub fn error(msg: &str) {
+    println!("Error: {}", msg);
+  }
+
+  pub fn error_token(token: TokenExt<'_>, msg: &str) {
+    println!("Error: {}\n{}", token.span, msg);
   }
 }
 
@@ -28,7 +32,7 @@ pub trait ReversableIterator {
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
 
   /// Returns previous item
-  fn prev(&self) -> Option<Self::Item>  {
+  fn prev(&self) -> Option<Self::Item> {
     self.prev_ext(1).pop().flatten()
   }
 
@@ -36,7 +40,7 @@ pub trait ReversableIterator {
   fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>>;
 
   /// Returns next item
-  fn next(&mut self) -> Option<Self::Item>  {
+  fn next(&mut self) -> Option<Self::Item> {
     self.next_ext(1).pop().flatten()
   }
 
@@ -51,13 +55,21 @@ pub trait ReversableIterator {
   fn check(&self, next: Self::Item) -> bool {
     self.peek() == Some(next)
   }
-  
+
   fn is_next(&mut self, next: Self::Item) -> bool {
-    if self.check(next) { self.next() != None } else { false }
+    if self.check(next) {
+      self.next() != None
+    } else {
+      false
+    }
   }
 
   fn is_not_next(&mut self, next: Self::Item) -> bool {
-    if !self.check(next) { self.next() != None } else { false }
+    if !self.check(next) {
+      self.next() != None
+    } else {
+      false
+    }
   }
 }
 
@@ -83,10 +95,7 @@ impl<T: Clone + PartialEq> ReversableStream<T> {
   }
 
   pub fn new(data: Vec<T>) -> ReversableStream<T> {
-    ReversableStream {
-      data,
-      pos: 0,
-    }
+    ReversableStream { data, pos: 0 }
   }
 }
 
@@ -94,11 +103,7 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
   type Item = T;
 
   fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> {
-    let mut next_tokens_iter = self
-      .data
-      .iter()
-      .skip(self.pos)
-      .cloned();
+    let mut next_tokens_iter = self.data.iter().skip(self.pos).cloned();
     let next_tokens = (0..size).map(|_| next_tokens_iter.next()).collect();
 
     self.pos += size;
@@ -107,20 +112,12 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
   }
 
   fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
-    let mut next_tokens_iter = self
-      .data
-      .iter()
-      .skip(self.pos)
-      .cloned();
+    let mut next_tokens_iter = self.data.iter().skip(self.pos).cloned();
     (0..size).map(|_| next_tokens_iter.next()).collect()
   }
 
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
-    let mut prev_tokens_iter = self
-      .data
-      .iter()
-      .skip(self.pos - size)
-      .cloned();
+    let mut prev_tokens_iter = self.data.iter().skip(self.pos - size).cloned();
     (0..size).map(|_| prev_tokens_iter.next()).collect()
   }
 }
@@ -146,7 +143,12 @@ impl ReversableStream<char> {
 
 impl ReversableStream<TokenExt<'_>> {
   pub fn check2(&mut self, token: Token) -> bool {
-    if self.peek().map(|t| t.token == token) == Some(true) { self.next(); true } else { false }
+    if self.peek().map(|t| t.token == token) == Some(true) {
+      self.next();
+      true
+    } else {
+      false
+    }
   }
 }
 
@@ -170,21 +172,22 @@ pub struct CharStream<'a> {
 impl CharStream<'_> {
   pub fn new(filename: &str) -> Result<CharStream, &str> {
     std::fs::read(filename)
-    .map(|file| {
-      let mut stream = CharStream::from_string(String::from_utf8(file).expect("Failed to parse as utf8 text"));
-      stream.file = filename;
-      stream
-    })
-    .map_err(|err| {
-      use std::io::ErrorKind::*;
-      match err.kind() {
-        NotFound => "No such file",
-        PermissionDenied => {
-          "Permission denied, maybe try running as administrator/sudo or add 'executable' flag"
+      .map(|file| {
+        let mut stream =
+          CharStream::from_string(String::from_utf8(file).expect("Failed to parse as utf8 text"));
+        stream.file = filename;
+        stream
+      })
+      .map_err(|err| {
+        use std::io::ErrorKind::*;
+        match err.kind() {
+          NotFound => "No such file",
+          PermissionDenied => {
+            "Permission denied, maybe try running as administrator/sudo or add 'executable' flag"
+          }
+          _ => "Unexpected IO error",
         }
-        _ => "Unexpected IO error",
-      }
-    })
+      })
   }
 
   pub fn from_string<'a>(s: String) -> CharStream<'a> {
@@ -201,8 +204,15 @@ impl CharStream<'_> {
     }
   }
 
-  pub fn pos(&self) -> usize { self.stream.pos }
-  pub fn stream(&self) -> &ReversableStream<char> { &self.stream }
+  pub fn set_pos(&mut self, pos: usize) {
+    self.stream.pos = pos;
+  }
+  pub fn pos(&self) -> usize {
+    self.stream.pos
+  }
+  pub fn stream(&self) -> &ReversableStream<char> {
+    &self.stream
+  }
 
   pub fn line(&self) -> usize {
     1 + self
@@ -227,19 +237,23 @@ impl CharStream<'_> {
 
   pub fn substring(&self, left: usize, right: usize) -> String {
     self
-    .stream
-    .data()
-    .iter()
-    .skip(left)
-    .take(right - left)
-    .collect::<std::string::String>()
+      .stream
+      .data()
+      .iter()
+      .skip(left)
+      .take(right - left)
+      .collect::<std::string::String>()
   }
 
   pub fn check<F: FnOnce(char) -> bool>(&self, f: F) -> bool {
     self.stream.peek().map(f) == Some(true)
   }
   pub fn check_next<F: FnOnce(char) -> bool>(&mut self, f: F) -> Option<char> {
-    if self.check(f) { self.next() } else { None }
+    if self.check(f) {
+      self.next()
+    } else {
+      None
+    }
   }
 }
 
@@ -330,7 +344,6 @@ where
 //     Ok(T::parse(token_stream).ok())
 //   }
 // }
-
 
 // macro_rules! parse_sequence {
 //   ($stream:expr, $($list: expr)+) => {
