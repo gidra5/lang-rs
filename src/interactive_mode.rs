@@ -51,7 +51,7 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line)) {
             Some(mut tokens) => {
-              // println!("{:?}", tokens.stream.data());
+              println!("{:?}", tokens.stream.data());
               match Expression::parse(&mut tokens, 0) {
                 Ok(tree) => println!("tree {:?}", tree),
                 Err(msg) => println!("{}", msg),

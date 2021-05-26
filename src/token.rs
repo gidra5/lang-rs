@@ -5,66 +5,6 @@ use std::hash::{Hash, Hasher};
 #[path = "tests/token.rs"]
 mod tests;
 
-#[derive(Clone, Debug)]
-pub struct Span<'a> {
-  /// Stream snapshot where occured error
-  stream: CharStream<'a>,
-
-  /// Length of span in symbols
-  length: usize,
-}
-
-impl Span<'_> {
-  pub fn pos(&self) -> usize {
-    self.stream.pos()
-  }
-}
-
-impl<'a> std::fmt::Display for Span<'a> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let stream = &self.stream;
-    let src = stream.to_string();
-    let line = stream.line();
-    let column = stream.column();
-    let line_src = match src.lines().nth(line) {
-      Some(src) => src,
-      None => {
-        Logger::error("Failed to read line");
-        return Err(std::fmt::Error);
-      }
-    };
-    let mut underscore = format!(
-      "\u{001b}[{}C~",
-      column + 4 + (line as f64).log10().ceil() as usize
-    );
-    for i in (1..self.length) {
-      underscore += "\u{001b}[0.5C~";
-    }
-
-    match self.stream.file {
-      "." => write!(
-        f,
-        "line {}, column {}: \n {}| {}\n{}",
-        line + 1,
-        column,
-        line + 1,
-        line_src,
-        underscore
-      ),
-      file => write!(
-        f,
-        "line {}, column {} in file {}: \n {}| {}\n{}",
-        line + 1,
-        column + 1,
-        file,
-        line + 1,
-        line_src,
-        underscore
-      ),
-    }
-  }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   Identifier(String),
@@ -79,7 +19,7 @@ pub enum Value {
 pub struct TokenExt<'a> {
   pub token: Token,
   pub src: String,
-  pub span: Span<'a>,
+  pub span: Span<CharStream<'a>>,
 }
 
 impl PartialEq for TokenExt<'_> {
@@ -90,7 +30,18 @@ impl PartialEq for TokenExt<'_> {
 
 impl TokenExt<'_> {
   pub fn value(&self) -> Value {
-    Value::None
+    match self.token {
+      Token::Number => Value::Number(self.src.parse::<f64>().unwrap()),
+      Token::Boolean => match self.src.as_str() { 
+        "true" => Value::Boolean(true), 
+        "false" => Value::Boolean(false), 
+        _ => unreachable!() 
+      }
+      Token::String => Value::String(self.src[1..self.span.length - 1].to_string()),
+      Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
+      Token::Identifier => Value::Identifier(self.src.clone()),
+      _ => Value::None
+    }
   }
 }
 
@@ -259,18 +210,17 @@ impl<'a> Tokenizable<'a> for Token {
 
             Number
           } else if c.is_ascii_alphabetic() || c == '_' {
-            if stream.check(|c| c.is_ascii_alphanumeric()) {
-              while stream.check_next(|c| c.is_ascii_alphanumeric()) != None {}
+            if stream.check(|c| c.is_ascii_alphanumeric() || c == '_') {
+              while stream.check_next(|c| c.is_ascii_alphanumeric() || c == '_') != None {}
+            }
 
-              match stream.substring(span.pos(), stream.pos()).as_str() {
-                "entry" => Entry,
-                "let" => Let,
-                "return" => Return,
-                "true" | "false" => Boolean,
-                _ => Identifier,
-              }
-            } else {
-              Placeholder
+            match stream.substring(span.pos(), stream.pos()).as_str() {
+              "entry" => Entry,
+              "let" => Let,
+              "return" => Return,
+              "true" | "false" => Boolean,
+              "_" => Placeholder,
+              _ => Identifier,
             }
           } else {
             msg = "Unexpected character";
@@ -299,10 +249,12 @@ impl<'a> Tokenizable<'a> for Token {
   }
 }
 
-pub struct TokenizationError<'a> {
-  pub span: Span<'a>,
-  pub msg: String,
-}
+pub type TokenizationError<'a> = CompilationError<CharStream<'a>>;
+// pub struct TokenizationError<'a> {
+//   pub span: Span<CharStream<'a>>,
+//   pub msg: String,
+// }
+
 pub trait Tokenizable<'a>
 where
   Self: Sized + Clone + PartialEq,

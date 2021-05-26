@@ -23,6 +23,76 @@ impl Logger {
   pub fn error_token(err: TokenizationError<'_>) {
     println!("Error: {}\n{}", err.span, err.msg);
   }
+
+  // pub fn error_parse(err: ParsingError) {
+  //   println!("Error: {}\n{}", err.span, err.msg);
+  // }
+}
+
+#[derive(Clone, Debug)]
+pub struct CompilationError<T: Clone + std::fmt::Debug + ReversableIterator> {
+  pub span: Span<T>,
+  pub msg: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Span<T: Clone + std::fmt::Debug + ReversableIterator> {
+  /// Stream snapshot where occured error
+  pub stream: T,
+
+  /// Length of span in symbols
+  pub length: usize,
+}
+
+impl<T: Clone + std::fmt::Debug + ReversableIterator> Span<T> {
+  pub fn pos(&self) -> usize {
+    self.stream.pos()
+  }
+}
+
+impl<'a> std::fmt::Display for Span<CharStream<'a>> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let stream = &self.stream;
+    let src = stream.to_string();
+    let line = stream.line();
+    let column = stream.column();
+    let line_src = match src.lines().nth(line) {
+      Some(src) => src,
+      None => {
+        Logger::error("Failed to read line");
+        return Err(std::fmt::Error);
+      }
+    };
+    let mut underscore = format!(
+      "\u{001b}[{}C~",
+      column + 4 + (line as f64).log10().ceil() as usize
+    );
+    for i in (1..self.length) {
+      underscore += "\u{001b}[0.5C~";
+    }
+
+    match self.stream.file {
+      "." => write!(
+        f,
+        "line {}, column {}: \n {}| {}\n{}",
+        line + 1,
+        column,
+        line + 1,
+        line_src,
+        underscore
+      ),
+      file => write!(
+        f,
+        "line {}, column {} in file {}: \n {}| {}\n{}",
+        line + 1,
+        column + 1,
+        file,
+        line + 1,
+        line_src,
+        underscore
+      ),
+    }
+  }
 }
 
 pub trait ReversableIterator {
@@ -31,21 +101,22 @@ pub trait ReversableIterator {
   /// Returns previous `size` items in iterator
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
 
+  /// Returns next `size` items in iterator
+  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>>;
+
+  /// Returns next `size` items without consuming iterator
+  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
+  fn pos(&self) -> usize;
+
   /// Returns previous item
   fn prev(&self) -> Option<Self::Item> {
     self.prev_ext(1).pop().flatten()
   }
 
-  /// Returns next `size` items in iterator
-  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>>;
-
   /// Returns next item
   fn next(&mut self) -> Option<Self::Item> {
     self.next_ext(1).pop().flatten()
   }
-
-  /// Returns next `size` items without consuming iterator
-  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
 
   /// Returns next item without consuming iterator (aka peeks next item)
   fn peek(&self) -> Option<Self::Item> {
@@ -90,10 +161,6 @@ impl<T: Clone + PartialEq> ReversableStream<T> {
     &self.data
   }
 
-  pub fn pos(&self) -> usize {
-    self.pos
-  }
-
   pub fn new(data: Vec<T>) -> ReversableStream<T> {
     ReversableStream { data, pos: 0 }
   }
@@ -120,24 +187,9 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
     let mut prev_tokens_iter = self.data.iter().skip(self.pos - size).cloned();
     (0..size).map(|_| prev_tokens_iter.next()).collect()
   }
-}
 
-impl ReversableStream<char> {
-  pub fn check(&mut self, regex: &str) -> Option<String> {
-    let regex = Regex::new(regex).unwrap();
-    let string = self.data.iter().skip(self.pos).cloned().collect::<String>();
-
-    if let Some(mat) = regex.find(&string).unwrap() {
-      if mat.start() == 0 && mat.start() != mat.end() {
-        self.pos += mat.end();
-
-        Some(mat.as_str().to_string())
-      } else {
-        None
-      }
-    } else {
-      None
-    }
+  fn pos(&self) -> usize {
+    self.pos
   }
 }
 
@@ -205,12 +257,6 @@ impl CharStream<'_> {
     }
   }
 
-  pub fn set_pos(&mut self, pos: usize) {
-    self.stream.pos = pos;
-  }
-  pub fn pos(&self) -> usize {
-    self.stream.pos
-  }
   pub fn stream(&self) -> &ReversableStream<char> {
     &self.stream
   }
@@ -281,6 +327,10 @@ impl ReversableIterator for CharStream<'_> {
 
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
     self.stream.prev_ext(size)
+  }
+
+  fn pos(&self) -> usize {
+    self.stream.pos()
   }
 }
 
