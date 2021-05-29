@@ -55,21 +55,13 @@ fn precedence_tokens() -> Vec<HashSet<Token>> {
   use Token::*;
   vec![
     set![LParenthesis, Identifier, Number, String, Char, Boolean],
-    set![Bang, Sub, Dec, Inc],
+    set![Bang, Sub],
+    set![Dec, Inc],
     set![Pow, Mod],
     set![Div, Mult],
     set![Add, Sub],
     set![EqualEqual, LessEqual, GreaterEqual],
   ]
-}
-
-// pub struct Program;
-#[derive(Debug)]
-pub enum Expression {
-  BinaryExpression(Box<Expression>, Token, Box<Expression>),
-  UnaryPrefixExpression(Token, Box<Expression>),
-  UnaryPostfixExpression(Token, Box<Expression>),
-  Literal(Value),
 }
 
 #[derive(Clone, Debug)]
@@ -78,19 +70,29 @@ pub struct ASTNodeExt<'a, T> {
   pub span: Span<TokenStream<'a>>,
 }
 
+// pub struct Program;
+#[derive(Debug)]
+pub enum Expression {
+  BinaryExpression(Box<Expression>, Token, Box<Expression>),
+  UnaryPrefixExpression(Token, Box<Expression>),
+  UnaryPostfixExpression(Token, Box<Expression>),
+  FunctionCallExpression(String, Box<Expression>),
+  Literal(Value),
+}
+
 impl Expression {
   pub fn parse(
     token_stream: &mut TokenStream<'_>,
     precedence: usize,
   ) -> Result<Expression, &'static str> {
     use Token::*;
-    if precedence > 5 {
-      return Err("Precedance greater than 5");
+    if precedence > 6 {
+      return Err("Precedance greater than 6");
     }
-    let operators = &precedence_tokens()[5 - precedence];
+    let operators = &precedence_tokens()[6 - precedence];
 
-    if let Some(token) = token_stream.stream.peek() {
-      if precedence == 5 {
+    if let Some(token) = token_stream.peek() {
+      if precedence == 6 {
         if operators.contains(&token.token) {
           if token_stream.stream.check2(Token::LParenthesis) {
             let inner = Self::parse(token_stream, 0)?;
@@ -100,6 +102,10 @@ impl Expression {
             }
 
             Ok(inner)
+          } else if token_stream.stream.peek().unwrap().token == Token::Identifier {
+            let ident = token_stream.stream.next().unwrap();
+
+            Ok(Self::FunctionCallExpression(ident.src, Box::new(Expression::parse(token_stream, 6)?)))
           } else {
             Ok(Self::Literal(token_stream.stream.next().unwrap().value()))
           }
@@ -110,7 +116,7 @@ impl Expression {
           ));
           Err("")
         }
-      } else if precedence == 4 {
+      } else if precedence == 4 || precedence == 5 {
         if operators.contains(&token.token) {
           Ok(Self::UnaryPrefixExpression(
             token_stream.stream.next().unwrap().token,
