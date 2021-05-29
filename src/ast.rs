@@ -1,20 +1,32 @@
 #![allow(unused)]
-use crate::common::*;
-use crate::token::{Token::*, *};
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
+use crate::{common::*, token::*};
+use std::{
+  collections::{HashMap, HashSet},
+  hash::{Hash, Hasher},
+};
 
 #[path = "tests/ast.rs"]
 mod tests;
 
+pub mod evaluate;
+
+pub enum ErrorType {}
+
+pub struct ParsingError<'a> {
+  pub error_type: ErrorType,
+  pub span:       Span<TokenStream<'a>>,
+  pub msg:        String,
+}
+
+pub trait Parseable<'a>
+where
+  Self: Sized,
+{
+  fn parse(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Self>, ParsingError<'a>>;
+}
+
 /*
   Syntax definition:
-  decl := let ident, [ident], "=", expr
-  derivative_expr := "d[", ident, "]", expr
-  fn_expr := ident, "(", expr, ")"
-  expr := derivative_expr | summand, ["-"|"+", expr] | fn_expr
-  summand := multiplier, ["*"|"/"|"^"|"%", summand]
-  multiplier := number | ident | "(", expr, ")"
 
   enter expression to evaluate it or i to enter interactive mode
 */
@@ -26,7 +38,7 @@ macro_rules! set {
       set.insert($item);
     )*
     set
-  }}
+  }};
 }
 
 macro_rules! map {
@@ -36,10 +48,11 @@ macro_rules! map {
       set.insert($key, $value);
     )*
     map
-  }}
+  }};
 }
 
 fn precedence_tokens() -> Vec<HashSet<Token>> {
+  use Token::*;
   vec![
     set![LParenthesis, Identifier, Number, String, Char, Boolean],
     set![Bang, Sub, Dec, Inc],
@@ -59,11 +72,18 @@ pub enum Expression {
   Literal(Value),
 }
 
+#[derive(Clone, Debug)]
+pub struct ASTNodeExt<'a, T> {
+  pub node: T,
+  pub span: Span<TokenStream<'a>>,
+}
+
 impl Expression {
   pub fn parse(
     token_stream: &mut TokenStream<'_>,
     precedence: usize,
   ) -> Result<Expression, &'static str> {
+    use Token::*;
     if precedence > 5 {
       return Err("Precedance greater than 5");
     }
@@ -160,8 +180,8 @@ impl Expression {
 //   fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 //     match self {
 //       NoIdentifier => write!(fmt, "Expected identifier"),
-//       IncorrectStatement => write!(fmt, "Expected expression: \n  {}", ExpressionError),
-//     }
+//       IncorrectStatement => write!(fmt, "Expected expression: \n  {}",
+// ExpressionError),     }
 //   }
 // }
 
@@ -260,8 +280,8 @@ impl Expression {
 // impl Parseable<Token> for Program {
 //   type ParsingError = ProgramError;
 
-//   fn parse(token_stream: &mut TokenStream) -> Result<Self, Self::ParsingError> {
-//     let mut vec = vec![];
+//   fn parse(token_stream: &mut TokenStream) -> Result<Self,
+// Self::ParsingError> {     let mut vec = vec![];
 
 //     while token_stream.peek() != None {
 //       let decl = token_stream.check(|stream| match stream.next() {
@@ -291,8 +311,8 @@ impl Expression {
 // impl Parseable<Token> for Declaration {
 //   type ParsingError = DeclarationError;
 
-//   fn parse(token_stream: &mut TokenStream) -> Result<Self, Self::ParsingError> {
-//     let ident = match token_stream.next() {
+//   fn parse(token_stream: &mut TokenStream) -> Result<Self,
+// Self::ParsingError> {     let ident = match token_stream.next() {
 //       Some(Token::Identifier(id)) => Ok(id),
 //       _ => Err(DeclarationError::NoIdentifier),
 //     }?;
@@ -324,8 +344,8 @@ impl Expression {
 // impl Parseable<Token> for IdentifierDeclaration {
 //   type ParsingError = DeclarationError;
 
-//   fn parse(token_stream: &mut TokenStream) -> Result<Self, Self::ParsingError> {
-//     let ident = match token_stream.next() {
+//   fn parse(token_stream: &mut TokenStream) -> Result<Self,
+// Self::ParsingError> {     let ident = match token_stream.next() {
 //       Some(Token::Identifier(id)) => Ok(id),
 //       _ => Err(DeclarationError::NoIdentifier),
 //     }?;
@@ -351,21 +371,21 @@ impl Expression {
 // impl Parseable<Token> for Expression {
 //   type ParsingError = ExpressionError;
 
-//   fn parse(token_stream: &mut TokenStream) -> Result<Self, Self::ParsingError> {
-//     let product = Product::parse(token_stream)?;
+//   fn parse(token_stream: &mut TokenStream) -> Result<Self,
+// Self::ParsingError> {     let product = Product::parse(token_stream)?;
 //     // println!("{:?}", token_stream.peek());
 //     // let rest = token_stream.check(|stream| match stream.next() {
 //     //     Some(Token::Operator(op @ Operator::Add))
-//     //   | Some(Token::Operator(op @ Operator::Sub)) => Ok((op, Expression::parse(stream))),
-//     //   _ => Err(ExpressionError::NoError)
+//     //   | Some(Token::Operator(op @ Operator::Sub)) => Ok((op,
+// Expression::parse(stream))),     //   _ => Err(ExpressionError::NoError)
 //     // }).ok().map(|(op, result)| match result {
 //     //   Ok(result) => Ok((op, Box::new(result))),
 //     //   Err(e) => Err(e),
 //     // }).transpose()?;
 
 //     let mut rest = None;
-//     if let Some(Token::Operator(op @ Operator::Add)) | Some(Token::Operator(op @ Operator::Sub)) =
-//       token_stream.peek()
+//     if let Some(Token::Operator(op @ Operator::Add)) |
+// Some(Token::Operator(op @ Operator::Sub)) =       token_stream.peek()
 //     {
 //       token_stream.next();
 //       rest = Some((op, Box::new(Expression::parse(token_stream)?)))
@@ -378,12 +398,12 @@ impl Expression {
 // impl Parseable<Token> for Product {
 //   type ParsingError = ExpressionError;
 
-//   fn parse(token_stream: &mut TokenStream) -> Result<Self, Self::ParsingError> {
-//     let factor = Factor::parse(token_stream)?;
+//   fn parse(token_stream: &mut TokenStream) -> Result<Self,
+// Self::ParsingError> {     let factor = Factor::parse(token_stream)?;
 //     // let rest = token_stream.check(|stream| match stream.next() {
 //     //     Some(Token::Operator(op @ Operator::Add))
-//     //   | Some(Token::Operator(op @ Operator::Sub)) => Ok((op, Expression::parse(stream))),
-//     //   _ => Err(ExpressionError::NoError)
+//     //   | Some(Token::Operator(op @ Operator::Sub)) => Ok((op,
+// Expression::parse(stream))),     //   _ => Err(ExpressionError::NoError)
 //     // }).ok().map(|(op, result)| match result {
 //     //   Ok(result) => Ok((op, Box::new(result))),
 //     //   Err(e) => Err(e),
@@ -406,8 +426,8 @@ impl Expression {
 // impl Parseable<Token> for Factor {
 //   type ParsingError = ExpressionError;
 
-//   fn parse(token_stream: &mut TokenStream) -> Result<Self, Self::ParsingError> {
-//     {
+//   fn parse(token_stream: &mut TokenStream) -> Result<Self,
+// Self::ParsingError> {     {
 //       let literal = token_stream.check(|stream| match stream.next() {
 //         Some(Token::Literal(literal)) => Ok(literal),
 //         _ => Err(ExpressionError),
@@ -434,15 +454,15 @@ impl Expression {
 //     token_stream
 //       .check(|stream| {
 //         match stream.next() {
-//           Some(Token::Punct(Punct::Parenthesis(BracketSide::Left))) => Ok(()),
-//           _ => Err(ExpressionError),
+//           Some(Token::Punct(Punct::Parenthesis(BracketSide::Left))) =>
+// Ok(()),           _ => Err(ExpressionError),
 //         }?;
 
 //         let expr = Expression::parse(stream);
 
 //         match stream.next() {
-//           Some(Token::Punct(Punct::Parenthesis(BracketSide::Right))) => Ok(()),
-//           _ => Err(ExpressionError),
+//           Some(Token::Punct(Punct::Parenthesis(BracketSide::Right))) =>
+// Ok(()),           _ => Err(ExpressionError),
 //         }?;
 
 //         expr

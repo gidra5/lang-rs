@@ -18,29 +18,29 @@ pub enum Value {
 #[derive(Clone, Debug)]
 pub struct TokenExt<'a> {
   pub token: Token,
-  pub src: String,
-  pub span: Span<CharStream<'a>>,
+  pub src:   String,
+  pub span:  Span<CharStream<'a>>,
 }
 
 impl PartialEq for TokenExt<'_> {
-  fn eq(&self, other: &Self) -> bool {
-    self.token == other.token && self.value() == other.value()
-  }
+  fn eq(&self, other: &Self) -> bool { self.token == other.token && self.value() == other.value() }
 }
 
 impl TokenExt<'_> {
   pub fn value(&self) -> Value {
     match self.token {
       Token::Number => Value::Number(self.src.parse::<f64>().unwrap()),
-      Token::Boolean => match self.src.as_str() { 
-        "true" => Value::Boolean(true), 
-        "false" => Value::Boolean(false), 
-        _ => unreachable!() 
-      }
+      Token::Boolean => {
+        match self.src.as_str() {
+          "true" => Value::Boolean(true),
+          "false" => Value::Boolean(false),
+          _ => unreachable!(),
+        }
+      },
       Token::String => Value::String(self.src[1..self.span.length - 1].to_string()),
       Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
       Token::Identifier => Value::Identifier(self.src.clone()),
-      _ => Value::None
+      _ => Value::None,
     }
   }
 }
@@ -120,14 +120,14 @@ impl<'a> Tokenizable<'a> for Token {
           } else {
             LAngleBracket
           }
-        }
+        },
         '>' => {
           if stream.is_next('=') {
             GreaterEqual
           } else {
             RAngleBracket
           }
-        }
+        },
         '(' => LParenthesis,
         ')' => RParenthesis,
         '{' => LBracket,
@@ -150,14 +150,14 @@ impl<'a> Tokenizable<'a> for Token {
           } else {
             Add
           }
-        }
+        },
         '-' => {
           if stream.is_next('-') {
             Dec
           } else {
             Sub
           }
-        }
+        },
         '*' => Mult,
         '/' => {
           if stream.is_next('/') {
@@ -171,7 +171,7 @@ impl<'a> Tokenizable<'a> for Token {
           } else {
             Div
           }
-        }
+        },
         '^' => Pow,
         '%' => Mod,
         '=' => {
@@ -180,24 +180,34 @@ impl<'a> Tokenizable<'a> for Token {
           } else {
             Equal
           }
-        }
+        },
         '\'' => {
           if stream.next() != None && stream.is_next('\'') {
             Char
           } else {
+            while stream.peek() != Some('\'') {
+              if stream.peek() == None {
+                break;
+              }
+              stream.next();
+            }
             msg = "Unexpected end of char literal";
             return None;
           }
-        }
+        },
         '"' => {
-          while stream.next() != Some('"') {
-            if stream.prev() == None {
+          while stream.peek() != Some('"') {
+            if stream.peek() == None {
               msg = "Unexpected end of string";
               return None;
+            } else if stream.peek() == Some('\\') {
+              stream.next();
             }
+            stream.next();
           }
+          stream.next();
           String
-        }
+        },
         '.' => Period,
 
         c => {
@@ -226,7 +236,7 @@ impl<'a> Tokenizable<'a> for Token {
             msg = "Unexpected character";
             return None;
           }
-        }
+        },
       })
     })();
     span.length = stream.pos() - span.pos();
@@ -238,7 +248,7 @@ impl<'a> Tokenizable<'a> for Token {
           span,
           msg: msg.to_string(),
         })
-      }
+      },
     };
 
     Ok(TokenExt {
@@ -249,11 +259,10 @@ impl<'a> Tokenizable<'a> for Token {
   }
 }
 
-pub type TokenizationError<'a> = CompilationError<CharStream<'a>>;
-// pub struct TokenizationError<'a> {
-//   pub span: Span<CharStream<'a>>,
-//   pub msg: String,
-// }
+pub struct TokenizationError<'a> {
+  pub span: Span<CharStream<'a>>,
+  pub msg:  String,
+}
 
 pub trait Tokenizable<'a>
 where
@@ -262,6 +271,7 @@ where
   fn tokenize(stream: &mut CharStream<'a>) -> Result<TokenExt<'a>, TokenizationError<'a>>;
 }
 
+#[derive(Clone, Debug)]
 pub struct TokenStream<'a> {
   pub stream: ReversableStream<TokenExt<'a>>,
 }
@@ -278,7 +288,7 @@ impl<'a> TokenStream<'a> {
           token: Token::Skip,
           src: _,
           span: _,
-        }) => {}
+        }) => {},
         Ok(token) => {
           tokens.push(token);
 
@@ -286,7 +296,7 @@ impl<'a> TokenStream<'a> {
             Logger::error_token(e);
             err_info = None;
           }
-        }
+        },
         Err(e) => {
           had_err = true;
           if let Some(mut e2) = err_info {
@@ -300,7 +310,7 @@ impl<'a> TokenStream<'a> {
           } else {
             err_info = Some(e);
           }
-        }
+        },
       }
     }
 
@@ -316,4 +326,16 @@ impl<'a> TokenStream<'a> {
       })
     }
   }
+}
+
+impl<'a> ReversableIterator for TokenStream<'a> {
+  type Item = TokenExt<'a>;
+
+  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> { self.stream.next_ext(size) }
+
+  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>> { self.stream.peek_ext(size) }
+
+  fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> { self.stream.prev_ext(size) }
+
+  fn pos(&self) -> usize { self.stream.pos() }
 }

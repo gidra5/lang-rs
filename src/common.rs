@@ -1,6 +1,5 @@
 #![allow(unused)]
-pub use crate::either::Either;
-pub use crate::token::*;
+pub use crate::{ast::*, either::Either, token::*};
 use fancy_regex::Regex;
 
 #[path = "tests/common.rs"]
@@ -21,22 +20,16 @@ impl Logger {
   }
 
   pub fn error_token(err: TokenizationError<'_>) {
-    println!("Error: {}\n{}", err.span, err.msg);
+    println!("Error: {} at\n{}", err.msg, err.span);
   }
 
-  // pub fn error_parse(err: ParsingError) {
-  //   println!("Error: {}\n{}", err.span, err.msg);
-  // }
+  pub fn error_parse(err: ParsingError<'_>) {
+    println!("Error: {}\n{}", err.span, err.msg);
+  }
 }
 
 #[derive(Clone, Debug)]
-pub struct CompilationError<T: Clone + std::fmt::Debug + ReversableIterator> {
-  pub span: Span<T>,
-  pub msg: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct Span<T: Clone + std::fmt::Debug + ReversableIterator> {
+pub struct Span<T: ReversableIterator> {
   /// Stream snapshot where occured error
   pub stream: T,
 
@@ -44,59 +37,145 @@ pub struct Span<T: Clone + std::fmt::Debug + ReversableIterator> {
   pub length: usize,
 }
 
-impl<T: Clone + std::fmt::Debug + ReversableIterator> Span<T> {
-  pub fn pos(&self) -> usize {
-    self.stream.pos()
-  }
+impl<T: ReversableIterator> Span<T> {
+  pub fn pos(&self) -> usize { self.stream.pos() }
 }
 
 impl<'a> std::fmt::Display for Span<CharStream<'a>> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let stream = &self.stream;
-    let src = stream.to_string();
-    let line = stream.line();
-    let column = stream.column();
-    let line_src = match src.lines().nth(line) {
-      Some(src) => src,
-      None => {
-        Logger::error("Failed to read line");
-        return Err(std::fmt::Error);
-      }
-    };
-    let mut underscore = format!(
-      "\u{001b}[{}C~",
-      column + 4 + (line as f64).log10().ceil() as usize
-    );
-    for i in (1..self.length) {
-      underscore += "\u{001b}[0.5C~";
-    }
+    let src = self.stream.to_string();
+
+    let line = self.stream.line();
+    let end_line = self.stream.line_from_pos(self.stream.pos() + self.length);
+
+    let column = self.stream.column();
+    let end_column = self.stream.column_from_pos(self.stream.pos() + self.length);
+
+    let lines_str = src
+      .lines()
+      .enumerate()
+      .skip(line)
+      .take(end_line - line + 1)
+      .map(|(i, line_src)| {
+        let length = if i == line {
+          line_src.len() - column
+        } else if i == end_line {
+          end_column
+        } else {
+          line_src.len()
+        };
+        let column = if i == line { column } else { 0 };
+
+        let mut underscore = format!("|\u{001b}[{}C~", column);
+        for i in
+          (0..(i as f64).log10().ceil() as usize + if self.stream.file == "." { 1 } else { 0 })
+        {
+          underscore = " ".to_string() + &underscore;
+        }
+        for i in (1..length) {
+          underscore += "\u{001b}[0.5C~";
+        }
+
+        format!(" {}| {}\n {}", i + 1, line_src, underscore)
+      })
+      .collect::<Vec<String>>()
+      .join("\n");
 
     match self.stream.file {
-      "." => write!(
-        f,
-        "line {}, column {}: \n {}| {}\n{}",
-        line + 1,
-        column,
-        line + 1,
-        line_src,
-        underscore
-      ),
-      file => write!(
-        f,
-        "line {}, column {} in file {}: \n {}| {}\n{}",
-        line + 1,
-        column + 1,
-        file,
-        line + 1,
-        line_src,
-        underscore
-      ),
+      "." => {
+        write!(
+          f,
+          "line {}, column {}: \n{}",
+          line + 1,
+          column + 1,
+          lines_str,
+        )
+      },
+      file => {
+        write!(
+          f,
+          "line {}, column {} in file {}: \n{}",
+          line + 1,
+          column + 1,
+          file,
+          lines_str
+        )
+      },
     }
   }
 }
 
+impl<'a> std::fmt::Display for Span<TokenStream<'a>> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "todo")
+    // let stream = &self.stream;
+    // let src = self.stream.to_string();
+
+    // let line = self.stream.line();
+    // let end_line = self.stream.line_from_pos(self.stream.pos() +
+    // self.length);
+
+    // let column = self.stream.column();
+    // let end_column = self.stream.line_from_pos(self.stream.pos() +
+    // self.length);
+
+    // let lines_str = src
+    //   .lines()
+    //   .enumerate()
+    //   .skip(line)
+    //   .take(end_line - line + 1)
+    //   .map(|(i, line_src)| {
+    //     let length = if i == line {
+    //       line_src.len() - column
+    //     } else if i == end_line {
+    //       end_column
+    //     } else {
+    //       line_src.len()
+    //     };
+    //     let column = if i == line { column } else { 0 };
+
+    //     let mut underscore = format!("|\u{001b}[{}C~", column);
+    //     for i in
+    //       (0..(i as f64).log10().ceil() as usize + if self.stream.file == "."
+    // { 1 } else { 0 })     {
+    //       underscore = " ".to_string() + &underscore;
+    //     }
+    //     for i in (1..length) {
+    //       underscore += "\u{001b}[0.5C~";
+    //     }
+
+    //     format!(" {}| {}\n {}", i + 1, line_src, underscore)
+    //   })
+    //   .collect::<Vec<String>>()
+    //   .join("\n");
+
+    // match self.stream.file {
+    //   "." => {
+    //     write!(
+    //       f,
+    //       "line {}, column {}: \n{}",
+    //       line + 1,
+    //       column + 1,
+    //       lines_str,
+    //     )
+    //   },
+    //   file => {
+    //     write!(
+    //       f,
+    //       "line {}, column {} in file {}: \n{}",
+    //       line + 1,
+    //       column + 1,
+    //       file,
+    //       lines_str
+    //     )
+    //   },
+    // }
+  }
+}
+
 pub trait ReversableIterator {
-  type Item: PartialEq + Clone;
+  type Item: PartialEq;
 
   /// Returns previous `size` items in iterator
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>>;
@@ -109,23 +188,15 @@ pub trait ReversableIterator {
   fn pos(&self) -> usize;
 
   /// Returns previous item
-  fn prev(&self) -> Option<Self::Item> {
-    self.prev_ext(1).pop().flatten()
-  }
+  fn prev(&self) -> Option<Self::Item> { self.prev_ext(1).pop().flatten() }
 
   /// Returns next item
-  fn next(&mut self) -> Option<Self::Item> {
-    self.next_ext(1).pop().flatten()
-  }
+  fn next(&mut self) -> Option<Self::Item> { self.next_ext(1).pop().flatten() }
 
   /// Returns next item without consuming iterator (aka peeks next item)
-  fn peek(&self) -> Option<Self::Item> {
-    self.peek_ext(1).pop().flatten()
-  }
+  fn peek(&self) -> Option<Self::Item> { self.peek_ext(1).pop().flatten() }
 
-  fn check(&self, next: Self::Item) -> bool {
-    self.peek() == Some(next)
-  }
+  fn check(&self, next: Self::Item) -> bool { self.peek() == Some(next) }
 
   fn is_next(&mut self, next: Self::Item) -> bool {
     if self.check(next) {
@@ -147,23 +218,19 @@ pub trait ReversableIterator {
 macro_rules! check_any {
   ($self: expr, $next: expr, $($rest: expr),*) => {
     $self.check($next) || check_next_all!($self, $($rest),*)
-  }
+  };
 }
 
 #[derive(Debug, Clone)]
 pub struct ReversableStream<T: Clone + PartialEq> {
   data: Vec<T>,
-  pos: usize,
+  pos:  usize,
 }
 
 impl<T: Clone + PartialEq> ReversableStream<T> {
-  pub fn data(&self) -> &Vec<T> {
-    &self.data
-  }
+  pub fn data(&self) -> &Vec<T> { &self.data }
 
-  pub fn new(data: Vec<T>) -> ReversableStream<T> {
-    ReversableStream { data, pos: 0 }
-  }
+  pub fn new(data: Vec<T>) -> ReversableStream<T> { ReversableStream { data, pos: 0 } }
 }
 
 impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
@@ -188,9 +255,7 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
     (0..size).map(|_| prev_tokens_iter.next()).collect()
   }
 
-  fn pos(&self) -> usize {
-    self.pos
-  }
+  fn pos(&self) -> usize { self.pos }
 }
 
 impl ReversableStream<TokenExt<'_>> {
@@ -205,20 +270,16 @@ impl ReversableStream<TokenExt<'_>> {
 }
 
 impl From<&str> for ReversableStream<char> {
-  fn from(s: &str) -> Self {
-    Self::new(s.chars().collect::<Vec<_>>())
-  }
+  fn from(s: &str) -> Self { Self::new(s.chars().collect::<Vec<_>>()) }
 }
 
 impl From<String> for ReversableStream<char> {
-  fn from(s: String) -> Self {
-    Self::from(s.as_str())
-  }
+  fn from(s: String) -> Self { Self::from(s.as_str()) }
 }
 
 #[derive(Debug, Clone)]
 pub struct CharStream<'a> {
-  stream: ReversableStream<char>,
+  stream:   ReversableStream<char>,
   pub file: &'a str,
 }
 
@@ -237,7 +298,7 @@ impl CharStream<'_> {
           NotFound => "No such file",
           PermissionDenied => {
             "Permission denied, maybe try running as administrator/sudo or add 'executable' flag"
-          }
+          },
           _ => "Unexpected IO error",
         }
       })
@@ -246,38 +307,40 @@ impl CharStream<'_> {
   pub fn from_string<'a>(s: String) -> CharStream<'a> {
     CharStream {
       stream: ReversableStream::<char>::from(s),
-      file: ".",
+      file:   ".",
     }
   }
 
   pub fn from_str<'a>(s: &str) -> CharStream<'a> {
     CharStream {
       stream: ReversableStream::<char>::from(s),
-      file: ".",
+      file:   ".",
     }
   }
 
-  pub fn stream(&self) -> &ReversableStream<char> {
-    &self.stream
-  }
+  pub fn stream(&self) -> &ReversableStream<char> { &self.stream }
 
-  pub fn line(&self) -> usize {
+  pub fn line(&self) -> usize { self.line_from_pos(self.pos()) }
+
+  pub fn line_from_pos(&self, pos: usize) -> usize {
     self
       .stream
       .data()
       .iter()
-      .take(self.pos())
+      .take(pos)
       .filter(|&&c| c == '\n')
       .count()
   }
 
-  pub fn column(&self) -> usize {
+  pub fn column(&self) -> usize { self.column_from_pos(self.pos()) }
+
+  pub fn column_from_pos(&self, pos: usize) -> usize {
     let mut col = 0;
     self
       .stream
       .data()
       .iter()
-      .take(self.pos())
+      .take(pos)
       .for_each(|&c| if c == '\n' { col = 0 } else { col += 1 });
     col
   }
@@ -317,31 +380,15 @@ impl std::fmt::Display for CharStream<'_> {
 impl ReversableIterator for CharStream<'_> {
   type Item = char;
 
-  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> {
-    self.stream.next_ext(size)
-  }
+  fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> { self.stream.next_ext(size) }
 
-  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
-    self.stream.peek_ext(size)
-  }
+  fn peek_ext(&self, size: usize) -> Vec<Option<Self::Item>> { self.stream.peek_ext(size) }
 
-  fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> {
-    self.stream.prev_ext(size)
-  }
+  fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> { self.stream.prev_ext(size) }
 
-  fn pos(&self) -> usize {
-    self.stream.pos()
-  }
+  fn pos(&self) -> usize { self.stream.pos() }
 }
 
-pub trait Parseable<'a, T: Tokenizable<'a>>
-where
-  Self: Sized,
-{
-  type ParsingError;
-
-  fn parse(token_stream: &mut ReversableStream<T>) -> Result<Self, Self::ParsingError>;
-}
 
 // impl<'a, S, T, U> Parseable<'a, S> for Either<T, U>
 // where
@@ -351,8 +398,8 @@ where
 // {
 //   type ParsingError = (T::ParsingError, U::ParsingError);
 
-//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
-//     Err((
+//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self,
+// Self::ParsingError> {     Err((
 //       match T::parse(token_stream) {
 //         Ok(res) => {
 //           return Ok(Self::Left(res));
@@ -377,8 +424,8 @@ where
 //   type ParsingError = ();
 //   // type ParsingError = T::ParsingError;
 
-//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
-//     let mut vec = vec![];
+//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self,
+// Self::ParsingError> {     let mut vec = vec![];
 
 //     while let Ok(parsed) = T::parse(token_stream) {
 //       vec.push(parsed);
@@ -401,8 +448,8 @@ where
 // {
 //   type ParsingError = ();
 
-//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self, Self::ParsingError> {
-//     Ok(T::parse(token_stream).ok())
+//   fn parse(token_stream: &mut ReversableStream<S>) -> Result<Self,
+// Self::ParsingError> {     Ok(T::parse(token_stream).ok())
 //   }
 // }
 

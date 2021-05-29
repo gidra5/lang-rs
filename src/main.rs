@@ -11,6 +11,7 @@ mod ast;
 mod common;
 mod interactive_mode;
 mod token;
+mod vm;
 
 use crate::common::*;
 
@@ -24,7 +25,7 @@ fn main() {
         Err(e) => {
           Logger::error(e);
           None
-        }
+        },
       }
     } else {
       None

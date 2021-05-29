@@ -1,7 +1,7 @@
-use crate::ast::*;
-use crate::common::*;
+use crate::{ast::*, common::*};
 use rustyline::{error::*, *};
 use rustyline_derive::*;
+
 
 #[derive(Completer, Helper, Highlighter, Hinter, Validator)]
 pub struct InteractiveModeHelper {}
@@ -22,16 +22,14 @@ impl InteractiveMode {
 
   /// executes given code in interpreter
   pub fn exec(&mut self, code: CharStream) {
-    // let _lines = code.lines();
-
     match TokenStream::new(code) {
       Some(mut tokens) => {
-        println!("{:?}", tokens.stream.data());
+        // println!("{:?}", tokens.stream.data());
         match Expression::parse(&mut tokens, 0) {
           Ok(tree) => println!("tree {:?}", tree),
           Err(msg) => println!("{}", msg),
         };
-      }
+      },
       None => println!("Tokenization failed"),
     };
   }
@@ -51,15 +49,15 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line)) {
             Some(mut tokens) => {
-              println!("{:?}", tokens.stream.data());
+              // println!("{:?}", tokens.stream.data());
               match Expression::parse(&mut tokens, 0) {
                 Ok(tree) => println!("tree {:?}", tree),
                 Err(msg) => println!("{}", msg),
               };
-            }
+            },
             None => println!("Tokenization failed"),
           };
-        }
+        },
         Err(ReadlineError::Interrupted) => break,
         Err(_) => println!("No input"),
       }
