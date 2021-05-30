@@ -5,16 +5,6 @@ use std::hash::{Hash, Hasher};
 #[path = "tests/token.rs"]
 mod tests;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Value {
-  Identifier(String),
-  String(String),
-  Number(f64),
-  Boolean(bool),
-  Char(char),
-  None,
-}
-
 #[derive(Clone, Debug)]
 pub struct TokenExt<'a> {
   pub token: Token,

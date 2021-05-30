@@ -12,6 +12,7 @@ mod common;
 mod interactive_mode;
 mod token;
 mod vm;
+mod enviroment;
 
 use crate::common::*;
 
