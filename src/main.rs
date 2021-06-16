@@ -1,3 +1,4 @@
+#![feature(bindings_after_at)]
 extern crate automata;
 extern crate either;
 extern crate fancy_regex;

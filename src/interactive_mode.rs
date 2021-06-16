@@ -25,8 +25,8 @@ impl InteractiveMode {
   pub fn exec(&mut self, code: CharStream) {
     match TokenStream::new(code) {
       Some(mut tokens) => {
-        match Expression::parse(&mut tokens, 0) {
-          Ok(tree) => println!("{:?}", Self::evaluate(&mut self.env, tree)),
+        match Expression::parse(&mut tokens) {
+          Ok(tree) => println!("{}", tree),
           Err(msg) => println!("{}", msg),
         };
       },
@@ -49,8 +49,8 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line)) {
             Some(mut tokens) => {
-              match Expression::parse(&mut tokens, 0) {
-                Ok(tree) => println!("{:?}", Self::evaluate(&mut self.env, tree)),
+              match Expression::parse(&mut tokens) {
+                Ok(tree) => println!("{}", tree),
                 Err(msg) => println!("{}", msg),
               };
             },
@@ -63,65 +63,65 @@ impl InteractiveMode {
     }
   }
 
-  fn evaluate(env: &mut Enviroment, expr: Expression) -> Value {
-    use Token::*;
-    use Expression::*;
+  // fn evaluate(env: &mut Enviroment, expr: Expression) -> Value {
+  //   // use Token::*;
+  //   use Expression::*;
 
-    match expr {
-      BinaryExpression(left, op, right) => {
-        let right = Self::evaluate(env, *right);
-        let left = if op != Equal { Self::evaluate(env, *left) } else { 
-          return match *left {
-            Literal(Value::Identifier(ident)) => { env.set(ident, right.clone()); right },
-            _ => Value::None,
-          }
-        };
+  //   match expr {
+  //     // BinaryExpression(left, op, right) => {
+  //     //   let right = Self::evaluate(env, *right);
+  //     //   let left = if op != Equal { Self::evaluate(env, *left) } else { 
+  //     //     return match *left {
+  //     //       Literal(Value::Identifier(ident)) => { env.set(ident, right.clone()); right },
+  //     //       _ => Value::None,
+  //     //     }
+  //     //   };
         
 
-        match op {
-          Add => left.add(right),
-          Sub => left.sub(right),
-          Mult => left.mult(right),
-          Div => left.div(right),
-          Pow => left.pow(right),
-          Mod => left.rem(right),
-          EqualEqual => left.e(right), 
-          LessEqual => left.le(right), 
-          GreaterEqual => left.ge(right),
-          _ => unreachable!()
-        }
-      },
-      UnaryPrefixExpression(op, expr) => {
-        let expr = Self::evaluate(env, *expr);
+  //     //   match op {
+  //     //     Add => left.add(right),
+  //     //     Sub => left.sub(right),
+  //     //     Mult => left.mult(right),
+  //     //     Div => left.div(right),
+  //     //     Pow => left.pow(right),
+  //     //     Mod => left.rem(right),
+  //     //     EqualEqual => left.e(right), 
+  //     //     LessEqual => left.le(right), 
+  //     //     GreaterEqual => left.ge(right),
+  //     //     _ => unreachable!()
+  //     //   }
+  //     // },
+  //     // PrefixExpression(op, expr) => {
+  //     //   let expr = Self::evaluate(env, *expr);
 
-        match op {
-          Sub => expr.neg(),
-          Bang => expr.inv(),
-          Dec => expr.dec(),
-          Inc => expr.inc(),
-          _ => unreachable!()
-        }
-      },
-      UnaryPostfixExpression(op, expr) => {
-        let _expr = Self::evaluate(env, *expr);
+  //     //   match op {
+  //     //     Sub => expr.neg(),
+  //     //     Bang => expr.inv(),
+  //     //     Dec => expr.dec(),
+  //     //     Inc => expr.inc(),
+  //     //     _ => unreachable!()
+  //     //   }
+  //     // },
+  //     // PostfixExpression(op, expr) => {
+  //     //   let _expr = Self::evaluate(env, *expr);
 
-        match op {
-          _ => unreachable!()
-        }
-      },
-      FunctionCallExpression(_func, _arg) => {
-        Value::None
-        // let func = Self::evaluate(env, *func);
+  //     //   match op {
+  //     //     _ => unreachable!()
+  //     //   }
+  //     // },
+  //     // FunctionCallExpression(_func, _arg) => {
+  //     //   Value::None
+  //     //   // let func = Self::evaluate(env, *func);
 
-        // func.evaluate(env, arg)
-      },
-      Literal(val) => match val {
-        Value::Identifier(id) => match env.get(id) {
-          Some(val) => val,
-          None => Value::None
-        },
-        val => val
-      },
-    }
-  }
+  //     //   // func.evaluate(env, arg)
+  //     // },
+  //     Literal(val) => match val {
+  //       Value::Identifier(id) => match env.get(id) {
+  //         Some(val) => val,
+  //         None => Value::None
+  //       },
+  //       val => val
+  //     },
+  //   }
+  // }
 }

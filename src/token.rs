@@ -89,6 +89,8 @@ pub enum Token {
   Identifier,
 
   Skip,
+  MaxPrecedence,
+  MinPrecedence
 }
 
 impl<'a> Tokenizable<'a> for Token {
@@ -104,20 +106,8 @@ impl<'a> Tokenizable<'a> for Token {
         ' ' | '\t' | '\r' | '\n' => Skip,
         // ' ' | '\t' | '\r' => Skip,
         // '\n' => NewLine,
-        '<' => {
-          if stream.is_next('=') {
-            LessEqual
-          } else {
-            LAngleBracket
-          }
-        },
-        '>' => {
-          if stream.is_next('=') {
-            GreaterEqual
-          } else {
-            RAngleBracket
-          }
-        },
+        '<' => LAngleBracket,
+        '>' => RAngleBracket,
         '(' => LParenthesis,
         ')' => RParenthesis,
         '{' => LBracket,
@@ -134,20 +124,8 @@ impl<'a> Tokenizable<'a> for Token {
         '#' => Hash,
         '$' => Dollar,
         '@' => At,
-        '+' => {
-          if stream.is_next('+') {
-            Inc
-          } else {
-            Add
-          }
-        },
-        '-' => {
-          if stream.is_next('-') {
-            Dec
-          } else {
-            Sub
-          }
-        },
+        '+' => Add,
+        '-' => Sub,
         '*' => Mult,
         '/' => {
           if stream.is_next('/') {
@@ -164,13 +142,7 @@ impl<'a> Tokenizable<'a> for Token {
         },
         '^' => Pow,
         '%' => Mod,
-        '=' => {
-          if stream.is_next('=') {
-            EqualEqual
-          } else {
-            Equal
-          }
-        },
+        '=' => Equal,
         '\'' => {
           if stream.next() != None && stream.is_next('\'') {
             Char
