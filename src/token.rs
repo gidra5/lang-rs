@@ -90,7 +90,7 @@ pub enum Token {
 
   Skip,
   MaxPrecedence,
-  MinPrecedence
+  MinPrecedence,
 }
 
 impl<'a> Tokenizable<'a> for Token {

@@ -1,4 +1,3 @@
-
 pub trait ReversableIterator {
   type Item: PartialEq;
 

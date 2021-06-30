@@ -7,8 +7,8 @@ use rustyline_derive::*;
 pub struct InteractiveModeHelper {}
 
 pub struct InteractiveMode {
-  rl: Editor<InteractiveModeHelper>,
-  env: Enviroment
+  rl:  Editor<InteractiveModeHelper>,
+  env: Enviroment,
 }
 
 impl InteractiveMode {
@@ -18,7 +18,10 @@ impl InteractiveMode {
     rl.set_helper(Some(InteractiveModeHelper {}));
     rl.bind_sequence(KeyEvent(KeyCode::Enter, Modifiers::ALT), Cmd::Newline);
 
-    Self { rl, env: Enviroment::new() }
+    Self {
+      rl,
+      env: Enviroment::new(),
+    }
   }
 
   /// executes given code in interpreter
@@ -70,13 +73,13 @@ impl InteractiveMode {
   //   match expr {
   //     // BinaryExpression(left, op, right) => {
   //     //   let right = Self::evaluate(env, *right);
-  //     //   let left = if op != Equal { Self::evaluate(env, *left) } else { 
+  //     //   let left = if op != Equal { Self::evaluate(env, *left) } else {
   //     //     return match *left {
-  //     //       Literal(Value::Identifier(ident)) => { env.set(ident, right.clone()); right },
-  //     //       _ => Value::None,
+  //     //       Literal(Value::Identifier(ident)) => { env.set(ident,
+  // right.clone()); right },     //       _ => Value::None,
   //     //     }
   //     //   };
-        
+
 
   //     //   match op {
   //     //     Add => left.add(right),
@@ -85,8 +88,8 @@ impl InteractiveMode {
   //     //     Div => left.div(right),
   //     //     Pow => left.pow(right),
   //     //     Mod => left.rem(right),
-  //     //     EqualEqual => left.e(right), 
-  //     //     LessEqual => left.le(right), 
+  //     //     EqualEqual => left.e(right),
+  //     //     LessEqual => left.le(right),
   //     //     GreaterEqual => left.ge(right),
   //     //     _ => unreachable!()
   //     //   }

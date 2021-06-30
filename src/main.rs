@@ -10,10 +10,10 @@ extern crate clap;
 
 mod ast;
 mod common;
+mod enviroment;
 mod interactive_mode;
 mod token;
 mod vm;
-mod enviroment;
 
 use crate::common::*;
 

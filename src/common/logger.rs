@@ -1,4 +1,4 @@
-pub use crate::{common::*, ast::*, token::*};
+pub use crate::{ast::*, common::*, token::*};
 
 pub struct Logger;
 impl Logger {
@@ -38,7 +38,5 @@ impl<T: ReversableIterator> Span<T> {
 }
 
 impl<'a> std::fmt::Display for Span<TokenStream<'a>> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "todo")
-  }
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "todo") }
 }
