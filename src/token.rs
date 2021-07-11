@@ -1,20 +1,35 @@
 #![allow(unused)]
 use crate::common::*;
-use std::hash::{Hash, Hasher};
+use std::{
+  fmt::Debug,
+  hash::{Hash, Hasher},
+};
 
 #[path = "tests/token.rs"]
 mod tests;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TokenExt<'a> {
   pub token: Token,
   pub src:   String,
   pub span:  Span<CharStream<'a>>,
 }
 
+
+impl Debug for TokenExt<'_> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("TokenExt")
+      .field("token", &self.token)
+      .field("src", &self.src)
+      .finish()
+  }
+}
+
+
 impl PartialEq for TokenExt<'_> {
   fn eq(&self, other: &Self) -> bool { self.token == other.token && self.value() == other.value() }
 }
+impl Eq for TokenExt<'_> {}
 
 impl TokenExt<'_> {
   pub fn value(&self) -> Value {
@@ -30,12 +45,33 @@ impl TokenExt<'_> {
       Token::String => Value::String(self.src[1..self.span.length - 1].to_string()),
       Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
       Token::Identifier => Value::Identifier(self.src.clone()),
+      token
+      @
+      (Token::Pipe
+      | Token::Appersand
+      | Token::QuestionMark
+      | Token::Bang
+      | Token::Hash
+      | Token::Dollar
+      | Token::At
+      | Token::Add
+      | Token::Sub
+      | Token::Dec
+      | Token::Inc
+      | Token::Mult
+      | Token::Div
+      | Token::Pow
+      | Token::Mod
+      | Token::Equal
+      | Token::EqualEqual
+      | Token::LessEqual
+      | Token::GreaterEqual) => Value::Operator(token),
       _ => Value::None,
     }
   }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Token {
   // Keywords
   Let,
@@ -55,7 +91,7 @@ pub enum Token {
   Semicolon,
   Period,
   Colon,
-  NewLine,
+  // NewLine,
   Comma,
 
   // Operators
@@ -89,8 +125,6 @@ pub enum Token {
   Identifier,
 
   Skip,
-  MaxPrecedence,
-  MinPrecedence,
 }
 
 impl<'a> Tokenizable<'a> for Token {
