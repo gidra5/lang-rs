@@ -65,7 +65,7 @@ pub enum Expression {
   ),
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Fixity {
   Prefix,
   Infix,
@@ -96,12 +96,17 @@ impl<'a> Default for Operator<'a> {
 impl Display for Expression {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::BinaryExpression(None, op, None) => write!(f, "{:?}", op),
-      Self::BinaryExpression(Some(left), op, None) => write!(f, "({:?} {})", op, left),
+      Self::BinaryExpression(None, Some(op), None) => write!(f, "{}", op),
+      Self::BinaryExpression(None, None, None) => write!(f, "None"),
+      Self::BinaryExpression(Some(left), op, None) => {
+        write!(f, "({:?} {})", op, left)
+      },
       Self::BinaryExpression(Some(left), op, Some(right)) => {
         write!(f, "({:?} {} {})", op, left, right)
       },
-      Self::BinaryExpression(None, op, Some(right)) => write!(f, "({:?} {})", op, right),
+      Self::BinaryExpression(None, op, Some(right)) => {
+        write!(f, "({:?} {})", op, right)
+      },
     }
   }
 }
