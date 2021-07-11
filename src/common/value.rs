@@ -1,3 +1,5 @@
+use crate::Token;
+use std::fmt::Display;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   Identifier(String),
@@ -5,9 +7,26 @@ pub enum Value {
   Number(f64),
   Boolean(bool),
   Char(char),
+  Operator(Token),
   // Func,
   // Struct,
   None,
+}
+
+impl Display for Value {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use crate::Value::*;
+    match self {
+      Identifier(s) => write!(f, "{}", s),
+      String(s) => write!(f, "\"{}\"", s),
+      Number(num) => write!(f, "{}", num),
+      Boolean(b) => write!(f, "{}", b),
+
+      Char(c) => write!(f, "'{}'", c),
+      Operator(op) => write!(f, "{:?}", op),
+      None => write!(f, "None"),
+    }
+  }
 }
 
 impl Value {
