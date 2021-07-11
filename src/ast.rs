@@ -79,6 +79,20 @@ pub struct Operator<'a> {
   token:  Option<TokenExt<'a>>,
 }
 
+impl<'a> Default for Operator<'a> {
+  fn default() -> Operator<'a> {
+    let token = TokenExt {
+      token: Token::LParenthesis,
+      src: "(".to_string(),
+      span: Span {
+        length: 1,
+        stream: CharStream::<'a>::from_str("")
+      }
+    };
+    Operator { token: Some(token), fixity: Fixity::Prefix }
+  }
+}
+
 impl Display for Expression {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -96,19 +110,93 @@ impl Expression {
   pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
     expr_bp(token_stream)
   }
+  // fn parse2(lexer: &mut TokenStream) -> Option<Expression> {
+  //   let mut top = Frame {
+  //     operator: None,
+  //     lhs:      None,
+  //   };
+  //   let mut stack = Vec::new();
+
+  //   loop {
+  //     let operator = Operator {
+  //       token:  lexer.next().map(|token_ext| token_ext.token),
+  //       fixity: if top.lhs.is_none() {
+  //         Fixity::Prefix
+  //       } else {
+  //         Fixity::Infix
+  //       },
+  //     };
+
+  //     let operator = loop {
+  //       match lookup(operator.clone()) {
+  //         t @ Some(_) if top.operator <= t => break t.unwrap(),
+  //         _ => {
+  //           let res = top;
+  //           top = match stack.pop() {
+  //             Some(it) => it,
+  //             None => return res.lhs,
+  //           };
+
+  //           top.lhs = Some(Expression::BinaryExpression(
+  //             top.lhs.map(Box::new),
+  //             res.operator.clone().map(|op| op.token).flatten(),
+  //             res.lhs.map(Box::new),
+  //           ));
+  //         },
+  //       };
+  //     };
+
+  //     if operator.token == Some(Token::RParenthesis) {
+  //       assert_eq!(
+  //         top.operator.as_ref().map(|op| op.token).flatten(),
+  //         Some(Token::LParenthesis)
+  //       );
+  //       let res = top;
+  //       top = stack.pop().unwrap();
+  //       top.lhs = res.lhs;
+  //       continue;
+  //     }
+
+  //     stack.push(top);
+  //     top = Frame {
+  //       operator: Some(operator),
+  //       lhs:      None,
+  //     };
+  //   }
+  // }
+
+  // pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
+  //   match Self::parse2(token_stream) {
+  //     Some(e) => Ok(e),
+  //     None => Err(""),
+  //   }
+  // }
 }
 
+use std::cmp::Ordering;
+impl PartialOrd for Operator<'_> {
+  fn partial_cmp(&self, other: &Operator) -> Option<Ordering> {
+    let (_, r_bp1) = bp(self.clone())?;
+    let (l_bp2, _) = bp(other.clone())?;
+    let res = match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
+      (false, false) => { println!("{:?} = {:?}", self, other); Some(Ordering::Equal) },
+      (true, false) => { println!("{:?} < {:?}", self, other); Some(Ordering::Less) },
+      (false, true) => { println!("{:?} > {:?}", self, other); Some(Ordering::Greater) },
+      _ => None,
+    };
+    println!("{:?}", res);
+    res
+  }
+}
 
 #[derive(Debug)]
 struct Frame<'a> {
   operator: Option<Operator<'a>>,
-  min_bp:   u8,
   lhs:      Option<Expression>,
 }
 
 fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
   let mut top = Frame {
-    min_bp:   0,
     operator: None,
     lhs:      None,
   };
@@ -116,17 +204,18 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
 
   loop {
     let token = lexer.next();
+    let operator = Operator {
+      token:  token.clone(),
+      fixity: if top.lhs.is_none() {
+        Fixity::Prefix
+      } else {
+        Fixity::Infix
+      },
+    };
 
-    let (operator, r_bp) = loop {
-      match binding_power2(Operator {
-        token:  token.clone(),
-        fixity: if top.lhs.is_none() {
-          Fixity::Prefix
-        } else {
-          Fixity::Infix
-        },
-      }) {
-        Some((t, (l_bp, r_bp))) if top.min_bp <= l_bp => break (t, r_bp),
+    let operator = loop {
+      match lookup(operator.clone()) {
+        Some(t) if top.operator.clone().unwrap_or_default() <= t => break t,
         _ => {
           let res = top;
           top = match stack.pop() {
@@ -181,27 +270,14 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
     stack.push(top);
     top = Frame {
       operator: Some(operator),
-      min_bp:   r_bp,
       lhs:      None,
     };
   }
 }
 
+fn bp(op: Operator) -> Option<(u8, u8)> { let res = binding_power2(op.clone()).map(|(_, bp)| bp); println!("{:?} {:?}", res, op); res }
 
-// #[derive(Debug)]
-// struct Frame<'a> {
-//   min_bp: u8,
-//   lhs:    Option<Expression>,
-//   token:  Option<TokenExt<'a>>,
-// }
-
-// fn expr_bp(lexer: &mut TokenStream) -> Option<Expression> {
-//   let mut top = Frame {
-//     min_bp: 0,
-//     lhs:    None,
-//     token:  None,
-//   };
-//   let mut stack = Vec::new();
+fn lookup(op: Operator) -> Option<Operator> { let res = binding_power2(op.clone()).map(|(op, _)| op); println!("{:?} {:?}", res, op); res }
 
 //   loop {
 //     let token = lexer.next();
@@ -250,7 +326,10 @@ fn binding_power2(op: Operator) -> Option<(Operator, (u8, u8))> {
   let res = match op.clone() {
     Operator {
       fixity: Fixity::None,
-      token: _,
+      token: Some(TokenExt {
+        token: Identifier | Number | Boolean | String | Char,
+        ..
+      }),
     } => (99, 100),
     Operator {
       fixity: Fixity::Postfix,
@@ -309,24 +388,6 @@ fn binding_power2(op: Operator) -> Option<(Operator, (u8, u8))> {
         },
       }
     },
-    _ => return None,
-  };
-  Some((op, res))
-}
-
-fn binding_power(op: Option<TokenExt>, prefix: bool) -> Option<(TokenExt, (u8, u8))> {
-  use Token::*;
-  let op = op?;
-  let res = match op.token {
-    Identifier | Number | String | Char | Boolean => (99, 100),
-    LParenthesis => (99, 0),
-    RParenthesis => (0, 100),
-    Equal => (2, 1),
-    Add | Sub if prefix => (99, 9), //prefix
-    Add | Sub => (5, 6),
-    Mult | Div => (7, 8),
-    Bang => (11, 100), // postfix
-    Period => (14, 13),
     _ => return None,
   };
   Some((op, res))
