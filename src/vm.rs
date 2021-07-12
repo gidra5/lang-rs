@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub enum LangVMCommand {
   NotAnd,    // reg1, reg2 - reg1 = ~(reg1 & reg2)
   LoadWord,  // reg, [mem] - reg = [mem]

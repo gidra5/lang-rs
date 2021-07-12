@@ -83,13 +83,16 @@ impl<'a> Default for Operator<'a> {
   fn default() -> Operator<'a> {
     let token = TokenExt {
       token: Token::LParenthesis,
-      src: "(".to_string(),
-      span: Span {
+      src:   "(".to_string(),
+      span:  Span {
         length: 1,
-        stream: CharStream::<'a>::from_str("")
-      }
+        stream: CharStream::<'a>::from_str(""),
+      },
     };
-    Operator { token: Some(token), fixity: Fixity::Prefix }
+    Operator {
+      token:  Some(token),
+      fixity: Fixity::Prefix,
+    }
   }
 }
 
@@ -170,8 +173,8 @@ impl Expression {
   //   }
   // }
 
-  // pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
-  //   match Self::parse2(token_stream) {
+  // pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression,
+  // &'static str> {   match Self::parse2(token_stream) {
   //     Some(e) => Ok(e),
   //     None => Err(""),
   //   }
@@ -184,9 +187,18 @@ impl PartialOrd for Operator<'_> {
     let (_, r_bp1) = bp(self.clone())?;
     let (l_bp2, _) = bp(other.clone())?;
     let res = match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
-      (false, false) => { println!("{:?} = {:?}", self, other); Some(Ordering::Equal) },
-      (true, false) => { println!("{:?} < {:?}", self, other); Some(Ordering::Less) },
-      (false, true) => { println!("{:?} > {:?}", self, other); Some(Ordering::Greater) },
+      (false, false) => {
+        println!("{:?} = {:?}", self, other);
+        Some(Ordering::Equal)
+      },
+      (true, false) => {
+        println!("{:?} < {:?}", self, other);
+        Some(Ordering::Less)
+      },
+      (false, true) => {
+        println!("{:?} > {:?}", self, other);
+        Some(Ordering::Greater)
+      },
       _ => None,
     };
     println!("{:?}", res);
@@ -209,33 +221,32 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
 
   loop {
     let token = lexer.next();
-    let operator = Operator {
+    let operator = lookup(Operator {
       token:  token.clone(),
       fixity: if top.lhs.is_none() {
         Fixity::Prefix
       } else {
         Fixity::Infix
       },
-    };
+    });
 
     let operator = loop {
-      match lookup(operator.clone()) {
-        Some(t) if top.operator.clone().unwrap_or_default() <= t => break t,
+      let top_operator = top.operator.clone().unwrap_or_default();
+      match operator.clone() {
+        Some(t) if top_operator <= t => break t,
         _ => {
-          let res = top;
+          let Frame { operator, lhs } = top;
+          let value = operator.map(|op| op.token.map(|op| op.value())).flatten();
+          
           top = match stack.pop() {
             Some(it) => it,
-            None => return res.lhs.ok_or("No Expression"),
+            None => return lhs.ok_or("No Expression"),
           };
 
           top.lhs = Some(Expression::BinaryExpression(
             top.lhs.map(Box::new),
-            res
-              .operator
-              .clone()
-              .map(|op| op.token.map(|op| op.value()))
-              .flatten(),
-            res.lhs.map(Box::new),
+            value,
+            lhs.map(Box::new),
           ))
         },
       };
@@ -243,7 +254,7 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
 
     if let Some(TokenExt {
       token: Token::RParenthesis,
-      ..
+      fixity: Fixity::Postfix
     }) = operator.token
     {
       if let Some(Operator {
@@ -251,7 +262,7 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
           token: Token::LParenthesis,
           ..
         }),
-        ..
+        fixity: Fixity::Prefix
       }) = top.operator
       {
         let res = top;
@@ -266,7 +277,7 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
         token: Token::LParenthesis,
         ..
       }),
-      ..
+      fixity: Fixity::Prefix
     }) = top.operator
     {
       return Err("Expected closing parenthesis");
@@ -280,9 +291,17 @@ fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
   }
 }
 
-fn bp(op: Operator) -> Option<(u8, u8)> { let res = binding_power2(op.clone()).map(|(_, bp)| bp); println!("{:?} {:?}", res, op); res }
+fn bp(op: Operator) -> Option<(u8, u8)> {
+  let res = binding_power2(op.clone()).map(|(_, bp)| bp);
+  println!("{:?} {:?}", res, op);
+  res
+}
 
-fn lookup(op: Operator) -> Option<Operator> { let res = binding_power2(op.clone()).map(|(op, _)| op); println!("{:?} {:?}", res, op); res }
+fn lookup(op: Operator) -> Option<Operator> {
+  let res = binding_power2(op.clone()).map(|(op, _)| op);
+  println!("{:?} {:?}", res, op);
+  res
+}
 
 //   loop {
 //     let token = lexer.next();
@@ -331,11 +350,16 @@ fn binding_power2(op: Operator) -> Option<(Operator, (u8, u8))> {
   let res = match op.clone() {
     Operator {
       fixity: Fixity::None,
-      token: Some(TokenExt {
-        token: Identifier | Number | Boolean | String | Char,
-        ..
-      }),
+      token:
+        Some(TokenExt {
+          token: Identifier | Number | Boolean | String | Char,
+          ..
+        }),
     } => (99, 100),
+    Operator {
+      fixity: Fixity::None,
+      token: None,
+    } => (0, 0),
     Operator {
       fixity: Fixity::Postfix,
       token,
