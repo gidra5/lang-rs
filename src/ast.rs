@@ -57,12 +57,10 @@ pub struct ASTNodeExt<'a, T> {
 }
 
 #[derive(Debug)]
-pub enum Expression {
-  BinaryExpression(
-    Option<Box<Expression>>,
-    Option<Value>,
-    Option<Box<Expression>>,
-  ),
+pub struct Expression {
+  left:  Option<Box<Expression>>,
+  op:    Value,
+  right: Option<Box<Expression>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -73,25 +71,17 @@ pub enum Fixity {
   None,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Operator<'a> {
+#[derive(PartialEq, Debug, Clone)]
+pub struct Operator {
   fixity: Fixity,
-  token:  Option<TokenExt<'a>>,
+  value:  Value,
 }
 
-impl<'a> Default for Operator<'a> {
-  fn default() -> Operator<'a> {
-    let token = TokenExt {
-      token: Token::LParenthesis,
-      src:   "(".to_string(),
-      span:  Span {
-        length: 1,
-        stream: CharStream::<'a>::from_str(""),
-      },
-    };
+impl<'a> Default for Operator {
+  fn default() -> Operator {
     Operator {
-      token:  Some(token),
-      fixity: Fixity::Prefix,
+      value:  Value::None,
+      fixity: Fixity::None,
     }
   }
 }
@@ -99,325 +89,323 @@ impl<'a> Default for Operator<'a> {
 impl Display for Expression {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::BinaryExpression(None, Some(op), None) => write!(f, "{}", op),
-      Self::BinaryExpression(None, None, None) => write!(f, "None"),
-      Self::BinaryExpression(Some(left), op, None) => {
+      Self {
+        left: None,
+        op,
+        right: None,
+      } => write!(f, "{}", op),
+      Self {
+        left: Some(left),
+        op,
+        right: None,
+      } => {
         write!(f, "({:?} {})", op, left)
       },
-      Self::BinaryExpression(Some(left), op, Some(right)) => {
+      Self {
+        left: Some(left),
+        op,
+        right: Some(right),
+      } => {
         write!(f, "({:?} {} {})", op, left, right)
       },
-      Self::BinaryExpression(None, op, Some(right)) => {
+      Self {
+        left: None,
+        op,
+        right: Some(right),
+      } => {
         write!(f, "({:?} {})", op, right)
       },
     }
   }
 }
 
-impl Expression {
-  pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
-    expr_bp(token_stream)
-  }
-  // fn parse2(lexer: &mut TokenStream) -> Option<Expression> {
-  //   let mut top = Frame {
-  //     operator: None,
-  //     lhs:      None,
-  //   };
-  //   let mut stack = Vec::new();
-
-  //   loop {
-  //     let operator = Operator {
-  //       token:  lexer.next().map(|token_ext| token_ext.token),
-  //       fixity: if top.lhs.is_none() {
-  //         Fixity::Prefix
-  //       } else {
-  //         Fixity::Infix
-  //       },
-  //     };
-
-  //     let operator = loop {
-  //       match lookup(operator.clone()) {
-  //         t @ Some(_) if top.operator <= t => break t.unwrap(),
-  //         _ => {
-  //           let res = top;
-  //           top = match stack.pop() {
-  //             Some(it) => it,
-  //             None => return res.lhs,
-  //           };
-
-  //           top.lhs = Some(Expression::BinaryExpression(
-  //             top.lhs.map(Box::new),
-  //             res.operator.clone().map(|op| op.token).flatten(),
-  //             res.lhs.map(Box::new),
-  //           ));
-  //         },
-  //       };
-  //     };
-
-  //     if operator.token == Some(Token::RParenthesis) {
-  //       assert_eq!(
-  //         top.operator.as_ref().map(|op| op.token).flatten(),
-  //         Some(Token::LParenthesis)
-  //       );
-  //       let res = top;
-  //       top = stack.pop().unwrap();
-  //       top.lhs = res.lhs;
-  //       continue;
-  //     }
-
-  //     stack.push(top);
-  //     top = Frame {
-  //       operator: Some(operator),
-  //       lhs:      None,
-  //     };
-  //   }
-  // }
-
-  // pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression,
-  // &'static str> {   match Self::parse2(token_stream) {
-  //     Some(e) => Ok(e),
-  //     None => Err(""),
-  //   }
-  // }
-}
-
-use std::cmp::Ordering;
-impl PartialOrd for Operator<'_> {
-  fn partial_cmp(&self, other: &Operator) -> Option<Ordering> {
-    let (_, r_bp1) = bp(self.clone())?;
-    let (l_bp2, _) = bp(other.clone())?;
-    let res = match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
-      (false, false) => {
-        println!("{:?} = {:?}", self, other);
-        Some(Ordering::Equal)
-      },
-      (true, false) => {
-        println!("{:?} < {:?}", self, other);
-        Some(Ordering::Less)
-      },
-      (false, true) => {
-        println!("{:?} > {:?}", self, other);
-        Some(Ordering::Greater)
-      },
-      _ => None,
-    };
-    println!("{:?}", res);
-    res
-  }
-}
-
-#[derive(Debug)]
-struct Frame<'a> {
-  operator: Option<Operator<'a>>,
+struct Frame {
+  operator: Option<Operator>,
   lhs:      Option<Expression>,
 }
 
-fn expr_bp(lexer: &mut TokenStream) -> Result<Expression, &'static str> {
-  let mut top = Frame {
-    operator: None,
-    lhs:      None,
-  };
-  let mut stack = Vec::new();
+impl Expression {
+  pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
+    let mut top = Frame {
+      lhs:      None,
+      operator: None,
+    };
+    let mut stack = Vec::new();
+    loop {
+      let token = token_stream.next();
+      let operator = loop {
+        let operator = token
+          .clone()
+          .map(|token| Operator::new(token, top.lhs.is_none()))
+          .flatten();
+        match operator {
+          // Some(None) => return Err("No such operator"),
+          // Some(t @ Some(op)) if top.operator <= t => break op,
+          Some(op) if top.operator <= Some(op.clone()) => break op,
+          _ => {
+            let res = top;
+            if let Some(Expression {
+              op: Value::Operator(Token::LParenthesis),
+              left: None,
+              right: Some(_),
+            }) = res.lhs
+            {
+              return Err("Expected closing parenthesis");
+            }
 
-  loop {
-    let token = lexer.next();
-    let operator = lookup(Operator {
-      token:  token.clone(),
-      fixity: if top.lhs.is_none() {
+            top = match stack.pop() {
+              Some(it) => it,
+              None => return res.lhs.ok_or("No expression"),
+            };
+
+            top.lhs = Some(Expression {
+              op:    res.operator.unwrap().value,
+              left:  top.lhs.map(Box::new),
+              right: res.lhs.map(Box::new),
+            });
+          },
+        };
+      };
+      if let Operator {
+        value: Value::Operator(Token::RParenthesis),
+        fixity: Fixity::Postfix,
+      } = operator
+      {
+        if let Some(Operator {
+          value: Value::Operator(Token::LParenthesis),
+          fixity: Fixity::Prefix,
+        }) = top.operator
+        {
+          let res = top;
+          top = stack.pop().unwrap();
+          top.lhs = res.lhs;
+          continue;
+        } else {
+          return Err("Unexpected closing parenthesis");
+        }
+      }
+      stack.push(top);
+      top = Frame {
+        lhs:      None,
+        operator: Some(operator),
+      };
+    }
+  }
+}
+
+impl Operator {
+  pub fn new(token: TokenExt, prefix: bool) -> Option<Self> {
+    let op = Operator {
+      value:  token.value(),
+      fixity: if prefix {
         Fixity::Prefix
       } else {
         Fixity::Infix
       },
-    });
-
-    let operator = loop {
-      let top_operator = top.operator.clone().unwrap_or_default();
-      match operator.clone() {
-        Some(t) if top_operator <= t => break t,
-        _ => {
-          let Frame { operator, lhs } = top;
-          let value = operator.map(|op| op.token.map(|op| op.value())).flatten();
-          
-          top = match stack.pop() {
-            Some(it) => it,
-            None => return lhs.ok_or("No Expression"),
-          };
-
-          top.lhs = Some(Expression::BinaryExpression(
-            top.lhs.map(Box::new),
-            value,
-            lhs.map(Box::new),
-          ))
-        },
-      };
     };
 
-    if let Some(TokenExt {
-      token: Token::RParenthesis,
-      fixity: Fixity::Postfix
-    }) = operator.token
-    {
-      if let Some(Operator {
-        token: Some(TokenExt {
-          token: Token::LParenthesis,
-          ..
-        }),
-        fixity: Fixity::Prefix
-      }) = top.operator
-      {
-        let res = top;
-        top = stack.pop().unwrap();
-        top.lhs = res.lhs;
-        continue;
-      } else {
-        return Err("Unexpected closing parenthesis");
-      }
-    } else if let Some(Operator {
-      token: Some(TokenExt {
-        token: Token::LParenthesis,
-        ..
-      }),
-      fixity: Fixity::Prefix
-    }) = top.operator
-    {
-      return Err("Expected closing parenthesis");
+    if op.exist() {
+      return Some(op);
     }
 
-    stack.push(top);
-    top = Frame {
-      operator: Some(operator),
-      lhs:      None,
+    let op = Operator {
+      fixity: if prefix {
+        Fixity::Prefix
+      } else {
+        Fixity::Infix
+      },
+      ..op
     };
+
+    if op.exist() {
+      return Some(op);
+    }
+
+    None
+  }
+
+  fn exist(&self) -> bool {
+    match self {
+      Operator {
+        value:
+          Value::Identifier(_)
+          | Value::String(_)
+          | Value::Char(_)
+          | Value::Number(_)
+          | Value::Boolean(_),
+        fixity: Fixity::None,
+      } => true,
+      Operator {
+        value:
+          Value::Operator(Token::LParenthesis)
+          | Value::Operator(Token::Add)
+          | Value::Operator(Token::Inc)
+          | Value::Operator(Token::Dec)
+          | Value::Operator(Token::Mult)
+          | Value::Operator(Token::Sub),
+        fixity: Fixity::Prefix,
+      } => true,
+      Operator {
+        value: Value::Operator(Token::RParenthesis) | Value::Operator(Token::Bang),
+        fixity: Fixity::Postfix,
+      } => true,
+      Operator {
+        value:
+          Value::Operator(Token::Period)
+          | Value::Operator(Token::Equal)
+          | Value::Operator(Token::EqualEqual)
+          | Value::Operator(Token::Add)
+          | Value::Operator(Token::Sub)
+          | Value::Operator(Token::Mod)
+          | Value::Operator(Token::Mult)
+          | Value::Operator(Token::Div),
+        fixity: Fixity::Postfix,
+      } => true,
+      _ => false,
+    }
+  }
+
+  fn bp(&self) -> Option<(u8, u8)> {
+    Some(match self {
+      Operator {
+        value:
+          Value::Identifier(_)
+          | Value::String(_)
+          | Value::Char(_)
+          | Value::Number(_)
+          | Value::Boolean(_),
+        fixity: Fixity::None,
+      } => (99, 100),
+      Operator {
+        value,
+        fixity: Fixity::Prefix,
+      } => {
+        (99, match value {
+          Value::Operator(token) => {
+            match token {
+              Token::LParenthesis => 0,
+              Token::Add | Token::Sub => 9,
+              Token::Inc | Token::Dec => 11,
+              Token::Mult => 13,
+              _ => return None,
+            }
+          },
+          _ => return None,
+        })
+      },
+      Operator {
+        value,
+        fixity: Fixity::Postfix,
+      } => {
+        (
+          match value {
+            Value::Operator(token) => {
+              match token {
+                Token::RParenthesis => 0,
+                Token::Bang => 15,
+                _ => return None,
+              }
+            },
+            _ => return None,
+          },
+          100,
+        )
+      },
+      Operator {
+        value,
+        fixity: Fixity::Postfix,
+      } => {
+        match value {
+          Value::Operator(token) => {
+            match token {
+              Token::Period => (18, 17),
+              Token::Equal => (2, 1),
+              Token::Add | Token::Sub => (5, 6),
+              Token::Mult | Token::Div => (7, 8),
+              Token::EqualEqual => (20, 19),
+              _ => return None,
+            }
+          },
+          _ => return None,
+        }
+      },
+      _ => return None,
+    })
   }
 }
 
-fn bp(op: Operator) -> Option<(u8, u8)> {
-  let res = binding_power2(op.clone()).map(|(_, bp)| bp);
-  println!("{:?} {:?}", res, op);
-  res
+use std::cmp::Ordering;
+impl PartialOrd for Operator {
+  fn partial_cmp(&self, other: &Operator) -> Option<Ordering> {
+    let (_, r_bp1) = self.bp()?;
+    let (l_bp2, _) = other.bp()?;
+
+    Some(match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
+      (false, false) => Ordering::Equal,
+      (true, false) => Ordering::Less,
+      (false, true) => Ordering::Greater,
+      _ => return None,
+    })
+  }
 }
 
-fn lookup(op: Operator) -> Option<Operator> {
-  let res = binding_power2(op.clone()).map(|(op, _)| op);
-  println!("{:?} {:?}", res, op);
-  res
+fn expr(input: &str) -> Result<Expression, &'static str> {
+  let mut lexer = TokenStream::new(CharStream::from_str(input))
+    .ok_or("Failed to create TokenStream from string")?;
+
+  Expression::parse(&mut lexer)
 }
 
-//   loop {
-//     let token = lexer.next();
+#[test]
+fn tests() {
+  let s = expr("1").unwrap();
+  assert_eq!(s.to_string(), "1");
 
-//     let (token, r_bp) = loop {
-//       match binding_power(token.clone(), top.lhs.is_none()) {
-//         Some((t, (l_bp, r_bp))) if top.min_bp <= l_bp => break (t, r_bp),
-//         _ => {
-//           let res = top;
-//           top = match stack.pop() {
-//             Some(it) => it,
-//             None => return res.lhs,
-//           };
+  //     let s = expr("1 + 2 * 3").unwrap();
+  //     assert_eq!(s.to_string(), "(+ 1 (* 2 3))");
 
-//           top.lhs = Some(Expression::BinaryExpression(
-//             top.lhs.map(Box::new),
-//             res.token.clone().map(|op| op.value()),
-//             res.lhs.map(Box::new),
-//           ))
-//         },
-//       };
-//     };
+  //     let s = expr("a + b * c * d + e").unwrap();
+  //     assert_eq!(s.to_string(), "(+ (+ a (* (* b c) d)) e)");
 
-//     if token.token == Token::RParenthesis {
-//       assert_eq!(
-//         top.token.clone().map(|token| token.token),
-//         Some(Token::LParenthesis)
-//       );
-//       let res = top;
-//       top = stack.pop().unwrap();
-//       top.lhs = res.lhs;
-//       continue;
-//     }
+  //     let s = expr("f . g . h").unwrap();
+  //     assert_eq!(s.to_string(), "(. f (. g h))");
 
-//     stack.push(top);
-//     top = Frame {
-//       min_bp: r_bp,
-//       lhs:    None,
-//       token:  Some(token),
-//     };
-//   }
-// }
+  //     let s = expr(" 1 + 2 + f . g . h * 3 * 4").unwrap();
+  //     assert_eq!(
+  //         s.to_string(),
+  //         "(+ (+ 1 2) (* (* (. f (. g h)) 3) 4))"
+  //     );
 
-fn binding_power2(op: Operator) -> Option<(Operator, (u8, u8))> {
-  use Token::*;
-  let res = match op.clone() {
-    Operator {
-      fixity: Fixity::None,
-      token:
-        Some(TokenExt {
-          token: Identifier | Number | Boolean | String | Char,
-          ..
-        }),
-    } => (99, 100),
-    Operator {
-      fixity: Fixity::None,
-      token: None,
-    } => (0, 0),
-    Operator {
-      fixity: Fixity::Postfix,
-      token,
-    } => {
-      (
-        match token? {
-          TokenExt {
-            token: RParenthesis,
-            ..
-          } => 0,
-          TokenExt { token: Bang, .. } => 11,
-          _ => return None,
-        },
-        100,
-      )
-    },
-    Operator {
-      fixity: Fixity::Prefix,
-      token,
-    } => {
-      (99, match token? {
-        TokenExt {
-          token: LParenthesis,
-          ..
-        } => 0,
-        TokenExt {
-          token: Add | Sub, ..
-        } => 9,
-        token => {
-          return binding_power2(Operator {
-            fixity: Fixity::None,
-            token:  Some(token),
-          })
-        },
-      })
-    },
-    Operator {
-      fixity: Fixity::Infix,
-      token,
-    } => {
-      match token? {
-        TokenExt { token: Equal, .. } => (2, 1),
-        TokenExt {
-          token: Add | Sub, ..
-        } => (5, 6),
-        TokenExt {
-          token: Mult | Div, ..
-        } => (7, 8),
-        TokenExt { token: Period, .. } => (14, 13),
-        token => {
-          return binding_power2(Operator {
-            fixity: Fixity::Postfix,
-            token:  Some(token),
-          })
-        },
-      }
-    },
-    _ => return None,
-  };
-  Some((op, res))
+  //     let s = expr("--1 * 2").unwrap();
+  //     assert_eq!(s.to_string(), "(* (- (- 1)) 2)");
+
+  //     let s = expr("--f . g").unwrap();
+  //     assert_eq!(s.to_string(), "(- (- (. f g)))");
+
+  //     let s = expr("-9!").unwrap();
+  //     assert_eq!(s.to_string(), "(- (! 9))");
+
+  //     let s = expr("f . g !").unwrap();
+  //     assert_eq!(s.to_string(), "(! (. f g))");
+
+  //     let s = expr("(((0)))").unwrap();
+  //     assert_eq!(s.to_string(), "0");
+
+  //     let s = expr("(1 + 2) * 3").unwrap();
+  //     assert_eq!(s.to_string(), "(* (+ 1 2) 3)");
+
+  //     let s = expr("1 + (2 * 3)").unwrap();
+  //     assert_eq!(s.to_string(), "(+ 1 (* 2 3))");
+
+  //     let s = expr("(1 + (2 * 3)").unwrap_err();
+  //     assert_eq!(s, "Expected closing parenthesis");
+
+  //     let s = expr("1 + (2 * 3))").unwrap_err();
+  //     assert_eq!(s, "Unexpected closing parenthesis");
+
+  //     let s = expr("1 + 2 * 3)").unwrap_err();
+  //     assert_eq!(s, "Unexpected closing parenthesis");
+
+  //     let s = expr("1 + (2 * 3").unwrap_err();
+  //     assert_eq!(s, "Expected closing parenthesis");
 }
