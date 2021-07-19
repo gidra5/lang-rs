@@ -56,7 +56,7 @@ pub struct ASTNodeExt<'a, T> {
   pub span: Span<TokenStream<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expression {
   left:  Option<Box<Expression>>,
   op:    Value,
@@ -99,26 +99,36 @@ impl Display for Expression {
         op,
         right: None,
       } => {
-        write!(f, "({:?} {})", op, left)
+        match op {
+          Value::Operator(op) => write!(f, "({:?} {})", op, left),
+          _ => unreachable!(),
+        }
       },
       Self {
         left: Some(left),
         op,
         right: Some(right),
       } => {
-        write!(f, "({:?} {} {})", op, left, right)
+        match op {
+          Value::Operator(op) => write!(f, "({:?} {} {})", op, left, right),
+          _ => unreachable!(),
+        }
       },
       Self {
         left: None,
         op,
         right: Some(right),
       } => {
-        write!(f, "({:?} {})", op, right)
+        match op {
+          Value::Operator(op) => write!(f, "({:?} {})", op, right),
+          _ => unreachable!(),
+        }
       },
     }
   }
 }
 
+#[derive(Debug, Clone)]
 struct Frame {
   operator: Option<Operator>,
   lhs:      Option<Expression>,
@@ -153,10 +163,21 @@ impl Expression {
               return Err("Expected closing parenthesis");
             }
 
+            println!(
+              "a: {:?}, {:?}, {:?}, {:?}, {:?}",
+              res.operator,
+              operator,
+              res.operator <= operator,
+              token,
+              stack
+            );
+
             top = match stack.pop() {
               Some(it) => it,
               None => return res.lhs.ok_or("No expression"),
             };
+
+            println!("b: {:?}, {:?}, {:?}", res, top, stack);
 
             top.lhs = Some(Expression {
               op:    res.operator.unwrap().value,
@@ -166,6 +187,7 @@ impl Expression {
           },
         };
       };
+      println!("c: {:?}, {:?}, {:?}", operator, top, stack);
       if let Operator {
         value: Value::Operator(Token::RParenthesis),
         fixity: Fixity::Postfix,
@@ -184,6 +206,7 @@ impl Expression {
           return Err("Unexpected closing parenthesis");
         }
       }
+
       stack.push(top);
       top = Frame {
         lhs:      None,
@@ -210,9 +233,9 @@ impl Operator {
 
     let op = Operator {
       fixity: if prefix {
-        Fixity::Prefix
+        Fixity::None
       } else {
-        Fixity::Infix
+        Fixity::Postfix
       },
       ..op
     };
@@ -259,7 +282,7 @@ impl Operator {
           | Value::Operator(Token::Mod)
           | Value::Operator(Token::Mult)
           | Value::Operator(Token::Div),
-        fixity: Fixity::Postfix,
+        fixity: Fixity::Infix,
       } => true,
       _ => false,
     }
@@ -313,7 +336,7 @@ impl Operator {
       },
       Operator {
         value,
-        fixity: Fixity::Postfix,
+        fixity: Fixity::Infix,
       } => {
         match value {
           Value::Operator(token) => {
@@ -350,10 +373,10 @@ impl PartialOrd for Operator {
 }
 
 fn expr(input: &str) -> Result<Expression, &'static str> {
-  let mut lexer = TokenStream::new(CharStream::from_str(input))
-    .ok_or("Failed to create TokenStream from string")?;
+  let mut stream =
+    TokenStream::new(CharStream::from_str(input)).ok_or("Failed to create TokenStream")?;
 
-  Expression::parse(&mut lexer)
+  Expression::parse(&mut stream)
 }
 
 #[test]
@@ -361,51 +384,52 @@ fn tests() {
   let s = expr("1").unwrap();
   assert_eq!(s.to_string(), "1");
 
-  //     let s = expr("1 + 2 * 3").unwrap();
-  //     assert_eq!(s.to_string(), "(+ 1 (* 2 3))");
+  let s = expr("1 + 2 * 3").unwrap();
+  assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
 
-  //     let s = expr("a + b * c * d + e").unwrap();
-  //     assert_eq!(s.to_string(), "(+ (+ a (* (* b c) d)) e)");
+  let s = expr("a + b * c * d + e").unwrap();
+  assert_eq!(s.to_string(), "(Add (Add a (Mult (Mult b c) d)) e)");
 
-  //     let s = expr("f . g . h").unwrap();
-  //     assert_eq!(s.to_string(), "(. f (. g h))");
+  let s = expr("f . g . h").unwrap();
+  assert_eq!(s.to_string(), "(Period f (Period g h))");
 
-  //     let s = expr(" 1 + 2 + f . g . h * 3 * 4").unwrap();
-  //     assert_eq!(
-  //         s.to_string(),
-  //         "(+ (+ 1 2) (* (* (. f (. g h)) 3) 4))"
-  //     );
+  let s = expr(" 1 + 2 + f . g . h * 3 * 4").unwrap();
+  assert_eq!(
+    s.to_string(),
+    "(Add (Add 1 2) (Mult (Mult (Period f (Period g h)) 3) 4))"
+  );
 
-  //     let s = expr("--1 * 2").unwrap();
-  //     assert_eq!(s.to_string(), "(* (- (- 1)) 2)");
+  let s = expr("--1 * 2").unwrap();
+  assert_eq!(s.to_string(), "(Mult (Sub (Sub 1)) 2)");
+  // assert_eq!(s.to_string(), "(Mult (Dec 1) 2)");
 
-  //     let s = expr("--f . g").unwrap();
-  //     assert_eq!(s.to_string(), "(- (- (. f g)))");
+  let s = expr("--f . g").unwrap();
+  assert_eq!(s.to_string(), "(Sub (Sub (Period f g)))");
 
-  //     let s = expr("-9!").unwrap();
-  //     assert_eq!(s.to_string(), "(- (! 9))");
+  let s = expr("-9!").unwrap();
+  assert_eq!(s.to_string(), "(Sub (Bang 9))");
 
-  //     let s = expr("f . g !").unwrap();
-  //     assert_eq!(s.to_string(), "(! (. f g))");
+  let s = expr("f . g !").unwrap();
+  assert_eq!(s.to_string(), "(Bang (Period f g))");
 
-  //     let s = expr("(((0)))").unwrap();
-  //     assert_eq!(s.to_string(), "0");
+  let s = expr("(((0)))").unwrap();
+  assert_eq!(s.to_string(), "0");
 
-  //     let s = expr("(1 + 2) * 3").unwrap();
-  //     assert_eq!(s.to_string(), "(* (+ 1 2) 3)");
+  let s = expr("(1 + 2) * 3").unwrap();
+  assert_eq!(s.to_string(), "(Mult (Add 1 2) 3)");
 
-  //     let s = expr("1 + (2 * 3)").unwrap();
-  //     assert_eq!(s.to_string(), "(+ 1 (* 2 3))");
+  let s = expr("1 + (2 * 3)").unwrap();
+  assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
 
-  //     let s = expr("(1 + (2 * 3)").unwrap_err();
-  //     assert_eq!(s, "Expected closing parenthesis");
+  let s = expr("(1 + (2 * 3)").unwrap_err();
+  assert_eq!(s, "Expected closing parenthesis");
 
-  //     let s = expr("1 + (2 * 3))").unwrap_err();
-  //     assert_eq!(s, "Unexpected closing parenthesis");
+  let s = expr("1 + (2 * 3))").unwrap_err();
+  assert_eq!(s, "Unexpected closing parenthesis");
 
-  //     let s = expr("1 + 2 * 3)").unwrap_err();
-  //     assert_eq!(s, "Unexpected closing parenthesis");
+  let s = expr("1 + 2 * 3)").unwrap_err();
+  assert_eq!(s, "Unexpected closing parenthesis");
 
-  //     let s = expr("1 + (2 * 3").unwrap_err();
-  //     assert_eq!(s, "Expected closing parenthesis");
+  let s = expr("1 + (2 * 3").unwrap_err();
+  assert_eq!(s, "Expected closing parenthesis");
 }

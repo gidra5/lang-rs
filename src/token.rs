@@ -48,7 +48,10 @@ impl TokenExt<'_> {
       token
       @
       (Token::Pipe
+      | Token::LParenthesis
+      | Token::RParenthesis
       | Token::Appersand
+      | Token::Period
       | Token::QuestionMark
       | Token::Bang
       | Token::Hash
