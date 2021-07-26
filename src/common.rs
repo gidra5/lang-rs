@@ -17,6 +17,9 @@ pub use reversable_iterator::*;
 pub mod char_stream;
 pub use char_stream::*;
 
+pub mod utils;
+pub use utils::*;
+
 impl ReversableStream<TokenExt<'_>> {
   pub fn check2(&mut self, token: Token) -> bool {
     if self.peek().map(|t| t.token == token) == Some(true) {

@@ -9,12 +9,12 @@ use std::{
 #[path = "tests/ast.rs"]
 mod tests;
 
-pub enum ErrorType {}
+// pub enum ErrorType {}
 
 pub struct ParsingError<'a> {
-  pub error_type: ErrorType,
-  pub span:       Span<TokenStream<'a>>,
-  pub msg:        String,
+  // pub error_type: ErrorType,
+  pub span: Span<TokenStream<'a>>,
+  pub msg:  String,
 }
 
 pub trait Parseable<'a>
@@ -24,31 +24,23 @@ where
   fn parse(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Self>, ParsingError<'a>>;
 }
 
+pub trait Synchronizable<'a> {
+  fn synchronize(stream: &mut TokenStream<'a>) {
+    stream.next();
+    while !Self::sync_point(stream) && stream.peek().is_some() {
+      stream.next();
+    }
+  }
+
+  fn sync_point(stream: &mut TokenStream<'a>) -> bool { false }
+}
+
 /*
   Syntax definition:
 
   enter expression to evaluate it or i to enter interactive mode
 */
 
-macro_rules! set {
-  ($($item: expr),*) => {{
-    let mut set = HashSet::new();
-    $(
-      set.insert($item);
-    )*
-    set
-  }};
-}
-
-macro_rules! map {
-  ($($key: expr => $value: expr),*) => {{
-    let mut map = HashMap::new();
-    $(
-      map.insert($key, $value);
-    )*
-    map
-  }};
-}
 
 #[derive(Clone, Debug)]
 pub struct ASTNodeExt<'a, T> {
@@ -135,7 +127,7 @@ struct Frame {
 }
 
 impl Expression {
-  pub fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
+  fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
     let mut top = Frame {
       lhs:      None,
       operator: None,
@@ -163,21 +155,21 @@ impl Expression {
               return Err("Expected closing parenthesis");
             }
 
-            println!(
-              "a: {:?}, {:?}, {:?}, {:?}, {:?}",
-              res.operator,
-              operator,
-              res.operator <= operator,
-              token,
-              stack
-            );
+            // println!(
+            //   "a: {:?}, {:?}, {:?}, {:?}, {:?}",
+            //   res.operator,
+            //   operator,
+            //   res.operator <= operator,
+            //   token,
+            //   stack
+            // );
 
             top = match stack.pop() {
               Some(it) => it,
               None => return res.lhs.ok_or("No expression"),
             };
 
-            println!("b: {:?}, {:?}, {:?}", res, top, stack);
+            // println!("b: {:?}, {:?}, {:?}", res, top, stack);
 
             top.lhs = Some(Expression {
               op:    res.operator.unwrap().value,
@@ -187,7 +179,7 @@ impl Expression {
           },
         };
       };
-      println!("c: {:?}, {:?}, {:?}", operator, top, stack);
+      // println!("c: {:?}, {:?}, {:?}", operator, top, stack);
       if let Operator {
         value: Value::Operator(Token::RParenthesis),
         fixity: Fixity::Postfix,
@@ -212,6 +204,28 @@ impl Expression {
         lhs:      None,
         operator: Some(operator),
       };
+    }
+  }
+}
+
+impl<'a> Parseable<'a> for Expression {
+  fn parse(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Expression>, ParsingError<'a>> {
+    let mut span = Span {
+      stream: stream.clone(),
+      length: 1,
+    };
+    let res = Self::parse(stream);
+
+    span.length = stream.pos() - span.pos();
+
+    match res {
+      Ok(node) => Ok(ASTNodeExt { node, span }),
+      Err(msg) => {
+        Err(ParsingError {
+          msg: msg.to_string(),
+          span,
+        })
+      },
     }
   }
 }
