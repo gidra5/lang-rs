@@ -284,9 +284,7 @@ impl<'a> TokenStream<'a> {
     while char_stream.peek() != None {
       match Token::tokenize(&mut char_stream) {
         Ok(TokenExt {
-          token: Token::Skip,
-          src: _,
-          span: _,
+          token: Token::Skip, ..
         }) => {},
         Ok(token) => {
           tokens.push(token);
