@@ -28,8 +28,10 @@ impl InteractiveMode {
   pub fn exec(&mut self, code: CharStream) {
     match TokenStream::new(code) {
       Some(mut tokens) => {
-        match Expression::parse(&mut tokens) {
-          Ok(tree) => println!("{}", tree.node),
+        match Statement::parse_ext(&mut tokens) {
+          Ok(tree) => {
+            tree.node.evaluate();
+          },
           Err(msg) => Logger::error_parse(msg),
         };
       },
@@ -52,8 +54,10 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line)) {
             Some(mut tokens) => {
-              match Expression::parse(&mut tokens) {
-                Ok(tree) => println!("{}", tree.node),
+              match Statement::parse_ext(&mut tokens) {
+                Ok(tree) => {
+                  tree.node.evaluate();
+                },
                 Err(msg) => Logger::error_parse(msg),
               };
             },

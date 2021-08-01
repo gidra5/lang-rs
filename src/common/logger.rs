@@ -42,9 +42,9 @@ impl<'a> std::fmt::Display for Span<TokenStream<'a>> {
     let err_token = self.stream.peek();
     let err_end_token = self.stream.peek_ext(self.length).pop().flatten();
 
-    if let None = err_token {
+    if err_token.is_none() {
       let prev_token = self.stream.prev();
-      if let None = prev_token {
+      if prev_token.is_none() {
         return write!(f, "Empty stream???");
       }
       let TokenExt { span, .. } = prev_token.unwrap();
@@ -53,14 +53,14 @@ impl<'a> std::fmt::Display for Span<TokenStream<'a>> {
     }
 
     let err_token = err_token.unwrap();
-    let err_end_token = err_end_token.unwrap_or(
+    let err_end_token = err_end_token.unwrap_or_else(|| {
       self
         .stream
         .peek_ext(self.length - 1)
         .pop()
         .flatten()
-        .unwrap(),
-    );
+        .unwrap()
+    });
 
     let char_stream = err_token.span.stream;
     let src = char_stream.to_string();

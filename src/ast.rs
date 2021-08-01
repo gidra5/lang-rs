@@ -1,14 +1,15 @@
 #![allow(unused)]
-use crate::{common::*, token::*};
+use crate::{common::*, *};
 use std::{
-  collections::{HashMap, HashSet},
-  fmt::Display,
+  cmp::Ordering,
+  fmt::{Display, Formatter},
   hash::{Hash, Hasher},
 };
 
 #[path = "tests/ast.rs"]
 mod tests;
 
+/// matches error productions
 // pub enum ErrorType {}
 
 pub struct ParsingError<'a> {
@@ -21,7 +22,21 @@ pub trait Parseable<'a>
 where
   Self: Sized,
 {
-  fn parse(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Self>, ParsingError<'a>>;
+  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String>;
+  fn parse_ext(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Self>, ParsingError<'a>> {
+    let mut span = Span {
+      stream: stream.clone(),
+      length: 1,
+    };
+    let res = Self::parse(stream);
+
+    span.length = stream.pos() - span.pos();
+
+    match res {
+      Ok(node) => Ok(ASTNodeExt { node, span }),
+      Err(msg) => Err(ParsingError { msg, span }),
+    }
+  }
 }
 
 pub trait Synchronizable<'a> {
@@ -35,6 +50,9 @@ pub trait Synchronizable<'a> {
   fn sync_point(stream: &mut TokenStream<'a>) -> bool { false }
 }
 
+pub trait Evaluatable {
+  fn evaluate(self) -> Value;
+}
 /*
   Syntax definition:
 
@@ -69,7 +87,7 @@ pub struct Operator {
   value:  Value,
 }
 
-impl<'a> Default for Operator {
+impl Default for Operator {
   fn default() -> Operator {
     Operator {
       value:  Value::None,
@@ -79,43 +97,13 @@ impl<'a> Default for Operator {
 }
 
 impl Display for Expression {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self {
-        left: None,
-        op,
-        right: None,
-      } => write!(f, "{}", op),
-      Self {
-        left: Some(left),
-        op,
-        right: None,
-      } => {
-        match op {
-          Value::Operator(op) => write!(f, "({:?} {})", op, left),
-          _ => unreachable!(),
-        }
-      },
-      Self {
-        left: Some(left),
-        op,
-        right: Some(right),
-      } => {
-        match op {
-          Value::Operator(op) => write!(f, "({:?} {} {})", op, left, right),
-          _ => unreachable!(),
-        }
-      },
-      Self {
-        left: None,
-        op,
-        right: Some(right),
-      } => {
-        match op {
-          Value::Operator(op) => write!(f, "({:?} {})", op, right),
-          _ => unreachable!(),
-        }
-      },
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    let Self { left, op, right } = self;
+    match (left, right) {
+      (None, None) => write!(f, "{}", op),
+      (Some(left), None) => write!(f, "({} {})", op, left),
+      (None, Some(right)) => write!(f, "({} {})", op, right),
+      (Some(left), Some(right)) => write!(f, "({} {} {})", op, left, right),
     }
   }
 }
@@ -126,8 +114,35 @@ struct Frame {
   lhs:      Option<Expression>,
 }
 
-impl Expression {
-  fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, &'static str> {
+impl Evaluatable for Expression {
+  fn evaluate(self) -> Value {
+    match self {
+      Expression {
+        left: None,
+        op,
+        right: None,
+      } => op,
+      Expression {
+        left: Some(left),
+        op,
+        right: None,
+      } => op.postfix((*left).evaluate()),
+      Expression {
+        left: None,
+        op,
+        right: Some(right),
+      } => op.prefix((*right).evaluate()),
+      Expression {
+        left: Some(left),
+        op,
+        right: Some(right),
+      } => op.infix((*left).evaluate(), (*right).evaluate()),
+    }
+  }
+}
+
+impl<'a> Parseable<'a> for Expression {
+  fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, String> {
     let mut top = Frame {
       lhs:      None,
       operator: None,
@@ -152,24 +167,13 @@ impl Expression {
               right: Some(_),
             }) = res.lhs
             {
-              return Err("Expected closing parenthesis");
+              return Err("Expected closing parenthesis".to_string());
             }
-
-            // println!(
-            //   "a: {:?}, {:?}, {:?}, {:?}, {:?}",
-            //   res.operator,
-            //   operator,
-            //   res.operator <= operator,
-            //   token,
-            //   stack
-            // );
 
             top = match stack.pop() {
               Some(it) => it,
-              None => return res.lhs.ok_or("No expression"),
+              None => return res.lhs.ok_or_else(|| "No expression".to_string()),
             };
-
-            // println!("b: {:?}, {:?}, {:?}", res, top, stack);
 
             top.lhs = Some(Expression {
               op:    res.operator.unwrap().value,
@@ -179,7 +183,7 @@ impl Expression {
           },
         };
       };
-      // println!("c: {:?}, {:?}, {:?}", operator, top, stack);
+
       if let Operator {
         value: Value::Operator(Token::RParenthesis),
         fixity: Fixity::Postfix,
@@ -195,7 +199,7 @@ impl Expression {
           top.lhs = res.lhs;
           continue;
         } else {
-          return Err("Unexpected closing parenthesis");
+          return Err("Unexpected closing parenthesis".to_string());
         }
       }
 
@@ -204,28 +208,6 @@ impl Expression {
         lhs:      None,
         operator: Some(operator),
       };
-    }
-  }
-}
-
-impl<'a> Parseable<'a> for Expression {
-  fn parse(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Expression>, ParsingError<'a>> {
-    let mut span = Span {
-      stream: stream.clone(),
-      length: 1,
-    };
-    let res = Self::parse(stream);
-
-    span.length = stream.pos() - span.pos();
-
-    match res {
-      Ok(node) => Ok(ASTNodeExt { node, span }),
-      Err(msg) => {
-        Err(ParsingError {
-          msg: msg.to_string(),
-          span,
-        })
-      },
     }
   }
 }
@@ -298,6 +280,10 @@ impl Operator {
           | Value::Operator(Token::Div),
         fixity: Fixity::Infix,
       } => true,
+      Operator {
+        value: Value::Identifier(id),
+        fixity: Fixity::Infix,
+      } if id == "mod" => true,
       _ => false,
     }
   }
@@ -363,6 +349,7 @@ impl Operator {
               _ => return None,
             }
           },
+          Value::Identifier(id) if id == "mod" => (22, 21),
           _ => return None,
         }
       },
@@ -371,7 +358,6 @@ impl Operator {
   }
 }
 
-use std::cmp::Ordering;
 impl PartialOrd for Operator {
   fn partial_cmp(&self, other: &Operator) -> Option<Ordering> {
     let (_, r_bp1) = self.bp()?;
@@ -386,64 +372,78 @@ impl PartialOrd for Operator {
   }
 }
 
-fn expr(input: &str) -> Result<Expression, &'static str> {
-  let mut stream =
-    TokenStream::new(CharStream::from_str(input)).ok_or("Failed to create TokenStream")?;
-
-  Expression::parse(&mut stream)
+#[derive(Clone)]
+pub enum Statement {
+  Print(Expression),
+  Expression(Expression),
+  Let(String, Option<Expression>),
 }
 
-#[test]
-fn tests() {
-  let s = expr("1").unwrap();
-  assert_eq!(s.to_string(), "1");
+impl<'a> Parseable<'a> for Statement {
+  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
+    let TokenExt { token, src, span } = stream
+      .next()
+      .ok_or_else(|| "Unexpected end of stream at statement.".to_string())?;
 
-  let s = expr("1 + 2 * 3").unwrap();
-  assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
+    let res =
+      Ok(match token {
+        Token::Identifier if src == "print" => Self::Print(Expression::parse(stream)?),
+        Token::Let => {
+          let id = stream
+            .next()
+            .map(|token| {
+              match token.token {
+                Token::Identifier => Some(token.src),
+                _ => None,
+              }
+            })
+            .flatten()
+            .ok_or_else(|| "Expected identifier at let statement.".to_string())?;
 
-  let s = expr("a + b * c * d + e").unwrap();
-  assert_eq!(s.to_string(), "(Add (Add a (Mult (Mult b c) d)) e)");
+          if let TokenExt {
+            token: Token::Equal,
+            ..
+          } = stream
+            .next()
+            .ok_or_else(|| "Unexpected end of stream at statement.".to_string())?
+          {
+            Self::Let(
+              id,
+              Some(Expression::parse(stream).map_err(|err| {
+                format!("Expected expression after '=' in let statement: {}", err)
+              })?),
+            )
+          } else {
+            Self::Let(id, None)
+          }
+        },
+        _ => Self::Expression(Expression::parse(stream)?),
+      });
 
-  let s = expr("f . g . h").unwrap();
-  assert_eq!(s.to_string(), "(Period f (Period g h))");
+    if let TokenExt {
+      token: Token::Semicolon,
+      ..
+    } = stream
+      .next()
+      .ok_or_else(|| "Unexpected end of stream at statement.".to_string())?
+    {
+      res
+    } else {
+      Err("Missing semicolon at statement".to_string())
+    }
+  }
+}
 
-  let s = expr(" 1 + 2 + f . g . h * 3 * 4").unwrap();
-  assert_eq!(
-    s.to_string(),
-    "(Add (Add 1 2) (Mult (Mult (Period f (Period g h)) 3) 4))"
-  );
+impl Evaluatable for Statement {
+  fn evaluate(self) -> Value {
+    match self {
+      Self::Expression(expr) => {
+        println!("{} = {}", expr.clone(), expr.evaluate())
+      },
+      Self::Print(expr) => println!("{}", expr.evaluate()),
+      Self::Let(id, expr) => todo!(),
+    };
 
-  let s = expr("--1 * 2").unwrap();
-  assert_eq!(s.to_string(), "(Mult (Sub (Sub 1)) 2)");
-  // assert_eq!(s.to_string(), "(Mult (Dec 1) 2)");
-
-  let s = expr("--f . g").unwrap();
-  assert_eq!(s.to_string(), "(Sub (Sub (Period f g)))");
-
-  let s = expr("-9!").unwrap();
-  assert_eq!(s.to_string(), "(Sub (Bang 9))");
-
-  let s = expr("f . g !").unwrap();
-  assert_eq!(s.to_string(), "(Bang (Period f g))");
-
-  let s = expr("(((0)))").unwrap();
-  assert_eq!(s.to_string(), "0");
-
-  let s = expr("(1 + 2) * 3").unwrap();
-  assert_eq!(s.to_string(), "(Mult (Add 1 2) 3)");
-
-  let s = expr("1 + (2 * 3)").unwrap();
-  assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
-
-  let s = expr("(1 + (2 * 3)").unwrap_err();
-  assert_eq!(s, "Expected closing parenthesis");
-
-  let s = expr("1 + (2 * 3))").unwrap_err();
-  assert_eq!(s, "Unexpected closing parenthesis");
-
-  let s = expr("1 + 2 * 3)").unwrap_err();
-  assert_eq!(s, "Unexpected closing parenthesis");
-
-  let s = expr("1 + (2 * 3").unwrap_err();
-  assert_eq!(s, "Expected closing parenthesis");
+    Value::None
+  }
 }
