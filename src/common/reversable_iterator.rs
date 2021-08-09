@@ -61,10 +61,24 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
   type Item = T;
 
   fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> {
-    let mut next_tokens_iter = self.data.iter().skip(self.pos).cloned();
-    let next_tokens = (0..size).map(|_| next_tokens_iter.next()).collect();
+    // let mut next_tokens_iter = self.data.iter().skip(self.pos).cloned();
+    // let next_tokens = (0..size).map(|_| next_tokens_iter.next()).collect();
+    let next_tokens = self
+      .data
+      .iter()
+      .skip(self.pos)
+      .cloned()
+      .map(|i| Some(i))
+      .chain(std::iter::repeat(None))
+      .take(size)
+      .collect();
 
     self.pos += size;
+    self.pos = if self.pos > self.data.len() {
+      self.data.len()
+    } else {
+      self.pos
+    };
 
     next_tokens
   }
