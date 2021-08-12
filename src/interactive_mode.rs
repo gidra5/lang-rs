@@ -30,7 +30,7 @@ impl InteractiveMode {
       Some(mut tokens) => {
         match Statement::parse_ext(&mut tokens) {
           Ok(tree) => {
-            tree.node.evaluate();
+            tree.node.evaluate(&mut self.env);
           },
           Err(msg) => Logger::error_parse(msg),
         };
@@ -56,7 +56,7 @@ impl InteractiveMode {
             Some(mut tokens) => {
               match Statement::parse_ext(&mut tokens) {
                 Ok(tree) => {
-                  tree.node.evaluate();
+                  tree.node.evaluate(&mut self.env);
                 },
                 Err(msg) => Logger::error_parse(msg),
               };

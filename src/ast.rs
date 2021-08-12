@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::{common::*, *};
+use crate::{common::*, enviroment::Enviroment, *};
 use std::{
   cmp::Ordering,
   fmt::{Display, Formatter},
@@ -54,7 +54,7 @@ pub trait Synchronizable<'a> {
 }
 
 pub trait Evaluatable {
-  fn evaluate(self) -> Value;
+  fn evaluate(self, env: &mut Enviroment) -> Value;
 }
 /*
   Syntax definition:
@@ -118,8 +118,13 @@ struct Frame {
 }
 
 impl Evaluatable for Expression {
-  fn evaluate(self) -> Value {
+  fn evaluate(self, env: &mut Enviroment) -> Value {
     match self {
+      Expression {
+        left: None,
+        op: Value::Identifier(id),
+        right: None,
+      } => env.get(id).unwrap_or(Value::None),
       Expression {
         left: None,
         op,
@@ -129,17 +134,17 @@ impl Evaluatable for Expression {
         left: Some(left),
         op,
         right: None,
-      } => op.postfix((*left).evaluate()),
+      } => op.postfix((*left).evaluate(env)),
       Expression {
         left: None,
         op,
         right: Some(right),
-      } => op.prefix((*right).evaluate()),
+      } => op.prefix((*right).evaluate(env)),
       Expression {
         left: Some(left),
         op,
         right: Some(right),
-      } => op.infix((*left).evaluate(), (*right).evaluate()),
+      } => op.infix((*left).evaluate(env), (*right).evaluate(env)),
     }
   }
 }
@@ -460,13 +465,16 @@ impl<'a> Parseable<'a> for Statement {
 }
 
 impl Evaluatable for Statement {
-  fn evaluate(self) -> Value {
+  fn evaluate(self, env: &mut Enviroment) -> Value {
     match self {
       Self::Expression(expr) => {
-        println!("{} = {}", expr.clone(), expr.evaluate())
+        println!("{} = {}", expr.clone(), expr.evaluate(env))
       },
-      Self::Print(expr) => println!("{}", expr.evaluate()),
-      Self::Let(id, expr) => todo!(),
+      Self::Print(expr) => println!("{}", expr.evaluate(env)),
+      Self::Let(id, expr) => {
+        let val = expr.map_or(Value::None, |expr| expr.evaluate(env));
+        env.set(id, val)
+      },
     };
 
     Value::None
