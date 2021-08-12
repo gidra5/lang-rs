@@ -19,7 +19,25 @@
           "kind": "bin"
         }
       },
-      "args": [],
+      "args": ["./samples/sample1.txt"],
+      "cwd": "${workspaceFolder}"
+    },    
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug interactive move executable 'lang-rs'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=lang-rs",
+          "--package=lang-rs"
+        ],
+        "filter": {
+          "name": "lang-rs",
+          "kind": "bin"
+        }
+      },
+      "args": ["-i"],
       "cwd": "${workspaceFolder}"
     },
     {
