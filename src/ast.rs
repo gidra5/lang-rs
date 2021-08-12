@@ -142,6 +142,25 @@ impl Evaluatable for Expression {
       } => op.prefix((*right).evaluate(env)),
       Expression {
         left: Some(left),
+        op: op @ Value::Operator(Token::Equal),
+        right: Some(right),
+      } => {
+        let left = *left;
+        let right = (*right).evaluate(env);
+        if let Expression {
+          left: None,
+          op: Value::Identifier(left),
+          right: None,
+        } = left
+        {
+          env.set(left, right.clone());
+          right
+        } else {
+          op.infix(left.evaluate(env), right)
+        }
+      },
+      Expression {
+        left: Some(left),
         op,
         right: Some(right),
       } => op.infix((*left).evaluate(env), (*right).evaluate(env)),

@@ -8,8 +8,6 @@ pub enum Value {
   Boolean(bool),
   Char(char),
   Operator(Token),
-  // Func,
-  // Struct,
   None,
 }
 
