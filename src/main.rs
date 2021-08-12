@@ -1,5 +1,4 @@
 #![allow(clippy::inconsistent_struct_constructor, dead_code)] //TODO: should remove dead_code when ready
-#![feature(bindings_after_at)]
 extern crate automata;
 extern crate either;
 extern crate fancy_regex;

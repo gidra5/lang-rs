@@ -10,8 +10,11 @@ use std::{
 mod tests;
 
 /// matches error productions
-// pub enum ErrorType {}
+// pub enum ErrorType {
+//   Generic(String)
+// }
 
+#[derive(Debug)]
 pub struct ParsingError<'a> {
   // pub error_type: ErrorType,
   pub span: Span<TokenStream<'a>>,
@@ -143,16 +146,16 @@ impl Evaluatable for Expression {
 
 impl<'a> Parseable<'a> for Expression {
   fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, String> {
-    println!("a {:?}", token_stream.peek());
+    // println!("a {:?}", token_stream.peek());
     let mut top = Frame {
       lhs:      None,
       operator: None,
     };
     let mut stack = Vec::new();
     loop {
-      println!("s {:?}", token_stream.peek());
-      let token = token_stream.next();
-      println!("d {:?} {:?}", token_stream.peek(), stack);
+      // println!("s {:?}", token_stream.peek());
+      let token = token_stream.peek();
+      // println!("d {:?} {:?}", token_stream.peek(), stack);
       let operator = loop {
         let operator = token
           .clone()
@@ -186,7 +189,8 @@ impl<'a> Parseable<'a> for Expression {
           },
         };
       };
-      println!("f {:?}", operator);
+      token_stream.next();
+      // println!("f {:?}", operator);
 
       if let Operator {
         value: Value::Operator(Token::RParenthesis),
@@ -385,18 +389,24 @@ pub enum Statement {
 
 impl<'a> Parseable<'a> for Statement {
   fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
+    // println!("stream: {:?} \npeek: {:?} \nres_peek: {:?}", stream, stream.peek(),
+    // stream .peek()
+    // .ok_or_else(|| "Unexpected end of statement.".to_string()));
     let TokenExt { token, src, span } = stream
       .peek()
       .ok_or_else(|| "Unexpected end of statement.".to_string())?;
 
     let res =
-      Ok(match token {
+      match token {
         Token::Identifier if src == "print" => {
           stream.next();
           Self::Print(Expression::parse(stream)?)
         },
         Token::Let => {
+          // println!("stream: {:?} \npeek: {:?}", stream, stream.peek());
           stream.next();
+
+          // println!("stream: {:?} \npeek: {:?}", stream, stream.peek());
           let id = stream
             .next()
             .map(|token| {
@@ -407,14 +417,19 @@ impl<'a> Parseable<'a> for Statement {
             })
             .flatten()
             .ok_or_else(|| "Expected identifier at let statement.".to_string())?;
+          // println!("id: {}", id);
+          // println!("stream: {:?} \npeek: {:?} \nres_peek: {:?}", stream, stream.peek(),
+          // stream.peek().ok_or_else(|| "Missing semicolon at the end of let
+          // statement".to_string()));
 
           if let TokenExt {
             token: Token::Equal,
             ..
           } = stream
-            .next()
-            .ok_or_else(|| "Unexpected end of stream at statement.".to_string())?
+            .peek()
+            .ok_or_else(|| "Missing semicolon at the end of let statement".to_string())?
           {
+            stream.next();
             Self::Let(
               id,
               Some(Expression::parse(stream).map_err(|err| {
@@ -426,16 +441,18 @@ impl<'a> Parseable<'a> for Statement {
           }
         },
         _ => Self::Expression(Expression::parse(stream)?),
-      });
+      };
+    // println!("stream: {:?} \npeek: {:?} result: {:?}", stream, stream.peek(),
+    // res);
 
     if let TokenExt {
       token: Token::Semicolon,
       ..
     } = stream
       .next()
-      .ok_or_else(|| "Unexpected end of statement.".to_string())?
+      .ok_or_else(|| "Missing semicolon at the end of statement".to_string())?
     {
-      res
+      Ok(res)
     } else {
       Err("Missing semicolon at the end of statement".to_string())
     }

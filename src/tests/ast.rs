@@ -1,6 +1,6 @@
 use crate::common::logger::char_stream::{CharStream, TokenStream};
 
-use super::{Expression, Parseable, Statement};
+use super::{ASTNodeExt, Expression, Parseable, Statement};
 
 fn stmt(input: &str) -> Result<Statement, String> {
   let mut stream =
@@ -122,6 +122,22 @@ fn expr_17_tests() {
   assert_eq!(s, "No expression");
 }
 
+#[test]
+fn expr_consumes_just_enough_test() -> Result<(), String> {
+  let input = "2;";
+  let mut stream = TokenStream::new(CharStream::from_str(input))
+    .ok_or("Failed to create TokenStream".to_string())?;
+
+  let ASTNodeExt {
+    node: expr_res,
+    span,
+  } = Expression::parse_ext(&mut stream).map_err(|err| err.msg)?;
+
+  assert_eq!(span.length, 1);
+
+  Ok(())
+}
+
 
 #[test]
 fn stmt_1_tests() {
@@ -156,7 +172,7 @@ fn stmt_5_tests() {
 #[test]
 fn stmt_6_tests() {
   let s = stmt("let x").unwrap_err();
-  assert_eq!(s, "Missing semicolon at the end of statement");
+  assert_eq!(s, "Missing semicolon at the end of let statement");
 }
 
 #[test]
