@@ -2,19 +2,16 @@ use crate::common::logger::char_stream::{CharStream, TokenStream};
 
 use super::{ASTNodeExt, Expression, Parseable, Statement};
 
-fn stmt(input: &str) -> Result<Statement, String> {
+fn str_parse<'a, T: Parseable<'a>>(input: &str) -> Result<T, String> {
   let mut stream =
     TokenStream::new(CharStream::from_str(input)).ok_or("Failed to create TokenStream")?;
 
-  Statement::parse(&mut stream)
+  T::parse(&mut stream)
 }
 
-fn expr(input: &str) -> Result<Expression, String> {
-  let mut stream =
-    TokenStream::new(CharStream::from_str(input)).ok_or("Failed to create TokenStream")?;
+fn stmt(input: &str) -> Result<Statement, String> { str_parse::<Statement>(input) }
 
-  Expression::parse(&mut stream)
-}
+fn expr(input: &str) -> Result<Expression, String> { str_parse::<Expression>(input) }
 
 #[test]
 fn expr_1_tests() {

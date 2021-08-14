@@ -1,9 +1,11 @@
 #![allow(unused)]
 use crate::{common::*, enviroment::Enviroment, *};
 use std::{
+  cell::RefCell,
   cmp::Ordering,
   fmt::{Display, Formatter},
   hash::{Hash, Hasher},
+  rc::Rc,
 };
 
 #[path = "tests/ast.rs"]
@@ -54,7 +56,7 @@ pub trait Synchronizable<'a> {
 }
 
 pub trait Evaluatable {
-  fn evaluate(self, env: &mut Enviroment) -> Value;
+  fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value;
 }
 /*
   Syntax definition:
@@ -118,13 +120,13 @@ struct Frame {
 }
 
 impl Evaluatable for Expression {
-  fn evaluate(self, env: &mut Enviroment) -> Value {
+  fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value {
     match self {
       Expression {
         left: None,
         op: Value::Identifier(id),
         right: None,
-      } => env.get(id).unwrap_or(Value::None),
+      } => env.borrow().get(id).unwrap_or(Value::None),
       Expression {
         left: None,
         op,
@@ -153,7 +155,7 @@ impl Evaluatable for Expression {
           right: None,
         } = left
         {
-          env.set(left, right.clone());
+          env.borrow_mut().set(left, right.clone());
           right
         } else {
           op.infix(left.evaluate(env), right)
@@ -170,16 +172,13 @@ impl Evaluatable for Expression {
 
 impl<'a> Parseable<'a> for Expression {
   fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, String> {
-    // println!("a {:?}", token_stream.peek());
     let mut top = Frame {
       lhs:      None,
       operator: None,
     };
     let mut stack = Vec::new();
     loop {
-      // println!("s {:?}", token_stream.peek());
       let token = token_stream.peek();
-      // println!("d {:?} {:?}", token_stream.peek(), stack);
       let operator = loop {
         let operator = token
           .clone()
@@ -214,7 +213,6 @@ impl<'a> Parseable<'a> for Expression {
         };
       };
       token_stream.next();
-      // println!("f {:?}", operator);
 
       if let Operator {
         value: Value::Operator(Token::RParenthesis),
@@ -409,13 +407,36 @@ pub enum Statement {
   Print(Expression),
   Expression(Expression),
   Let(String, Option<Expression>),
+  Block(Block),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Block(Vec<Statement>);
+
+impl<'a> Parseable<'a> for Block {
+  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
+    let mut res = vec![];
+
+    while !check_token!(stream, Token::RBracket) && !check_token_end!(stream) {
+      res.push(Statement::parse(stream)?);
+    }
+
+    if let TokenExt {
+      token: Token::RBracket,
+      ..
+    } = stream
+      .next()
+      .ok_or_else(|| "Missing closing bracket".to_string())?
+    {
+      Ok(Self(res))
+    } else {
+      Err("Missing closing bracket".to_string())
+    }
+  }
 }
 
 impl<'a> Parseable<'a> for Statement {
   fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
-    // println!("stream: {:?} \npeek: {:?} \nres_peek: {:?}", stream, stream.peek(),
-    // stream .peek()
-    // .ok_or_else(|| "Unexpected end of statement.".to_string()));
     let TokenExt { token, src, span } = stream
       .peek()
       .ok_or_else(|| "Unexpected end of statement.".to_string())?;
@@ -426,11 +447,14 @@ impl<'a> Parseable<'a> for Statement {
           stream.next();
           Self::Print(Expression::parse(stream)?)
         },
-        Token::Let => {
-          // println!("stream: {:?} \npeek: {:?}", stream, stream.peek());
+        Token::LBracket => {
           stream.next();
 
-          // println!("stream: {:?} \npeek: {:?}", stream, stream.peek());
+          Self::Block(Block::parse(stream)?)
+        },
+        Token::Let => {
+          stream.next();
+
           let id = stream
             .next()
             .map(|token| {
@@ -441,10 +465,6 @@ impl<'a> Parseable<'a> for Statement {
             })
             .flatten()
             .ok_or_else(|| "Expected identifier at let statement.".to_string())?;
-          // println!("id: {}", id);
-          // println!("stream: {:?} \npeek: {:?} \nres_peek: {:?}", stream, stream.peek(),
-          // stream.peek().ok_or_else(|| "Missing semicolon at the end of let
-          // statement".to_string()));
 
           if let TokenExt {
             token: Token::Equal,
@@ -466,8 +486,6 @@ impl<'a> Parseable<'a> for Statement {
         },
         _ => Self::Expression(Expression::parse(stream)?),
       };
-    // println!("stream: {:?} \npeek: {:?} result: {:?}", stream, stream.peek(),
-    // res);
 
     if let TokenExt {
       token: Token::Semicolon,
@@ -484,7 +502,7 @@ impl<'a> Parseable<'a> for Statement {
 }
 
 impl Evaluatable for Statement {
-  fn evaluate(self, env: &mut Enviroment) -> Value {
+  fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value {
     match self {
       Self::Expression(expr) => {
         println!("{} = {}", expr.clone(), expr.evaluate(env))
@@ -492,7 +510,16 @@ impl Evaluatable for Statement {
       Self::Print(expr) => println!("{}", expr.evaluate(env)),
       Self::Let(id, expr) => {
         let val = expr.map_or(Value::None, |expr| expr.evaluate(env));
-        env.set(id, val)
+        env.borrow_mut().set(id, val)
+      },
+      Self::Block(Block(statements)) => {
+        let mut new_env = Enviroment::new();
+        new_env.set_enclosing(env.clone());
+        let mut new_env = Rc::new(RefCell::new(new_env));
+
+        for stmt in statements {
+          stmt.evaluate(&mut new_env);
+        }
       },
     };
 

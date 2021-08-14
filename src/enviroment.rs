@@ -1,13 +1,17 @@
 use crate::common::*;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Enviroment {
   variables: HashMap<String, Value>,
-  enclosing: Option<Box<Enviroment>>,
+  enclosing: Option<Rc<RefCell<Enviroment>>>,
 }
 
 impl Enviroment {
+  pub fn set_enclosing(&mut self, enclosing: Rc<RefCell<Enviroment>>) {
+    self.enclosing = Some(enclosing);
+  }
+
   pub fn new() -> Enviroment {
     Enviroment {
       variables: HashMap::new(),
@@ -18,7 +22,7 @@ impl Enviroment {
   pub fn get(&self, ident: String) -> Option<Value> {
     Some(match self.variables.get(&ident) {
       Some(val) => val.clone(),
-      None => self.enclosing.as_ref()?.get(ident)?,
+      None => self.enclosing.as_ref()?.borrow().get(ident)?,
     })
   }
   pub fn set(&mut self, ident: String, val: Value) { self.variables.insert(ident, val); }

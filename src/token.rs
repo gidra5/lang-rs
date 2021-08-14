@@ -336,3 +336,21 @@ impl<'a> ReversableIterator for TokenStream<'a> {
 
   fn pos(&self) -> usize { self.stream.pos() }
 }
+
+#[macro_export]
+macro_rules! check_token {
+  ($stream:ident, $pattern:pat) => {
+    matches!($stream
+      .peek(), Some(TokenExt {
+      token: $pattern,
+      ..
+    }))
+  };
+}
+
+#[macro_export]
+macro_rules! check_token_end {
+  ($stream:ident) => {
+    matches!($stream.peek(), None)
+  };
+}
