@@ -339,12 +339,13 @@ impl<'a> ReversableIterator for TokenStream<'a> {
 
 #[macro_export]
 macro_rules! check_token {
-  ($stream:ident, $pattern:pat) => {
+  ($stream:ident$([$src:ident])?, $pattern:pat $(if $cond:expr)?) => {
     matches!($stream
       .peek(), Some(TokenExt {
       token: $pattern,
+      $(src: $src,)?
       ..
-    }))
+    }) $(if $cond)?)
   };
 }
 

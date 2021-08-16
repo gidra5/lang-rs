@@ -1,4 +1,7 @@
-use crate::common::logger::char_stream::{CharStream, TokenStream};
+use crate::{
+  ast::Block,
+  common::logger::char_stream::{CharStream, TokenStream},
+};
 
 use super::{ASTNodeExt, Expression, Parseable, Statement};
 
@@ -218,4 +221,106 @@ fn stmt_12_tests() {
 fn stmt_13_tests() {
   let s = stmt("print 2").unwrap_err();
   assert_eq!(s, "Missing semicolon at the end of statement");
+}
+
+#[test]
+fn stmt_empty_block_tests() {
+  let s = stmt("{};").unwrap();
+  assert_eq!(s, Statement::Block(Block(vec![])));
+}
+
+#[test]
+fn stmt_if_1_tests() {
+  let s = stmt("if x + 2: print x; else print \"fuck you\";").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(
+      expr("x + 2").unwrap(),
+      vec![stmt("print x;").unwrap()],
+      vec![stmt("print \"fuck you\";").unwrap()]
+    )
+  );
+}
+
+#[test]
+fn stmt_if_2_tests() {
+  let s = stmt("if x + 2: { print x; print x; } else { print \"fuck you\"; }").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(
+      expr("x + 2").unwrap(),
+      vec![stmt("print x;").unwrap(), stmt("print x;").unwrap()],
+      vec![stmt("print \"fuck you\";").unwrap()]
+    )
+  );
+}
+
+#[test]
+fn stmt_if_3_tests() {
+  let s = stmt("if x + 2: print x; else { print \"fuck you\"; }").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(
+      expr("x + 2").unwrap(),
+      vec![stmt("print x;").unwrap()],
+      vec![stmt("print \"fuck you\";").unwrap()]
+    )
+  );
+}
+
+#[test]
+fn stmt_if_4_tests() {
+  let s = stmt("if x + 2: { print x; } else print \"fuck you\";").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(
+      expr("x + 2").unwrap(),
+      vec![stmt("print x;").unwrap()],
+      vec![stmt("print \"fuck you\";").unwrap()]
+    )
+  );
+}
+
+#[test]
+fn stmt_if_no_else_tests() {
+  let s = stmt("if x + 2: print x;").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(
+      expr("x + 2").unwrap(),
+      vec![stmt("print x;").unwrap()],
+      vec![]
+    )
+  );
+}
+
+#[test]
+fn stmt_if_no_else_bracketed_tests() {
+  let s = stmt("if x + 2: { print x; }").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(
+      expr("x + 2").unwrap(),
+      vec![stmt("print x;").unwrap()],
+      vec![]
+    )
+  );
+}
+
+#[test]
+fn stmt_if_missing_branch_tests() {
+  let s = stmt("if x + 2: else print x;").unwrap_err();
+  assert_eq!(s, "Empty true branch in if statement");
+}
+
+#[test]
+fn stmt_if_missing_else_branch_tests() {
+  let s = stmt("if x + 2: print x; else ").unwrap_err();
+  assert_eq!(s, "Empty false branch in if statement");
+}
+
+#[test]
+fn stmt_if_missing_colon_tests() {
+  let s = stmt("if x + 2 print x").unwrap_err();
+  assert_eq!(s, "Missing colon after condition in if statement");
 }

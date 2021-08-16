@@ -408,6 +408,7 @@ pub enum Statement {
   Expression(Expression),
   Let(String, Option<Expression>),
   Block(Block),
+  If(Expression, Vec<Statement>, Vec<Statement>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -446,6 +447,43 @@ impl<'a> Parseable<'a> for Statement {
         Token::Identifier if src == "print" => {
           stream.next();
           Self::Print(Expression::parse(stream)?)
+        },
+        Token::Identifier if src == "if" => {
+          stream.next();
+          let expr = Expression::parse(stream)?;
+
+          // println!("1 {:?}", stream);
+          // println!("1 {:?}", stream.peek());
+          if !check_token!(stream, Token::Colon) {
+            return Err("Missing colon after condition in if statement".to_string());
+          }
+          stream.next();
+          // println!("2 {:?}", stream);
+          // println!("2 {:?}", stream.peek());
+          let true_block = if check_token!(stream, Token::LBracket) {
+            Block::parse(stream)?.0
+          } else {
+            vec![Statement::parse(stream)?]
+          };
+          // println!("3 {:?}", stream);
+          // println!("3 {:?} {}", stream.peek(), check_token!(stream[src],
+          // Token::Identifier if src == "else"));
+
+          let false_block = if check_token!(stream[src], Token::Identifier if src == "else") {
+            stream.next();
+            // println!("5 {:?}", stream.peek());
+            if check_token!(stream, Token::LBracket) {
+              Block::parse(stream)?.0
+            } else {
+              vec![Statement::parse(stream)?]
+            }
+          } else {
+            // println!("6 {:?}", stream.peek());
+            vec![]
+          };
+          // println!("4 {:?}", stream);
+          // println!("4 {:?}", stream.peek());
+          return Ok(Self::If(expr, true_block, false_block));
         },
         Token::LBracket => {
           stream.next();
@@ -511,6 +549,13 @@ impl Evaluatable for Statement {
       Self::Let(id, expr) => {
         let val = expr.map_or(Value::None, |expr| expr.evaluate(env));
         env.borrow_mut().set(id, val)
+      },
+      Self::If(condition, true_branch, false_branch) => {
+        if let Value::Boolean(true) = condition.evaluate(env) {
+          Statement::Block(Block(true_branch)).evaluate(env)
+        } else {
+          Statement::Block(Block(false_branch)).evaluate(env)
+        };
       },
       Self::Block(Block(statements)) => {
         let mut new_env = Enviroment::new();
