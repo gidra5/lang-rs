@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::common::*;
+pub use crate::common::*;
 use std::{
   fmt::Debug,
   hash::{Hash, Hasher},
@@ -77,7 +77,6 @@ impl TokenExt<'_> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Token {
   // Keywords
-  Let,
   Return,
   Entry,
   Placeholder,
@@ -94,7 +93,7 @@ pub enum Token {
   Semicolon,
   Period,
   Colon,
-  // NewLine,
+  NewLine,
   Comma,
 
   // Operators
@@ -140,9 +139,9 @@ impl<'a> Tokenizable<'a> for Token {
     let mut msg = "";
     let token = (|| {
       Some(match stream.next()? {
-        ' ' | '\t' | '\r' | '\n' => Skip,
-        // ' ' | '\t' | '\r' => Skip,
-        // '\n' => NewLine,
+        // ' ' | '\t' | '\r' | '\n' => Skip,
+        ' ' | '\t' | '\r' => Skip,
+        '\n' => NewLine,
         '<' => LAngleBracket,
         '>' => RAngleBracket,
         '(' => LParenthesis,
@@ -225,7 +224,6 @@ impl<'a> Tokenizable<'a> for Token {
 
             match stream.substring(span.pos(), stream.pos()).as_str() {
               "entry" => Entry,
-              "let" => Let,
               "return" => Return,
               "true" | "false" => Boolean,
               "_" => Placeholder,
@@ -339,9 +337,8 @@ impl<'a> ReversableIterator for TokenStream<'a> {
 
 #[macro_export]
 macro_rules! check_token {
-  ($stream:ident$([$src:ident])?, $pattern:pat $(if $cond:expr)?) => {
-    matches!($stream
-      .peek(), Some(TokenExt {
+  ($token:expr$(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
+    matches!($token, Some(TokenExt {
       token: $pattern,
       $(src: $src,)?
       ..

@@ -68,7 +68,7 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
       .iter()
       .skip(self.pos)
       .cloned()
-      .map(|i| Some(i))
+      .map(Some)
       .chain(std::iter::repeat(None))
       .take(size)
       .collect();

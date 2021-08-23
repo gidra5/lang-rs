@@ -72,7 +72,7 @@ impl Value {
             Value::Number(left.powf(right))
           },
           (Value::Number(left), Token::EqualEqual, Value::Number(right)) => {
-            Value::Boolean(left == right)
+            Value::Boolean((left - right).abs() < f64::EPSILON)
           },
           (Value::Number(left), Token::LessEqual, Value::Number(right)) => {
             Value::Boolean(left <= right)
