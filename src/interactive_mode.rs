@@ -4,6 +4,8 @@ use crate::{common::*, enviroment::*};
 use rustyline::{error::*, *};
 use rustyline_derive::*;
 
+#[path = "tests/interactive_mode.rs"]
+mod tests;
 
 #[derive(Completer, Helper, Highlighter, Hinter, Validator)]
 pub struct InteractiveModeHelper {}
@@ -31,18 +33,13 @@ impl InteractiveMode {
     match TokenStream::new(code) {
       Some(mut tokens) => {
         match Program::parse_ext(&mut tokens) {
-          Ok(ASTNodeExt {
-            node: Program(stmts),
-            ..
-          }) => {
-            for stmt in stmts {
-              stmt.evaluate(&mut self.env);
-            }
+          Ok(tree) => {
+            tree.node.evaluate(&mut self.env);
           },
           Err(msg) => Logger::error_parse(msg),
         };
       },
-      None => println!("Tokenization failed"),
+      None => Logger::error("Tokenization failed"),
     };
   }
 
@@ -68,11 +65,11 @@ impl InteractiveMode {
                 Err(msg) => Logger::error_parse(msg),
               };
             },
-            None => println!("Tokenization failed"),
+            None => Logger::error("Tokenization failed"),
           };
         },
         Err(ReadlineError::Interrupted) => break,
-        Err(_) => println!("No input"),
+        Err(_) => Logger::log("No input"),
       }
     }
   }

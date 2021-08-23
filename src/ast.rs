@@ -16,19 +16,20 @@ pub use stmt::*;
 
 pub mod program;
 pub use program::*;
+
 #[path = "tests/ast.rs"]
 mod tests;
 
 /// matches error productions
-// pub enum ErrorType {
-//   Generic(String)
-// }
+#[derive(Debug)]
+pub enum ErrorType {
+  Generic(String),
+}
 
 #[derive(Debug)]
 pub struct ParsingError<'a> {
-  // pub error: ErrorType,
-  pub span: Span<TokenStream<'a>>,
-  pub msg:  String,
+  pub error: ErrorType,
+  pub span:  Span<TokenStream<'a>>,
 }
 
 pub trait Parseable<'a>
@@ -47,7 +48,12 @@ where
 
     match res {
       Ok(node) => Ok(ASTNodeExt { node, span }),
-      Err(msg) => Err(ParsingError { msg, span }),
+      Err(msg) => {
+        Err(ParsingError {
+          error: ErrorType::Generic(msg),
+          span,
+        })
+      },
     }
   }
 }

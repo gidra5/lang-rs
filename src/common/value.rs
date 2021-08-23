@@ -11,6 +11,10 @@ pub enum Value {
   None,
 }
 
+impl Default for Value {
+  fn default() -> Self { Value::None }
+}
+
 impl Display for Value {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     use crate::Value::*;

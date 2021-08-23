@@ -5,6 +5,7 @@ use crate::{
   check_token_end,
   common::{
     char_stream::{value::Value, Token, TokenExt, TokenStream},
+    logger::char_stream::{Logger, LoggerTrait},
     reversable_iterator::ReversableIterator,
   },
   enviroment::Enviroment,
@@ -122,7 +123,7 @@ impl<'a> Parseable<'a> for Statement {
         Token::LBracket => {
           stream.next();
 
-          Self::Block(Block::parse(stream)?)
+          return Ok(Self::Block(Block::parse(stream)?));
         },
         Token::Identifier if src == "let" => {
           stream.next();
@@ -177,12 +178,13 @@ impl Evaluatable for Statement {
   fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value {
     match self {
       Self::Expression(expr) => {
-        println!("{} = {}", expr.clone(), expr.evaluate(env))
+        expr.evaluate(env);
+        // println!("{} = {}", expr.clone(), expr.evaluate(env))
       },
-      Self::Print(expr) => println!("{}", expr.evaluate(env)),
+      Self::Print(expr) => Logger::write(format!("{}", expr.evaluate(env))),
       Self::Let(id, expr) => {
         let val = expr.map_or(Value::None, |expr| expr.evaluate(env));
-        env.borrow_mut().set(id, val)
+        env.borrow_mut().define(id, val)
       },
       Self::If(condition, true_branch, false_branch) => {
         if let Value::Boolean(true) = condition.evaluate(env) {

@@ -80,7 +80,7 @@ impl Evaluatable for Expression {
         left: None,
         op: Value::Identifier(id),
         right: None,
-      } => env.borrow().get(id).unwrap_or(Value::None),
+      } => env.borrow().get(id).unwrap_or_default(),
       Expression {
         left: None,
         op,
@@ -110,6 +110,7 @@ impl Evaluatable for Expression {
         } = left
         {
           env.borrow_mut().set(left, right.clone());
+          println!("{:?}", env);
           right
         } else {
           op.infix(left.evaluate(env), right)

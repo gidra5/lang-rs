@@ -133,7 +133,7 @@ fn expr_consumes_just_enough() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream).map_err(|err| err.msg)?;
+  } = Expression::parse_ext(&mut stream).map_err(|err| format!("{:?}", err.error))?;
 
   assert_eq!(span.length, 1);
 

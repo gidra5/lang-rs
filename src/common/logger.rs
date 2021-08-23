@@ -1,28 +1,39 @@
 pub use crate::{ast::*, common::*, token::*};
 
-pub struct Logger;
-impl Logger {
-  pub fn log(msg: &str) {
-    println!("Log: {}", msg);
+pub trait LoggerTrait {
+  fn write(msg: String) {
+    println!("{}", msg);
   }
 
-  pub fn warning(msg: &str) {
-    println!("Warning: {}", msg);
+  fn log(msg: &str) { Self::write(format!("Log: {}", msg)); }
+
+  fn warning(msg: &str) { Self::write(format!("Warning: {}", msg)); }
+
+  fn error(msg: &str) { Self::write(format!("Error: {}", msg)); }
+
+  fn error_token(TokenizationError { msg, span }: TokenizationError<'_>) {
+    Self::error(format!("{} at\n{}", msg, span).as_str());
   }
 
-  pub fn error(msg: &str) {
-    println!("Error: {}", msg);
-  }
-
-  pub fn error_token(err: TokenizationError<'_>) {
-    println!("Error: {} at\n{}", err.msg, err.span);
-  }
-
-  pub fn error_parse(err: ParsingError<'_>) {
-    println!("Error: {}\n{}", err.span, err.msg);
+  fn error_parse(ParsingError { error, span }: ParsingError<'_>) {
+    match error {
+      ErrorType::Generic(msg) => Self::error(format!("{}\n{}", span, msg).as_str()),
+    }
   }
 }
 
+pub static mut LOGS: Vec<String> = vec![];
+
+pub struct Logger;
+impl LoggerTrait for Logger {
+  fn write(msg: String) {
+    unsafe {
+      LOGS.push(msg.clone());
+    }
+
+    println!("{}", msg);
+  }
+}
 
 #[derive(Clone, Debug)]
 pub struct Span<T: ReversableIterator> {
