@@ -8,15 +8,11 @@ use crate::{
     reversable_iterator::ReversableIterator,
   },
   enviroment::Enviroment,
+  punct_or_newline,
 };
 
 use super::{expr::Expression, Evaluatable, Parseable};
 
-macro_rules! punct_or_newline {
-  ($token:expr, $punct:ident) => {
-    matches!($token, Some(TokenExt { token: Token::NewLine | Token::$punct, ..}) | None)
-  };
-}
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
   Print(Expression),
@@ -26,12 +22,18 @@ pub enum Statement {
   If(Expression, Vec<Statement>, Vec<Statement>),
 }
 
+#[macro_export]
 macro_rules! parse_stmt_vec {
-  ($stream:ident, $token:ident) => {{
+  ($stream:ident $(, $token:ident)?) => {{
+    use crate::{check_token, check_token_end,
+      ast::expr::Expression, common::{
+        char_stream::{Token, TokenExt, TokenStream},
+        reversable_iterator::ReversableIterator,
+      }, enviroment::Enviroment, punct_or_newline};
     let mut res = vec![];
     let mut err = None;
 
-    while !check_token!($stream.peek(), Token::$token) && !check_token_end!($stream) {
+    while $(!check_token!($stream.peek(), Token::$token) &&)? !check_token_end!($stream) {
       match Statement::parse($stream) {
         Ok(Statement::Expression(expr)) if expr == Expression::default() => (),
         Ok(stmt) => res.push(stmt),
@@ -142,9 +144,9 @@ impl<'a> Parseable<'a> for Statement {
               id,
               Some(match Expression::parse(stream) {
                 Ok(expr) if expr == Expression::default() => {
-                  return Err(format!(
-                    "Error at expression after '=' in let statement: No expression"
-                  ))
+                  return Err(
+                    "Error at expression after '=' in let statement: No expression".to_string(),
+                  )
                 },
                 Ok(expr) => expr,
                 Err(msg) => {

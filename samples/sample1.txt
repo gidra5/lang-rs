@@ -1,6 +1,17 @@
-1-5+3^2
+let x = 2; let y = 3
 
-1+2*(3+4)/(5-6*
-7
-*
-8+3/4
+/*
+  OMG
+*/
+
+{
+  let z
+
+  z = x = x + y // will print result of expression
+  
+  print z; 
+  print x
+}
+
+print x 
+print y

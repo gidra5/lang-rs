@@ -30,9 +30,14 @@ impl InteractiveMode {
   pub fn exec(&mut self, code: CharStream) {
     match TokenStream::new(code) {
       Some(mut tokens) => {
-        match Statement::parse_ext(&mut tokens) {
-          Ok(tree) => {
-            tree.node.evaluate(&mut self.env);
+        match Program::parse_ext(&mut tokens) {
+          Ok(ASTNodeExt {
+            node: Program(stmts),
+            ..
+          }) => {
+            for stmt in stmts {
+              stmt.evaluate(&mut self.env);
+            }
           },
           Err(msg) => Logger::error_parse(msg),
         };

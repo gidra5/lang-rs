@@ -16,6 +16,7 @@ mod token;
 mod vm;
 
 use crate::common::*;
+use interactive_mode::*;
 
 fn main() {
   let yaml = load_yaml!("cli.yml");
@@ -34,17 +35,13 @@ fn main() {
     }
   };
 
+  let mut im = InteractiveMode::new();
+
+  if let Some(code) = code {
+    im.exec(code);
+  }
+
   if matches.is_present("interactive") {
-    use interactive_mode::*;
-
-    let mut im = InteractiveMode::new();
-
-    if let Some(code) = code {
-      im.exec(code);
-    }
-
     im.run();
-  } else {
-    todo!();
   }
 }

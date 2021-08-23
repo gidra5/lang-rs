@@ -168,9 +168,7 @@ impl<'a> Tokenizable<'a> for Token {
             while stream.is_not_next('\n') {}
             Skip
           } else if stream.is_next('*') {
-            while stream.next() != Some('*') || stream.next() != Some('/') {
-              println!("{:?}", stream.peek())
-            }
+            while stream.next() != Some('*') || stream.next() != Some('/') {}
             Skip
           } else {
             Div
@@ -350,5 +348,12 @@ macro_rules! check_token {
 macro_rules! check_token_end {
   ($stream:ident) => {
     matches!($stream.peek(), None)
+  };
+}
+
+#[macro_export]
+macro_rules! punct_or_newline {
+  ($token:expr, $punct:ident) => {
+    matches!($token, Some(TokenExt { token: Token::NewLine | Token::$punct, ..}) | None)
   };
 }

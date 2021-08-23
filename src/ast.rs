@@ -13,6 +13,9 @@ pub use expr::*;
 
 pub mod stmt;
 pub use stmt::*;
+
+pub mod program;
+pub use program::*;
 #[path = "tests/ast.rs"]
 mod tests;
 
