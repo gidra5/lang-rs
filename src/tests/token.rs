@@ -77,7 +77,7 @@ fn token_float_6() {
 }
 
 #[test]
-fn token_prefix_suffix_period_followed_by_number() {
+fn token_period_number_period() {
   let s = tokens(".123.456.").unwrap();
   check!(s, [(Period, "."), (Number, "123.456"), (Period, ".")])
 }

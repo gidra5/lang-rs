@@ -268,7 +268,7 @@ impl Operator {
       Operator {
         value: Value::Identifier(id),
         fixity: Fixity::Infix,
-      } if id == "mod" => true,
+      } => matches!(id.as_str(), "mod" | "and" | "or"),
       _ => false,
     }
   }
@@ -335,6 +335,8 @@ impl Operator {
             }
           },
           Value::Identifier(id) if id == "mod" => (22, 21),
+          Value::Identifier(id) if id == "and" => (24, 23),
+          Value::Identifier(id) if id == "or" => (25, 26),
           _ => return None,
         }
       },

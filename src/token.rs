@@ -272,7 +272,10 @@ pub struct TokenStream<'a> {
 }
 
 impl<'a> TokenStream<'a> {
-  pub fn new(mut char_stream: CharStream<'a>) -> Option<TokenStream> {
+  pub fn new<L: LoggerTrait>(
+    mut char_stream: CharStream<'a>,
+    logger: &mut L,
+  ) -> Option<TokenStream<'a>> {
     let mut tokens = vec![];
     let mut had_err = false;
     let mut err_info: Option<TokenizationError> = None;
@@ -286,7 +289,7 @@ impl<'a> TokenStream<'a> {
           tokens.push(token);
 
           if let Some(e) = err_info {
-            Logger::error_token(e);
+            logger.error_token(e);
             err_info = None;
           }
         },
@@ -297,7 +300,7 @@ impl<'a> TokenStream<'a> {
               e2.span.length = 1 + e.span.stream.pos() - e2.span.stream.pos();
               err_info = Some(e2);
             } else {
-              Logger::error_token(e2);
+              logger.error_token(e2);
               err_info = Some(e);
             }
           } else {
@@ -309,7 +312,7 @@ impl<'a> TokenStream<'a> {
 
     if had_err {
       if let Some(e) = err_info {
-        Logger::error_token(e);
+        logger.error_token(e);
         err_info = None;
       }
       None
@@ -335,7 +338,7 @@ impl<'a> ReversableIterator for TokenStream<'a> {
 
 #[macro_export]
 macro_rules! check_token {
-  ($token:expr$(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
+  ($token:expr $(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
     matches!($token, Some(TokenExt {
       token: $pattern,
       $(src: $src,)?
@@ -353,7 +356,7 @@ macro_rules! check_token_end {
 
 #[macro_export]
 macro_rules! punct_or_newline {
-  ($token:expr, $punct:ident) => {
-    matches!($token, Some(TokenExt { token: Token::NewLine | Token::$punct, ..}) | None)
+  ($token:expr, $($punct:ident)|+) => {
+    matches!($token, Some(TokenExt { token: Token::NewLine | $(Token::$punct)|+, ..}) | None)
   };
 }

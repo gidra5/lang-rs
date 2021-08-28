@@ -1,5 +1,6 @@
 use crate::Token;
 use std::fmt::Display;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   Identifier(String),
@@ -90,6 +91,8 @@ impl Value {
       Value::Identifier(operator) => {
         match (left, operator.as_str(), right) {
           (Value::Number(left), "mod", Value::Number(right)) => Value::Number(left % right),
+          (Value::Boolean(left), "and", Value::Boolean(right)) => Value::Boolean(left && right),
+          (Value::Boolean(left), "or", Value::Boolean(right)) => Value::Boolean(left || right),
           _ => Value::None,
         }
       },

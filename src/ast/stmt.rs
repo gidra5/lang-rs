@@ -14,6 +14,37 @@ use crate::{
 
 use super::{expr::Expression, Evaluatable, Parseable};
 
+/// Statement
+///
+/// Every statement has either a semicolon or newline at the end
+///
+/// Possible variants are:
+///
+/// Print: Prints value of evaluated expression, probably will be removed
+///
+/// Syntax:
+/// "print" expr
+///
+/// Expression: evaluates expression, probably everything can be treated as this
+/// statement
+///
+/// Syntax:
+/// expr
+///
+/// Let: Creates variable in current scope
+///
+/// Syntax:
+/// "let" ident ("=" expr)?
+///
+/// Block: Groups staements into one
+///
+/// Syntax:
+/// "{" (stmt)* "}"
+///
+/// If: Conditionally executes statements
+///
+/// Syntax:
+/// "if" expr(: | "\n") stmt "else" stmt
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
   Print(Expression),
@@ -25,7 +56,7 @@ pub enum Statement {
 
 #[macro_export]
 macro_rules! parse_stmt_vec {
-  ($stream:ident $(, $token:ident)?) => {{
+  ($stream:ident $($(, { $src:ident })?, $pattern:pat $(if $cond:expr)?)?) => {{
     use crate::{check_token, check_token_end,
       ast::expr::Expression, common::{
         char_stream::{Token, TokenExt, TokenStream},
@@ -34,7 +65,7 @@ macro_rules! parse_stmt_vec {
     let mut res = vec![];
     let mut err = None;
 
-    while $(!check_token!($stream.peek(), Token::$token) &&)? !check_token_end!($stream) {
+    while $(!check_token!($stream.peek() $(, { $src })?, $pattern $(if $cond)?) &&)? !check_token_end!($stream) {
       match Statement::parse($stream) {
         Ok(Statement::Expression(expr)) if expr == Expression::default() => (),
         Ok(stmt) => res.push(stmt),
@@ -74,7 +105,6 @@ impl<'a> Parseable<'a> for Block {
   }
 }
 
-
 impl<'a> Parseable<'a> for Statement {
   fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
     let res = {
@@ -90,11 +120,20 @@ impl<'a> Parseable<'a> for Statement {
         Token::Identifier if src == "if" => {
           stream.next();
           let expr = Expression::parse(stream)?;
+          println!("2 {:?}", stream.peek());
 
-          if !punct_or_newline!(stream.next(), Colon) {
+          if !punct_or_newline!(stream.peek(), Colon | LBracket) {
             return Err("Missing colon after condition in if statement".to_string());
           }
+          println!("3 {:?}", stream.peek());
 
+          if !check_token!(stream.peek(), Token::LBracket) {
+            stream.next();
+          }
+          println!("4 {:?}", stream.peek());
+
+          // let true_block = parse_stmt_vec!(stream, {src}, Token::Identifier if src ==
+          // "else");
           let true_block = if check_token!(stream.peek(), Token::LBracket) {
             stream.next();
             Block::parse(stream)?.0
@@ -103,10 +142,12 @@ impl<'a> Parseable<'a> for Statement {
           } else {
             return Err("Empty true branch in if statement".to_string());
           };
+          println!("5 {:?}", stream.peek());
 
           let false_block = if check_token!(stream.peek(), {src}, Token::Identifier if src == "else")
           {
             stream.next();
+            println!("6 {:?}", stream.peek());
             if check_token!(stream.peek(), Token::LBracket) {
               stream.next();
               Block::parse(stream)?.0
@@ -118,6 +159,7 @@ impl<'a> Parseable<'a> for Statement {
           } else {
             vec![]
           };
+          println!("7 {:?}", stream.peek());
           return Ok(Self::If(expr, true_block, false_block));
         },
         Token::LBracket => {
@@ -141,6 +183,9 @@ impl<'a> Parseable<'a> for Statement {
 
           if check_token!(stream.peek(), Token::Equal) {
             stream.next();
+            while check_token!(stream.peek(), Token::NewLine) {
+              stream.next();
+            }
             Self::Let(
               id,
               Some(match Expression::parse(stream) {
@@ -175,22 +220,22 @@ impl<'a> Parseable<'a> for Statement {
 }
 
 impl Evaluatable for Statement {
-  fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value {
+  fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
     match self {
       Self::Expression(expr) => {
-        expr.evaluate(env);
+        expr.evaluate(env, logger);
         // println!("{} = {}", expr.clone(), expr.evaluate(env))
       },
-      Self::Print(expr) => Logger::write(format!("{}", expr.evaluate(env))),
+      Self::Print(expr) => logger.write(format!("{}", expr.evaluate(env, logger))),
       Self::Let(id, expr) => {
-        let val = expr.map_or(Value::None, |expr| expr.evaluate(env));
+        let val = expr.map_or(Value::None, |expr| expr.evaluate(env, logger));
         env.borrow_mut().define(id, val)
       },
       Self::If(condition, true_branch, false_branch) => {
-        if let Value::Boolean(true) = condition.evaluate(env) {
-          Statement::Block(Block(true_branch)).evaluate(env)
+        if let Value::Boolean(true) = condition.evaluate(env, logger) {
+          Statement::Block(Block(true_branch)).evaluate(env, logger)
         } else {
-          Statement::Block(Block(false_branch)).evaluate(env)
+          Statement::Block(Block(false_branch)).evaluate(env, logger)
         };
       },
       Self::Block(Block(statements)) => {
@@ -199,7 +244,7 @@ impl Evaluatable for Statement {
         let mut new_env = Rc::new(RefCell::new(new_env));
 
         for stmt in statements {
-          stmt.evaluate(&mut new_env);
+          stmt.evaluate(&mut new_env, logger);
         }
       },
     };

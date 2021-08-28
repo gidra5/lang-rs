@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::common::logger::char_stream::{value::Value, CharStream, LOGS};
+use crate::common::logger::char_stream::{value::Value, CharStream};
 
 use super::InteractiveMode;
 
@@ -27,12 +27,14 @@ macro_rules! assert_env {
 
 #[test]
 fn interactive_scope_mutation() {
-  let InteractiveMode { rl: _, env: state } = interpret(stringify!(
-    let x;
+  let InteractiveMode { rl: _, env: state } = interpret(
+    "
+    let x
     {
-      x = 2;
+      x = 2
     }
-  ));
+  ",
+  );
 
   assert_env!(state, {
     x: Value::Number(2.)
@@ -40,28 +42,60 @@ fn interactive_scope_mutation() {
 }
 
 #[test]
+fn interactive_if() {
+  let InteractiveMode { rl: _, env: state } = interpret(
+    "
+    let x = true
+    let y = false
+
+    if true: print \"true\"
+    if false: print \"false\"
+    if x: print \"x\"
+    if y: print \"unreachable\"; else print \"not y\"
+    if y and x: print \"unreachable\"; else print \"not (y and x)\"
+    if y or x: print \"y or x\"; else print \"unreachable\"
+  ",
+  );
+
+  unsafe {
+    assert!(logs.iter().eq(
+      vec![
+        "\"true\"",
+        "\"x\"",
+        "\"not y\"",
+        "\"not (y and x)\"",
+        "\"y or x\"",
+      ]
+      .iter()
+    ))
+  }
+}
+
+#[test]
 fn interactive_2() {
-  let InteractiveMode { rl: _, env: state } = interpret(stringify!(
-    let a = "global a";
-    let b = "global b";
-    let c = "global c";
+  let InteractiveMode { rl: _, env: state } = interpret(
+    "
+    let a = \"global a\"
+    let b = \"global b\"
+    let c = \"global c\"
     {
-      let a = "outer a";
-      let b = "outer b";
+      let a = \"outer a\"
+      let b = \"outer b\"
       {
-        let a = "inner a";
-        print a;
-        print b;
-        print c;
+        let a = \"inner a\"
+        print a
+        print b
+        print c
       }
-      print a;
-      print b;
-      print c;
+      print a
+      print b
+      print c
     }
-    print a;
-    print b;
-    print c;
-  ));
+    print a
+    print b
+    print c
+  ",
+  );
 
   assert_env!(state, {
     a: Value::String("global a".to_string()),
@@ -70,7 +104,8 @@ fn interactive_2() {
   });
 
   unsafe {
-    assert!(LOGS.iter().eq(
+    println!("{:?}", logs);
+    assert!(logs.iter().eq(
       vec![
         "\"inner a\"",
         "\"outer b\"",
@@ -85,4 +120,15 @@ fn interactive_2() {
       .iter()
     ))
   }
+}
+
+#[test]
+fn interactive_weird() {
+  let InteractiveMode { rl: _, env: state } = interpret(
+    "
+    let else = (else) => else
+
+    if else: else else; else else else
+  ",
+  );
 }

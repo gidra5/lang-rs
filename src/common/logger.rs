@@ -1,35 +1,34 @@
 pub use crate::{ast::*, common::*, token::*};
 
 pub trait LoggerTrait {
-  fn write(msg: String) {
+  fn write(&mut self, msg: String) {
     println!("{}", msg);
   }
 
-  fn log(msg: &str) { Self::write(format!("Log: {}", msg)); }
+  fn log(&mut self, msg: &str) { Self::write(self, format!("Log: {}", msg)); }
 
-  fn warning(msg: &str) { Self::write(format!("Warning: {}", msg)); }
+  fn warning(&mut self, msg: &str) { Self::write(self, format!("Warning: {}", msg)); }
 
-  fn error(msg: &str) { Self::write(format!("Error: {}", msg)); }
+  fn error(&mut self, msg: &str) { Self::write(self, format!("Error: {}", msg)); }
 
-  fn error_token(TokenizationError { msg, span }: TokenizationError<'_>) {
-    Self::error(format!("{} at\n{}", msg, span).as_str());
+  fn error_token(&mut self, TokenizationError { msg, span }: TokenizationError<'_>) {
+    Self::error(self, format!("{} at\n{}", msg, span).as_str());
   }
 
-  fn error_parse(ParsingError { error, span }: ParsingError<'_>) {
+  fn error_parse(&mut self, ParsingError { error, span }: ParsingError<'_>) {
     match error {
-      ErrorType::Generic(msg) => Self::error(format!("{}\n{}", span, msg).as_str()),
+      ErrorType::Generic(msg) => Self::error(self, format!("{}\n{}", span, msg).as_str()),
     }
   }
 }
 
-pub static mut LOGS: Vec<String> = vec![];
+pub struct Logger {
+  logs: Vec<String>,
+}
 
-pub struct Logger;
 impl LoggerTrait for Logger {
-  fn write(msg: String) {
-    unsafe {
-      LOGS.push(msg.clone());
-    }
+  fn write(&mut self, msg: String) {
+    self.logs.push(msg.clone());
 
     println!("{}", msg);
   }

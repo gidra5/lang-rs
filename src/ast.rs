@@ -66,11 +66,11 @@ pub trait Synchronizable<'a> {
     }
   }
 
-  fn sync_point(stream: &mut TokenStream<'a>) -> bool { false }
+  fn sync_point(stream: &mut TokenStream<'a>) -> bool { true }
 }
 
 pub trait Evaluatable {
-  fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value;
+  fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value;
 }
 
 #[derive(Clone, Debug)]
