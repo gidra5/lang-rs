@@ -8,7 +8,7 @@ use super::{
 };
 
 fn str_parse<'a, T: Parseable<'a>>(input: &str) -> Result<T, String> {
-  let logger = Logger { logs: vec![] };
+  let mut logger = Logger { logs: vec![] };
   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
     .ok_or("Failed to create TokenStream")?;
 
@@ -127,7 +127,7 @@ fn expr_17() {
 
 #[test]
 fn expr_consumes_just_enough() -> Result<(), String> {
-  let logger = Logger { logs: vec![] };
+  let mut logger = Logger { logs: vec![] };
   let input = "2;";
   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
     .ok_or("Failed to create TokenStream".to_string())?;

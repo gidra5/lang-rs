@@ -5,6 +5,8 @@ use std::{
   rc::Rc,
 };
 
+use itertools::Itertools;
+
 use crate::{
   common::{
     char_stream::{value::Value, Token, TokenExt, TokenStream},
@@ -17,10 +19,13 @@ use crate::{
 use super::{Evaluatable, Parseable};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Expression {
-  left:  Option<Box<Expression>>,
-  op:    Value,
-  right: Option<Box<Expression>>,
+pub enum Expression {
+  Binary {
+    left:  Option<Box<Expression>>,
+    op:    Value,
+    right: Option<Box<Expression>>,
+  },
+  Tuple(Vec<Expression>),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -39,7 +44,7 @@ pub struct Operator {
 
 impl Default for Expression {
   fn default() -> Expression {
-    Expression {
+    Expression::Binary {
       left:  None,
       op:    Value::None,
       right: None,
@@ -58,12 +63,28 @@ impl Default for Operator {
 
 impl Display for Expression {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    let Self { left, op, right } = self;
-    match (left, right) {
-      (None, None) => write!(f, "{}", op),
-      (Some(left), None) => write!(f, "({} {})", op, left),
-      (None, Some(right)) => write!(f, "({} {})", op, right),
-      (Some(left), Some(right)) => write!(f, "({} {} {})", op, left, right),
+    match self {
+      Self::Binary {
+        left: None,
+        op,
+        right: None,
+      } => write!(f, "{}", op),
+      Self::Binary {
+        left: Some(left),
+        op,
+        right: None,
+      } => write!(f, "({} {})", op, left),
+      Self::Binary {
+        left: None,
+        op,
+        right: Some(right),
+      } => write!(f, "({} {})", op, right),
+      Self::Binary {
+        left: Some(left),
+        op,
+        right: Some(right),
+      } => write!(f, "({} {} {})", op, left, right),
+      Self::Tuple(exprs) => write!(f, "({})", exprs.iter().join(", ")),
     }
   }
 }
@@ -77,34 +98,34 @@ struct Frame {
 impl Evaluatable for Expression {
   fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
     match self {
-      Expression {
+      Expression::Binary {
         left: None,
         op: Value::Identifier(id),
         right: None,
       } => env.borrow().get(id).unwrap_or_default(),
-      Expression {
+      Expression::Binary {
         left: None,
         op,
         right: None,
       } => op,
-      Expression {
+      Expression::Binary {
         left: Some(left),
         op,
         right: None,
       } => op.postfix((*left).evaluate(env, logger)),
-      Expression {
+      Expression::Binary {
         left: None,
         op,
         right: Some(right),
       } => op.prefix((*right).evaluate(env, logger)),
-      Expression {
+      Expression::Binary {
         left: Some(left),
         op: op @ Value::Operator(Token::Equal),
         right: Some(right),
       } => {
         let left = *left;
         let right = (*right).evaluate(env, logger);
-        if let Expression {
+        if let Expression::Binary {
           left: None,
           op: Value::Identifier(left),
           right: None,
@@ -117,7 +138,7 @@ impl Evaluatable for Expression {
           op.infix(left.evaluate(env, logger), right)
         }
       },
-      Expression {
+      Expression::Binary {
         left: Some(left),
         op,
         right: Some(right),
@@ -125,6 +146,14 @@ impl Evaluatable for Expression {
         op.infix(
           (*left).evaluate(env, logger),
           (*right).evaluate(env, logger),
+        )
+      },
+      Expression::Tuple(exprs) => {
+        Value::Tuple(
+          exprs
+            .into_iter()
+            .map(|expr| expr.evaluate(env, logger))
+            .collect_vec(),
         )
       },
     }
@@ -140,7 +169,7 @@ impl<'a> Parseable<'a> for Expression {
     let mut stack = Vec::new();
     loop {
       let token = token_stream.peek();
-      let operator = loop {
+      let mut operator = loop {
         let operator = token
           .clone()
           .map(|token| Operator::new(token, top.lhs.is_none()))
@@ -151,21 +180,21 @@ impl<'a> Parseable<'a> for Expression {
           Some(op) if top.operator <= Some(op.clone()) => break op,
           _ => {
             let res = top;
-            if let Some(Expression {
-              op: Value::Operator(Token::LParenthesis),
-              left: None,
-              right: Some(_),
-            }) = res.lhs
-            {
-              return Err("Expected closing parenthesis".to_string());
-            }
+            // if let Some(Expression::Binary {
+            //   op: Value::Operator(Token::LParenthesis),
+            //   left: None,
+            //   right: Some(_),
+            // }) = res.lhs
+            // {
+            //   return Err("Expected closing parenthesis".to_string());
+            // }
 
             top = match stack.pop() {
               Some(it) => it,
               None => return Ok(res.lhs.unwrap_or_default()),
             };
 
-            top.lhs = Some(Expression {
+            top.lhs = Some(Expression::Binary {
               op:    res.operator.unwrap().value,
               left:  top.lhs.map(Box::new),
               right: res.lhs.map(Box::new),
@@ -176,23 +205,80 @@ impl<'a> Parseable<'a> for Expression {
       token_stream.next();
 
       if let Operator {
-        value: Value::Operator(Token::RParenthesis),
-        fixity: Fixity::Postfix,
+        value: Value::Operator(Token::LParenthesis),
+        fixity: Fixity::Prefix,
       } = operator
       {
-        if let Some(Operator {
-          value: Value::Operator(Token::LParenthesis),
-          fixity: Fixity::Prefix,
-        }) = top.operator
-        {
-          let res = top;
-          top = stack.pop().unwrap();
-          top.lhs = res.lhs;
-          continue;
-        } else {
-          return Err("Unexpected closing parenthesis".to_string());
+        let mut exprs = vec![];
+
+        if let Some(TokenExt { token, .. }) = token_stream.peek() {
+          match token {
+            // Token::Comma => {
+            //   token_stream.next();
+            //   if let Some(
+            //     token @ TokenExt {
+            //       token: Token::RParenthesis,
+            //       ..
+            //     },
+            //   ) = token_stream.peek()
+            //   {
+            //     operator = Operator::new(token, false).unwrap();
+            //   } else {
+            //     exprs.push(Expression::parse(token_stream)?);
+            //   }
+            // },
+            Token::RParenthesis => {
+              token_stream.next();
+            },
+            _ => {
+              exprs.push(Expression::parse(token_stream)?);
+            },
+          }
+        }
+        while let Some(TokenExt { token, .. }) = token_stream.peek() {
+          match token {
+            Token::Comma => {
+              token_stream.next();
+              if let Some(
+                token
+                @
+                TokenExt {
+                  token: Token::RParenthesis,
+                  ..
+                },
+              ) = token_stream.peek()
+              {
+                operator = Operator::new(token, false).unwrap();
+              } else {
+                exprs.push(Expression::parse(token_stream)?);
+              }
+            },
+            Token::RParenthesis => {
+              token_stream.next();
+            },
+            _ => return Err(format!("Unexpected token {:?}", token)),
+          }
         }
       }
+
+      // if let Operator {
+      //   value: Value::Operator(Token::RParenthesis),
+      //   fixity: Fixity::Postfix,
+      // } = operator
+      // {
+      //   if let Some(Operator {
+      //     value: Value::Operator(Token::LParenthesis),
+      //     fixity: Fixity::Prefix,
+      //   }) = top.operator
+      //   {
+      //     let res = top;
+      //     top = stack.pop().unwrap();
+      //     top.lhs = res.lhs;
+      //     continue;
+      //   } else {
+      //     return Err("Unexpected closing parenthesis".to_string());
+      //   }
+      // }
 
       stack.push(top);
       top = Frame {

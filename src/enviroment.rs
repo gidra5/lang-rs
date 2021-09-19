@@ -33,7 +33,7 @@ impl Enviroment {
   pub fn set(&mut self, ident: String, val: Value) -> Result<(), String> {
     Ok(match &self.enclosing {
       Some(enclosing) => {
-        enclosing.borrow_mut().set(ident, val);
+        enclosing.borrow_mut().set(ident, val)?;
       },
       None => {
         if self.has(&ident) {

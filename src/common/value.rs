@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::Token;
 use std::fmt::Display;
 
@@ -9,6 +11,7 @@ pub enum Value {
   Boolean(bool),
   Char(char),
   Operator(Token),
+  Tuple(Vec<Value>),
   None,
 }
 
@@ -26,6 +29,7 @@ impl Display for Value {
       Boolean(b) => write!(f, "{}", b),
       Char(c) => write!(f, "'{}'", c),
       Operator(op) => write!(f, "{:?}", op),
+      Tuple(values) => write!(f, "({})", values.iter().join(", ")),
       None => write!(f, "None"),
     }
   }

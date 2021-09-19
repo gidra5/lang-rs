@@ -89,7 +89,7 @@ pub struct Block(pub Vec<Statement>);
 
 impl<'a> Parseable<'a> for Block {
   fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
-    let res = parse_stmt_vec!(stream, RBracket)?;
+    let res = parse_stmt_vec!(stream, Token::RBracket)?;
 
     if let TokenExt {
       token: Token::RBracket,
@@ -226,7 +226,10 @@ impl Evaluatable for Statement {
         expr.evaluate(env, logger);
         // println!("{} = {}", expr.clone(), expr.evaluate(env))
       },
-      Self::Print(expr) => logger.write(format!("{}", expr.evaluate(env, logger))),
+      Self::Print(expr) => {
+        let msg = format!("{}", expr.evaluate(env, logger));
+        logger.write(msg)
+      },
       Self::Let(id, expr) => {
         let val = expr.map_or(Value::None, |expr| expr.evaluate(env, logger));
         env.borrow_mut().define(id, val)

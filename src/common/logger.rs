@@ -23,7 +23,7 @@ pub trait LoggerTrait {
 }
 
 pub struct Logger {
-  logs: Vec<String>,
+  pub logs: Vec<String>,
 }
 
 impl LoggerTrait for Logger {
