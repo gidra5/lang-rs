@@ -1,17 +1,18 @@
 #[cfg(test)]
-use crate::common::logger::char_stream::{CharStream, TokenExt, TokenStream};
+use crate::common::char_stream::{CharStream, Logger, TokenExt, TokenStream};
 
-use super::logger::char_stream::Token;
+use super::Token;
 
 fn tokens(input: &str) -> Result<Vec<(Token, String)>, String> {
-  use crate::common::logger::char_stream::{CharStream, TokenExt, TokenStream};
+  use crate::common::char_stream::{CharStream, Logger, TokenExt, TokenStream};
 
-  use super::logger::char_stream::Token;
+  use super::Token;
 
   let mut stream = CharStream::from_str(input);
+  let mut logger = Logger { logs: vec![] };
 
   Ok(
-    TokenStream::new(CharStream::from_str(input))
+    TokenStream::new(CharStream::from_str(input), &mut logger)
       .ok_or("Failed to create TokenStream")?
       .stream
       .data()

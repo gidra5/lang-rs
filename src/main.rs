@@ -21,12 +21,15 @@ use interactive_mode::*;
 fn main() {
   let yaml = load_yaml!("cli.yml");
   let matches = clap::App::from_yaml(yaml).get_matches();
+
+  let mut im = InteractiveMode::new();
+
   let code = {
     if let Some(filename) = matches.value_of("SRC_FILE") {
       match CharStream::new(filename) {
         Ok(s) => Some(s),
         Err(e) => {
-          Logger::error(e);
+          im.logger.error(e);
           None
         },
       }
@@ -34,8 +37,6 @@ fn main() {
       None
     }
   };
-
-  let mut im = InteractiveMode::new();
 
   if let Some(code) = code {
     im.exec(code);

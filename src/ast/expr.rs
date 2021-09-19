@@ -8,6 +8,7 @@ use std::{
 use crate::{
   common::{
     char_stream::{value::Value, Token, TokenExt, TokenStream},
+    logger::char_stream::LoggerTrait,
     reversable_iterator::ReversableIterator,
   },
   enviroment::Enviroment,
@@ -74,7 +75,7 @@ struct Frame {
 }
 
 impl Evaluatable for Expression {
-  fn evaluate(self, env: &mut Rc<RefCell<Enviroment>>) -> Value {
+  fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
     match self {
       Expression {
         left: None,
@@ -90,19 +91,19 @@ impl Evaluatable for Expression {
         left: Some(left),
         op,
         right: None,
-      } => op.postfix((*left).evaluate(env)),
+      } => op.postfix((*left).evaluate(env, logger)),
       Expression {
         left: None,
         op,
         right: Some(right),
-      } => op.prefix((*right).evaluate(env)),
+      } => op.prefix((*right).evaluate(env, logger)),
       Expression {
         left: Some(left),
         op: op @ Value::Operator(Token::Equal),
         right: Some(right),
       } => {
         let left = *left;
-        let right = (*right).evaluate(env);
+        let right = (*right).evaluate(env, logger);
         if let Expression {
           left: None,
           op: Value::Identifier(left),
@@ -113,14 +114,19 @@ impl Evaluatable for Expression {
           println!("{:?}", env);
           right
         } else {
-          op.infix(left.evaluate(env), right)
+          op.infix(left.evaluate(env, logger), right)
         }
       },
       Expression {
         left: Some(left),
         op,
         right: Some(right),
-      } => op.infix((*left).evaluate(env), (*right).evaluate(env)),
+      } => {
+        op.infix(
+          (*left).evaluate(env, logger),
+          (*right).evaluate(env, logger),
+        )
+      },
     }
   }
 }

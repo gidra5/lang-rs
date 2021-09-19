@@ -30,8 +30,8 @@ impl Enviroment {
 
   pub fn define(&mut self, ident: String, val: Value) { self.variables.insert(ident, val); }
 
-  pub fn set(&mut self, ident: String, val: Value) {
-    match &self.enclosing {
+  pub fn set(&mut self, ident: String, val: Value) -> Result<(), String> {
+    Ok(match &self.enclosing {
       Some(enclosing) => {
         enclosing.borrow_mut().set(ident, val);
       },
@@ -39,9 +39,9 @@ impl Enviroment {
         if self.has(&ident) {
           self.variables.insert(ident, val);
         } else {
-          Logger::error(format!("Variable {} is not declared in this scope", ident).as_str())
+          return Err(format!("Variable {} is not declared in this scope", ident));
         }
       },
-    }
+    })
   }
 }

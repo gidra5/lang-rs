@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::common::logger::char_stream::{value::Value, CharStream};
+use crate::common::logger::char_stream::{value::Value, CharStream, Logger};
 
 use super::InteractiveMode;
 
@@ -27,7 +27,11 @@ macro_rules! assert_env {
 
 #[test]
 fn interactive_scope_mutation() {
-  let InteractiveMode { rl: _, env: state } = interpret(
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
     "
     let x
     {
@@ -43,7 +47,11 @@ fn interactive_scope_mutation() {
 
 #[test]
 fn interactive_if() {
-  let InteractiveMode { rl: _, env: state } = interpret(
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
     "
     let x = true
     let y = false
@@ -73,7 +81,11 @@ fn interactive_if() {
 
 #[test]
 fn interactive_2() {
-  let InteractiveMode { rl: _, env: state } = interpret(
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
     "
     let a = \"global a\"
     let b = \"global b\"
@@ -124,7 +136,11 @@ fn interactive_2() {
 
 #[test]
 fn interactive_weird() {
-  let InteractiveMode { rl: _, env: state } = interpret(
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
     "
     let else = (else) => else
 

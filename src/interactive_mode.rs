@@ -11,8 +11,9 @@ mod tests;
 pub struct InteractiveModeHelper {}
 
 pub struct InteractiveMode {
-  rl:  Editor<InteractiveModeHelper>,
-  env: Rc<RefCell<Enviroment>>,
+  rl:         Editor<InteractiveModeHelper>,
+  env:        Rc<RefCell<Enviroment>>,
+  pub logger: Logger,
 }
 
 impl InteractiveMode {
@@ -25,21 +26,22 @@ impl InteractiveMode {
     Self {
       rl,
       env: Rc::new(RefCell::new(Enviroment::new())),
+      logger: Logger { logs: vec![] },
     }
   }
 
   /// executes given code in interpreter
   pub fn exec(&mut self, code: CharStream) {
-    match TokenStream::new(code) {
+    match TokenStream::new(code, &mut self.logger) {
       Some(mut tokens) => {
         match Program::parse_ext(&mut tokens) {
           Ok(tree) => {
-            tree.node.evaluate(&mut self.env);
+            tree.node.evaluate(&mut self.env, &mut self.logger);
           },
-          Err(msg) => Logger::error_parse(msg),
+          Err(msg) => self.logger.error_parse(msg),
         };
       },
-      None => Logger::error("Tokenization failed"),
+      None => self.logger.error("Tokenization failed"),
     };
   }
 
@@ -56,20 +58,20 @@ impl InteractiveMode {
 
           self.rl.add_history_entry(line.as_str());
 
-          match TokenStream::new(CharStream::from_string(line)) {
+          match TokenStream::new(CharStream::from_string(line), &mut self.logger) {
             Some(mut tokens) => {
               match Statement::parse_ext(&mut tokens) {
                 Ok(tree) => {
-                  tree.node.evaluate(&mut self.env);
+                  tree.node.evaluate(&mut self.env, &mut self.logger);
                 },
-                Err(msg) => Logger::error_parse(msg),
+                Err(msg) => self.logger.error_parse(msg),
               };
             },
-            None => Logger::error("Tokenization failed"),
+            None => self.logger.error("Tokenization failed"),
           };
         },
         Err(ReadlineError::Interrupted) => break,
-        Err(_) => Logger::log("No input"),
+        Err(_) => self.logger.log("No input"),
       }
     }
   }

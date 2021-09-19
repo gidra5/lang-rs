@@ -1,9 +1,9 @@
-use std::{cell::RefCell, rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
   check_token,
   check_token_end,
-  common::{char_stream::TokenStream, logger::char_stream::value::Value},
+  common::{char_stream::TokenStream, logger::LoggerTrait, value::Value},
   enviroment::Enviroment,
   parse_stmt_vec,
 };
@@ -23,9 +23,9 @@ impl<'a> Parseable<'a> for Program {
 }
 
 impl Evaluatable for Program {
-  fn evaluate(self, env: &mut rc::Rc<RefCell<Enviroment>>) -> Value {
+  fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
     for stmt in self.0 {
-      stmt.evaluate(env);
+      stmt.evaluate(env, logger);
     }
 
     Value::None
