@@ -1,4 +1,5 @@
 pub use crate::{ast::*, common::*, token::*};
+use std::fmt::Debug;
 
 pub trait LoggerTrait {
   fn write(&mut self, msg: String) {
@@ -34,13 +35,22 @@ impl LoggerTrait for Logger {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Span<T: ReversableIterator> {
   /// Stream snapshot where occured error
   pub stream: T,
 
   /// Length of span in symbols
   pub length: usize,
+}
+
+impl<T: ReversableIterator> Debug for Span<T> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Span")
+      .field("length", &self.length)
+      .field("pos", &self.pos())
+      .finish()
+  }
 }
 
 impl<T: ReversableIterator> Span<T> {

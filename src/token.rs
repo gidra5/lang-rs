@@ -8,23 +8,12 @@ use std::{
 #[path = "tests/token.rs"]
 mod tests;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TokenExt<'a> {
   pub token: Token,
   pub src:   String,
   pub span:  Span<CharStream<'a>>,
 }
-
-
-impl Debug for TokenExt<'_> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("TokenExt")
-      .field("token", &self.token)
-      .field("src", &self.src)
-      .finish()
-  }
-}
-
 
 impl PartialEq for TokenExt<'_> {
   fn eq(&self, other: &Self) -> bool { self.token == other.token && self.value() == other.value() }
@@ -32,6 +21,12 @@ impl PartialEq for TokenExt<'_> {
 impl Eq for TokenExt<'_> {}
 
 impl TokenExt<'_> {
+  pub fn expr(&self) -> Expression {
+    match self.token {
+      Token::LParenthesis => Expression::Tuple(vec![]),
+      _ => Expression::Value(self.value()),
+    }
+  }
   pub fn value(&self) -> Value {
     match self.token {
       Token::Number => Value::Number(self.src.parse::<f64>().unwrap()),
@@ -48,7 +43,6 @@ impl TokenExt<'_> {
       token
       @
       (Token::Pipe
-      | Token::LParenthesis
       | Token::RParenthesis
       | Token::Appersand
       | Token::Period

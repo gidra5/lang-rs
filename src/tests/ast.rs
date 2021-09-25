@@ -34,7 +34,7 @@ fn expr_2() {
 #[test]
 fn expr_3() {
   let s = expr("(((0)))").unwrap();
-  assert_eq!(s.to_string(), "0");
+  assert_eq!(s.to_string(), "(((0)))");
 }
 
 #[test]
@@ -110,19 +110,26 @@ fn expr_14() {
 #[test]
 fn expr_15() {
   let s = expr("1 + (2 * 3)").unwrap();
-  assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
+  assert_eq!(s.to_string(), "(Add 1 ((Mult 2 3)))");
 }
 
 #[test]
 fn expr_16() {
   let s = expr("(1 + 2) * 3").unwrap();
-  assert_eq!(s.to_string(), "(Mult (Add 1 2) 3)");
+  assert_eq!(s.to_string(), "(Mult ((Add 1 2)) 3)");
 }
 
 #[test]
 fn expr_17() {
   let s = expr("").unwrap();
   assert_eq!(s, Expression::default());
+}
+
+#[test]
+fn expr_empty_tuple() {
+  let s = expr("()").unwrap();
+  assert_eq!(s.to_string(), "()");
+  // assert_eq!(s, Expression::Tuple(vec![]));
 }
 
 #[test]

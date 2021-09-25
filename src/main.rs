@@ -1,3 +1,4 @@
+#![feature(bindings_after_at)]
 #![allow(clippy::inconsistent_struct_constructor, dead_code)] //TODO: should remove dead_code when ready
 extern crate automata;
 extern crate either;
