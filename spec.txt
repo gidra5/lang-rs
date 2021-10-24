@@ -2,25 +2,69 @@
 0+ - zero or more
 * | k=1.. - 
 
-Data-type is a partition of fixed size chunk of memory into a hierarcy.
+Data-type is a partition of fixed size chunk of memory into a hierarcy. 
 
 Possible syntax is:
+
 data-type = "["data-partition, 0+"]" | data-point-size data-point-count
-data-partition = data-point-size data-point-count "," 0+ | data-type | type-identifier
+data-partition = data-point-size data-point-count "," 0+ | data-type | type-identifier 
 
 Data-type can be aliased.
-Aliased data-types can have associated functions. Those together are called type
-Functions can be assembly code (or target language code).
+Aliased data-types can have associated functions. 
+Those together are called type
+Functions can be assembly code (or target language code). 
 
 Possible syntax is: 
 type = "type" type-identifier "=" data-type ("{" function-list "}")
-associated-function-declaration = type-identifier "{" function-list "}"
+associated-function-declaration = type-identifier "{" function-list "}" 
 
-There can be declared a variable of some order. Variable of order k have associated variable of order k+1 that restricts its values and describes value-distribution. 
-Variable of order 1 is a data-variable and is the bottom of sequence, and variable of order 2 is a type-variable, of order 3 is type-constraint.
+There can be declared a variable of some order. 
+Variable of order k have associated variable of order k+1 that restricts its values and describes value-distribution. 
+Variable of order 1 is a data-variable and is the bottom of sequence, and variable of order 2 is a type-variable, 
+of order 3 is type-constraint.
 Type-variable is a type and value distribution for every data-partition of associated data-type. 
-Also since variable of order k can be considered as variable of order k+1 that constraints to one possible value 
-then every variable can be considered being of infinite order.
+Also since variable of order k can be considered as variable of order k+1 that constraints to one possible value then every variable can be considered being of infinite order. 
 
 Possible syntax is:
 variable-declaration = variable-k-declaration | k = 1.. 
+
+Every pure function call is treated as asyncronous process, that is awaited when its result is needed for some computation. 
+There is a support for algebraic data types, meaning we support exponents, products and unions of types. 
+
+sum = type ("|" type)+
+product = type ("," type)+
+exponent = type => type
+alg_type = sum | product | exponent | unit | void
+unit = "()"
+void = "void" 
+
+These operations have some properties to adjust
+They can be either ordered or not (meaning elements can be accessed by indexing, though exponents are already ordered), 
+labeled or not (elements are accessed by labels). 
+
+labeled = ident":" type
+unordered = "["type"]" 
+
+Data without both properties can only be iterated to access data. 
+
+collected_set_iterable = "..." iterable 
+
+These properties together describe sets (unordered unlabeled product), 
+tuples (ordered unlabeled product), 
+finite arrays (monotyped tuples),
+records (labeled unordered products), 
+ordered map, 
+enumeration (labeled unordered unions),
+sums (unlabeled unordered unions)
+ordered enumeration (c-style enums) and type tuple?
+
+There are also notions of iterated types, mutability, ownership and convertions (which also could describe type narrowing).
+
+Iterated types are product types for which its data can be accessed one at a time and only once.
+Variables of such types can be collected into tuples and tuples can be iterated.
+Ownership describes which scope handles data, thus scope implies some finite lifetime of this data
+Mutability simply describes whether data can be modified or only transfomed. 
+Concept of execution time can be described as count of calls to evaluation function and can be used to model computation complexity to decide optimisation strategy for particular code piece 
+
+There can be declared a class. 
+Each instance of an encapsulating class is an actor.
