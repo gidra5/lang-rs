@@ -247,28 +247,32 @@ impl Operator {
       } => true,
       Operator {
         value:
-          Value::Operator(Token::LParenthesis)
-          | Value::Operator(Token::Add)
-          | Value::Operator(Token::Inc)
-          | Value::Operator(Token::Dec)
-          | Value::Operator(Token::Mult)
-          | Value::Operator(Token::Sub),
+          Value::Operator(
+            Token::LParenthesis | Token::Add | Token::Inc | Token::Dec | Token::Mult | Token::Sub,
+          ),
         fixity: Fixity::Prefix,
       } => true,
       Operator {
-        value: Value::Operator(Token::RParenthesis) | Value::Operator(Token::Bang),
+        value: Value::Operator(Token::RParenthesis | Token::Bang),
         fixity: Fixity::Postfix,
       } => true,
       Operator {
         value:
-          Value::Operator(Token::Period)
-          | Value::Operator(Token::Equal)
-          | Value::Operator(Token::EqualEqual)
-          | Value::Operator(Token::Add)
-          | Value::Operator(Token::Sub)
-          | Value::Operator(Token::Mod)
-          | Value::Operator(Token::Mult)
-          | Value::Operator(Token::Div),
+          Value::Operator(
+            Token::Comma
+            | Token::Period
+            | Token::LAngleBracket
+            | Token::RAngleBracket
+            | Token::LessEqual
+            | Token::GreaterEqual
+            | Token::Equal
+            | Token::EqualEqual
+            | Token::Add
+            | Token::Sub
+            | Token::Mod
+            | Token::Mult
+            | Token::Div,
+          ),
         fixity: Fixity::Infix,
       } => true,
       Operator {
@@ -332,11 +336,17 @@ impl Operator {
         match value {
           Value::Operator(token) => {
             match token {
-              Token::Period => (18, 17),
+              Token::Comma => (22, 21),
+              Token::Colon => (18, 17),
+              Token::Period => (24, 23),
               Token::Equal => (2, 1),
               Token::Add | Token::Sub => (5, 6),
               Token::Mult | Token::Div => (7, 8),
               Token::EqualEqual => (20, 19),
+              Token::LAngleBracket => (20, 19),
+              Token::RAngleBracket => (20, 19),
+              Token::LessEqual => (20, 19),
+              Token::GreaterEqual => (20, 19),
               _ => return None,
             }
           },

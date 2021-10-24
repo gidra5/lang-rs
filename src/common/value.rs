@@ -9,6 +9,7 @@ pub enum Value {
   Boolean(bool),
   Char(char),
   Operator(Token),
+  Unit,
   None,
 }
 
@@ -26,6 +27,7 @@ impl Display for Value {
       Boolean(b) => write!(f, "{}", b),
       Char(c) => write!(f, "'{}'", c),
       Operator(op) => write!(f, "{:?}", op),
+      Unit => write!(f, "()"),
       None => write!(f, "None"),
     }
   }

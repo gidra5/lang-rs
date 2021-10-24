@@ -8,7 +8,7 @@ use super::{
 };
 
 fn str_parse<'a, T: Parseable<'a>>(input: &str) -> Result<T, String> {
-  let logger = Logger { logs: vec![] };
+  let mut logger = Logger { logs: vec![] };
   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
     .ok_or("Failed to create TokenStream")?;
 
@@ -28,7 +28,7 @@ fn expr_1() {
 #[test]
 fn expr_2() {
   let s = expr("--f . g").unwrap();
-  assert_eq!(s.to_string(), "(Sub (Sub (Period f g)))");
+  assert_eq!(s.to_string(), "(Dec (Period f g))");
 }
 
 #[test]
@@ -52,8 +52,7 @@ fn expr_5() {
 #[test]
 fn expr_6() {
   let s = expr("--1 * 2").unwrap();
-  assert_eq!(s.to_string(), "(Mult (Sub (Sub 1)) 2)");
-  // assert_eq!(s.to_string(), "(Mult (Dec 1) 2)");
+  assert_eq!(s.to_string(), "(Mult (Dec 1) 2)");
 }
 
 #[test]
@@ -127,7 +126,7 @@ fn expr_17() {
 
 #[test]
 fn expr_consumes_just_enough() -> Result<(), String> {
-  let logger = Logger { logs: vec![] };
+  let mut logger = Logger { logs: vec![] };
   let input = "2;";
   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
     .ok_or("Failed to create TokenStream".to_string())?;

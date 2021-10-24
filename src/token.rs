@@ -51,7 +51,11 @@ impl TokenExt<'_> {
       | Token::LParenthesis
       | Token::RParenthesis
       | Token::Appersand
+      | Token::Arrow
+      | Token::Is
       | Token::Period
+      | Token::Colon
+      | Token::Comma
       | Token::QuestionMark
       | Token::Bang
       | Token::Hash
@@ -116,6 +120,8 @@ pub enum Token {
   EqualEqual,
   LessEqual,
   GreaterEqual,
+  Arrow,
+  Is,
 
   // Literals
   Number,
@@ -139,10 +145,11 @@ impl<'a> Tokenizable<'a> for Token {
     let mut msg = "";
     let token = (|| {
       Some(match stream.next()? {
-        // ' ' | '\t' | '\r' | '\n' => Skip,
         ' ' | '\t' | '\r' => Skip,
         '\n' => NewLine,
+        '<' if stream.is_next('=') => LessEqual,
         '<' => LAngleBracket,
+        '>' if stream.is_next('=') => GreaterEqual,
         '>' => RAngleBracket,
         '(' => LParenthesis,
         ')' => RParenthesis,
@@ -160,22 +167,24 @@ impl<'a> Tokenizable<'a> for Token {
         '#' => Hash,
         '$' => Dollar,
         '@' => At,
+        '+' if stream.is_next('+') => Inc,
         '+' => Add,
+        '-' if stream.is_next('-') => Dec,
         '-' => Sub,
         '*' => Mult,
-        '/' => {
-          if stream.is_next('/') {
-            while stream.is_not_next('\n') {}
-            Skip
-          } else if stream.is_next('*') {
-            while stream.next() != Some('*') || stream.next() != Some('/') {}
-            Skip
-          } else {
-            Div
-          }
+        '/' if stream.is_next('/') => {
+          while stream.is_not_next('\n') {}
+          Skip
         },
+        '/' if stream.is_next('*') => {
+          while stream.next() != Some('*') || stream.next() != Some('/') {}
+          Skip
+        },
+        '/' => Div,
         '^' => Pow,
         '%' => Mod,
+        '=' if stream.is_next('>') => Arrow,
+        '=' if stream.is_next('=') => EqualEqual,
         '=' => Equal,
         '\'' => {
           if stream.next() != None && stream.is_next('\'') {
@@ -205,32 +214,32 @@ impl<'a> Tokenizable<'a> for Token {
           String
         },
         '.' => Period,
+        c if c.is_ascii_digit() => {
+          while stream.check_next(|c| c.is_ascii_digit()) != None {}
 
-        c => {
-          if c.is_ascii_digit() {
+          if stream.is_next('.') {
             while stream.check_next(|c| c.is_ascii_digit()) != None {}
-
-            if stream.is_next('.') {
-              while stream.check_next(|c| c.is_ascii_digit()) != None {}
-            }
-
-            Number
-          } else if c.is_ascii_alphabetic() || c == '_' {
-            if stream.check(|c| c.is_ascii_alphanumeric() || c == '_') {
-              while stream.check_next(|c| c.is_ascii_alphanumeric() || c == '_') != None {}
-            }
-
-            match stream.substring(span.pos(), stream.pos()).as_str() {
-              "entry" => Entry,
-              "return" => Return,
-              "true" | "false" => Boolean,
-              "_" => Placeholder,
-              _ => Identifier,
-            }
-          } else {
-            msg = "Unexpected character";
-            return None;
           }
+
+          Number
+        },
+        c if c.is_ascii_alphabetic() || c == '_' => {
+          if stream.check(|c| c.is_ascii_alphanumeric() || c == '_') {
+            while stream.check_next(|c| c.is_ascii_alphanumeric() || c == '_') != None {}
+          }
+
+          match stream.substring(span.pos(), stream.pos()).as_str() {
+            "entry" => Entry,
+            "return" => Return,
+            "is" => Is,
+            "true" | "false" => Boolean,
+            "_" => Placeholder,
+            _ => Identifier,
+          }
+        },
+        _ => {
+          msg = "Unexpected character";
+          return None;
         },
       })
     })();
