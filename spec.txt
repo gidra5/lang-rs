@@ -66,5 +66,8 @@ Ownership describes which scope handles data, thus scope implies some finite lif
 Mutability simply describes whether data can be modified or only transfomed. 
 Concept of execution time can be described as count of calls to evaluation function and can be used to model computation complexity to decide optimisation strategy for particular code piece 
 
+We may have ternary logic. 
+Meaning there are three logical values - true, false, unknown
+
 There can be declared a class. 
 Each instance of an encapsulating class is an actor.
