@@ -2,6 +2,12 @@ use crate::Token;
 use std::fmt::Display;
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct RecordItem {
+  pub name:  String,
+  pub value: Value,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   Identifier(String),
   String(String),
@@ -9,6 +15,7 @@ pub enum Value {
   Boolean(bool),
   Char(char),
   Operator(Token),
+  Record(Vec<RecordItem>),
   Unit,
   None,
 }
@@ -27,6 +34,7 @@ impl Display for Value {
       Boolean(b) => write!(f, "{}", b),
       Char(c) => write!(f, "'{}'", c),
       Operator(op) => write!(f, "{:?}", op),
+      Record(record_items) => write!(f, "()"),
       Unit => write!(f, "()"),
       None => write!(f, "None"),
     }

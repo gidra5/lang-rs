@@ -5,21 +5,33 @@ use std::{
   rc::Rc,
 };
 
+use itertools::Itertools;
+
 use crate::{
+  check_token,
+  check_token_end,
   common::{
     char_stream::{value::Value, Token, TokenExt, TokenStream},
     logger::char_stream::LoggerTrait,
     reversable_iterator::ReversableIterator,
   },
   enviroment::Enviroment,
+  punct_or_newline,
+  token::{self, char_stream::value},
 };
 
 use super::{Evaluatable, Parseable};
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum Op {
+  Value(Value),
+  Record(Vec<RecordItem>),
+  // Block(Vec<RecordItem>),
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
   left:  Option<Box<Expression>>,
-  op:    Value,
+  op:    Op,
   right: Option<Box<Expression>>,
 }
 
@@ -41,7 +53,7 @@ impl Default for Expression {
   fn default() -> Expression {
     Expression {
       left:  None,
-      op:    Value::None,
+      op:    Op::Value(Value::None),
       right: None,
     }
   }
@@ -59,12 +71,125 @@ impl Default for Operator {
 impl Display for Expression {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     let Self { left, op, right } = self;
-    match (left, right) {
-      (None, None) => write!(f, "{}", op),
-      (Some(left), None) => write!(f, "({} {})", op, left),
-      (None, Some(right)) => write!(f, "({} {})", op, right),
-      (Some(left), Some(right)) => write!(f, "({} {} {})", op, left, right),
+    match op {
+      Op::Value(op) => {
+        match (left, right) {
+          (None, None) => write!(f, "{}", op),
+          (Some(left), None) => write!(f, "({} {})", op, left),
+          (None, Some(right)) => write!(f, "({} {})", op, right),
+          (Some(left), Some(right)) => write!(f, "({} {} {})", op, left, right),
+        }
+      },
+      Op::Record(record_items) => {
+        let mut x = record_items
+          .iter()
+          .map(|RecordItem { name, expr }| (name, format!("{}", expr)))
+          .collect::<Vec<_>>();
+        if x.len() > 1 || (x.len() == 1 && x[0].0 != "0") {
+          write!(
+            f,
+            "({})",
+            x.iter()
+              .map(|(name, expr)| format!("{}: {}", name, expr))
+              .join(", ")
+          )
+        } else if x.len() == 1 {
+          write!(f, "{}", x.pop().unwrap().1)
+        } else {
+          write!(f, "()")
+        }
+      },
     }
+  }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct RecordItem {
+  name: String,
+  expr: Expression,
+}
+
+fn parse_braces(token_stream: &mut TokenStream<'_>) -> Result<Expression, String> {
+  if !check_token!(token_stream.peek(), Token::LBrace) {
+    Err("Expected opening brace".to_string())
+  } else {
+    token_stream.next();
+
+    let expr = Expression::parse(token_stream)?;
+
+    if !check_token!(token_stream.peek(), Token::RBrace) {
+      Err("Expected closing brace".to_string())
+    } else {
+      Ok(expr)
+    }
+  }
+}
+
+fn parse_parens(token_stream: &mut TokenStream<'_>) -> Result<Expression, String> {
+  if !check_token!(token_stream.peek(), Token::LParenthesis) {
+    Err("Expected opening parenthesis".to_string())
+  } else {
+    token_stream.next();
+    let mut x = vec![];
+    if check_token!(token_stream.peek(), Token::RParenthesis) {
+      token_stream.next();
+
+      return Ok(Expression {
+        left:  None,
+        right: None,
+        op:    Op::Record(x),
+      });
+    }
+
+    {
+      let y = token_stream.peek_ext(2);
+      let mut name = None;
+
+      if check_token!(y[0], Token::Identifier) && check_token!(y[1], Token::Colon) {
+        name = Some(token_stream.next().unwrap().src);
+        token_stream.next();
+      }
+
+      let expr = parse_expr(token_stream, true)?;
+
+      x.push(RecordItem {
+        name: name.unwrap_or(x.len().to_string()),
+        expr,
+      });
+    }
+
+    while !check_token!(token_stream.peek(), Token::RParenthesis) {
+      if !punct_or_newline!(token_stream.next(), Comma) {
+        return Err(
+          "Unexpected token, should be either comma, newline or closing parenthesis".to_string(),
+        );
+      }
+      if check_token_end!(token_stream) {
+        return Err("Unexpected end of input".to_string());
+      }
+
+      let y = token_stream.peek_ext(2);
+      let mut name = None;
+
+      if check_token!(y[0], Token::Identifier) && check_token!(y[1], Token::Colon) {
+        name = Some(token_stream.next().unwrap().src);
+        token_stream.next();
+      }
+
+      let expr = parse_expr(token_stream, true)?;
+
+      x.push(RecordItem {
+        name: name.unwrap_or(x.len().to_string()),
+        expr,
+      })
+    }
+    token_stream.next();
+
+    Ok(Expression {
+      left:  None,
+      right: None,
+      op:    Op::Record(x),
+    })
   }
 }
 
@@ -79,34 +204,34 @@ impl Evaluatable for Expression {
     match self {
       Expression {
         left: None,
-        op: Value::Identifier(id),
+        op: Op::Value(Value::Identifier(id)),
         right: None,
       } => env.borrow().get(id).unwrap_or_default(),
       Expression {
         left: None,
-        op,
+        op: Op::Value(op),
         right: None,
       } => op,
       Expression {
         left: Some(left),
-        op,
+        op: Op::Value(op),
         right: None,
       } => op.postfix((*left).evaluate(env, logger)),
       Expression {
         left: None,
-        op,
+        op: Op::Value(op),
         right: Some(right),
       } => op.prefix((*right).evaluate(env, logger)),
       Expression {
         left: Some(left),
-        op: op @ Value::Operator(Token::Equal),
+        op: Op::Value(op @ Value::Operator(Token::Equal)),
         right: Some(right),
       } => {
         let left = *left;
         let right = (*right).evaluate(env, logger);
         if let Expression {
           left: None,
-          op: Value::Identifier(left),
+          op: Op::Value(Value::Identifier(left)),
           right: None,
         } = left
         {
@@ -119,7 +244,7 @@ impl Evaluatable for Expression {
       },
       Expression {
         left: Some(left),
-        op,
+        op: Op::Value(op),
         right: Some(right),
       } => {
         op.infix(
@@ -127,80 +252,110 @@ impl Evaluatable for Expression {
           (*right).evaluate(env, logger),
         )
       },
+      Expression {
+        left: _,
+        op: Op::Record(op),
+        right: _,
+      } => {
+        let mut x = op
+          .into_iter()
+          .map(|RecordItem { name, expr }| {
+            value::RecordItem {
+              name,
+              value: expr.evaluate(env, logger),
+            }
+          })
+          .collect::<Vec<_>>();
+        if x.len() > 1 || (x.len() == 1 && x[0].name != "0") {
+          Value::Record(x)
+        } else if x.len() == 1 {
+          x.pop().unwrap().value
+        } else {
+          Value::Unit
+        }
+      },
     }
+  }
+}
+fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Expression, String> {
+  let mut top = Frame {
+    lhs:      None,
+    operator: None,
+  };
+  let mut stack = Vec::new();
+
+  loop {
+    let token = token_stream.peek();
+    if check_token!(token, Token::LParenthesis) {
+      top.lhs = Some(parse_parens(token_stream)?);
+      continue;
+    } else if check_token!(token, Token::RParenthesis) && !in_parens {
+      return Err("Unexpected closing parenthesis".to_string());
+    }
+    let operator = loop {
+      let operator = token
+        .clone()
+        .map(|token| Operator::new(token, top.lhs.is_none()))
+        .flatten();
+      match operator {
+        // Some(None) => return Err("No such operator"),
+        // Some(t @ Some(op)) if top.operator <= t => break op,
+        Some(op)
+          if top.operator <= Some(op.clone())
+            // && !matches!(op, Operator {
+            //   value:  Value::Operator(Token::RParenthesis),
+            //   fixity: Fixity::Postfix,
+            // }) 
+            =>
+        {
+          break op
+        },
+        _ => {
+          let res = top;
+          // if let Some(Expression {
+          //   op: Value::Operator(Token::LParenthesis),
+          //   left: None,
+          //   right: Some(_),
+          // }) = res.lhs
+          // {
+          //   return Err("Expected closing parenthesis".to_string());
+          // }
+
+          top = match stack.pop() {
+            Some(it) => it,
+            None => return Ok(res.lhs.unwrap_or_default()),
+          };
+
+          top.lhs = Some(Expression {
+            op:    Op::Value(res.operator.unwrap().value),
+            left:  top.lhs.map(Box::new),
+            right: res.lhs.map(Box::new),
+          });
+        },
+      };
+    };
+    token_stream.next();
+
+    // if let Operator {
+    //   value: Value::Operator(Token::RParenthesis),
+    //   fixity: Fixity::Postfix,
+    // } = operator
+    // {
+    //   if !in_parens {
+    //     return Err("Unexpected closing parenthesis".to_string());
+    //   }
+    // }
+
+    stack.push(top);
+    top = Frame {
+      lhs:      None,
+      operator: Some(operator),
+    };
   }
 }
 
 impl<'a> Parseable<'a> for Expression {
-  fn parse(token_stream: &mut TokenStream<'_>) -> Result<Expression, String> {
-    let mut top = Frame {
-      lhs:      None,
-      operator: None,
-    };
-    let mut stack = Vec::new();
-    loop {
-      let token = token_stream.peek();
-      let operator = loop {
-        let operator = token
-          .clone()
-          .map(|token| Operator::new(token, top.lhs.is_none()))
-          .flatten();
-        match operator {
-          // Some(None) => return Err("No such operator"),
-          // Some(t @ Some(op)) if top.operator <= t => break op,
-          Some(op) if top.operator <= Some(op.clone()) => break op,
-          _ => {
-            let res = top;
-            if let Some(Expression {
-              op: Value::Operator(Token::LParenthesis),
-              left: None,
-              right: Some(_),
-            }) = res.lhs
-            {
-              return Err("Expected closing parenthesis".to_string());
-            }
-
-            top = match stack.pop() {
-              Some(it) => it,
-              None => return Ok(res.lhs.unwrap_or_default()),
-            };
-
-            top.lhs = Some(Expression {
-              op:    res.operator.unwrap().value,
-              left:  top.lhs.map(Box::new),
-              right: res.lhs.map(Box::new),
-            });
-          },
-        };
-      };
-      token_stream.next();
-
-      if let Operator {
-        value: Value::Operator(Token::RParenthesis),
-        fixity: Fixity::Postfix,
-      } = operator
-      {
-        if let Some(Operator {
-          value: Value::Operator(Token::LParenthesis),
-          fixity: Fixity::Prefix,
-        }) = top.operator
-        {
-          let res = top;
-          top = stack.pop().unwrap();
-          top.lhs = res.lhs;
-          continue;
-        } else {
-          return Err("Unexpected closing parenthesis".to_string());
-        }
-      }
-
-      stack.push(top);
-      top = Frame {
-        lhs:      None,
-        operator: Some(operator),
-      };
-    }
-  }
+  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> { parse_expr(stream, false) }
 }
 
 impl Operator {

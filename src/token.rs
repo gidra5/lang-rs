@@ -48,14 +48,10 @@ impl TokenExt<'_> {
       token
       @
       (Token::Pipe
-      | Token::LParenthesis
-      | Token::RParenthesis
       | Token::Appersand
       | Token::Arrow
       | Token::Is
       | Token::Period
-      | Token::Colon
-      | Token::Comma
       | Token::QuestionMark
       | Token::Bang
       | Token::Hash
@@ -357,6 +353,7 @@ macro_rules! check_token {
     }) $(if $cond)?)
   };
 }
+
 
 #[macro_export]
 macro_rules! check_token_end {

@@ -85,7 +85,7 @@ fn expr_10() {
 #[test]
 fn expr_11() {
   let s = expr("1 + (2 * 3").unwrap_err();
-  assert_eq!(s, "Expected closing parenthesis");
+  assert_eq!(s, "Unexpected end of input");
 }
 
 #[test]
@@ -103,12 +103,13 @@ fn expr_13() {
 #[test]
 fn expr_14() {
   let s = expr("(1 + (2 * 3)").unwrap_err();
-  assert_eq!(s, "Expected closing parenthesis");
+  assert_eq!(s, "Unexpected end of input");
 }
 
 #[test]
 fn expr_15() {
   let s = expr("1 + (2 * 3)").unwrap();
+  println!("{:?}", s);
   assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
 }
 
@@ -122,6 +123,44 @@ fn expr_16() {
 fn expr_17() {
   let s = expr("").unwrap();
   assert_eq!(s, Expression::default());
+}
+
+#[test]
+fn expr_18() {
+  let s = expr("1 + 2) * 3").unwrap_err();
+  assert_eq!(s.to_string(), "Unexpected closing parenthesis");
+}
+
+#[test]
+fn expr_19_unit() {
+  let s = expr("()").unwrap();
+  assert_eq!(s.to_string(), "()");
+}
+
+#[test]
+fn expr_20() {
+  let s = expr("(a: 1)").unwrap();
+  assert_eq!(s.to_string(), "(a: 1)");
+}
+
+fn expr_21() {
+  let s = expr("(a: 1, b: 2)").unwrap();
+  assert_eq!(s.to_string(), "(a: 1, b: 2)");
+}
+
+fn expr_22() {
+  let s = expr("(a: 1, b: 2 + 2)").unwrap();
+  assert_eq!(s.to_string(), "(a: 1, b: (Add 2 2))");
+}
+
+fn expr_23() {
+  let s = expr("(a: 1, b: 2 * (2 - 1)))").unwrap();
+  assert_eq!(s.to_string(), "(a: 1, b: (Mult 2 (Sub 2 1)))");
+}
+
+fn expr_24() {
+  let s = expr("(a: (c: \"d\"), b: 2 * (2 - 1)))").unwrap();
+  assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
 }
 
 #[test]
@@ -198,7 +237,7 @@ fn stmt_9() {
   let s = stmt("let x = (2").unwrap_err();
   assert_eq!(
     s,
-    "Error at expression after '=' in let statement: Expected closing parenthesis"
+    "Error at expression after '=' in let statement: Unexpected end of input"
   );
 }
 
