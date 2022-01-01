@@ -25,7 +25,7 @@ fn tokens(input: &str) -> Result<Vec<(Token, String)>, String> {
 
 macro_rules! check {
   ($s:ident, [$(($token:ident, $str:literal)),*]) => {
-    assert!($s.iter().eq(vec![$((Token::$token, $str.to_string())),*].iter()));
+    assert!($s.iter().eq(vec![$((Token::$token, $str.to_string())),*].iter()))
   };
 }
 

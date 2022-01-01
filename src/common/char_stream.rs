@@ -18,10 +18,12 @@ impl CharStream<'_> {
   pub fn new(filename: &str) -> Result<CharStream, &str> {
     std::fs::read(filename)
       .map(|file| {
-        let mut stream =
-          CharStream::from_string(String::from_utf8(file).expect("Failed to parse as utf8 text"));
-        stream.file = filename;
-        stream
+        CharStream {
+          stream: ReversableStream::<char>::from(
+            String::from_utf8(file).expect("Failed to parse as utf8 text"),
+          ),
+          file:   filename,
+        }
       })
       .map_err(|err| {
         use std::io::ErrorKind::*;

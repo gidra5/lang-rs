@@ -45,6 +45,22 @@ pub struct Span<T: ReversableIterator> {
 
 impl<T: ReversableIterator> Span<T> {
   pub fn pos(&self) -> usize { self.stream.pos() }
+  pub fn src(&self) -> Vec<Option<<T>::Item>> { self.stream.peek_ext(self.length) }
+}
+
+impl<'a> Span<CharStream<'a>> {
+  pub fn string_src(&self) -> String {
+    self
+      .src()
+      .iter()
+      .map(|x| {
+        match x {
+          Some(y) => y.to_string(),
+          None => "".to_string(),
+        }
+      })
+      .collect()
+  }
 }
 
 impl<'a> std::fmt::Display for Span<TokenStream<'a>> {

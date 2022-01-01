@@ -122,6 +122,7 @@ pub enum Token {
   GreaterEqual,
   Arrow,
   Is,
+  As,
 
   // Literals
   Number,
@@ -138,13 +139,10 @@ pub enum Token {
 impl<'a> Tokenizable<'a> for Token {
   fn tokenize(stream: &mut CharStream<'a>) -> Result<TokenExt<'a>, TokenizationError<'a>> {
     use Token::*;
-    let mut span = Span {
-      stream: stream.clone(),
-      length: 1,
-    };
-    let mut msg = "";
+    let stream_snapshot = stream.clone();
+
     let token = (|| {
-      Some(match stream.next()? {
+      Ok(match stream.next().ok_or("Unexpected end of stream")? {
         ' ' | '\t' | '\r' => Skip,
         '\n' => NewLine,
         '<' if stream.is_next('=') => LessEqual,
@@ -196,15 +194,13 @@ impl<'a> Tokenizable<'a> for Token {
               }
               stream.next();
             }
-            msg = "Unexpected end of char literal";
-            return None;
+            return Err("Unexpected end of char literal");
           }
         },
         '"' => {
           while stream.peek() != Some('"') {
             if stream.peek() == None {
-              msg = "Unexpected end of string";
-              return None;
+              return Err("Unexpected end of string");
             } else if stream.peek() == Some('\\') {
               stream.next();
             }
@@ -228,38 +224,44 @@ impl<'a> Tokenizable<'a> for Token {
             while stream.check_next(|c| c.is_ascii_alphanumeric() || c == '_') != None {}
           }
 
-          match stream.substring(span.pos(), stream.pos()).as_str() {
+          match stream
+            .substring(stream_snapshot.pos(), stream.pos())
+            .as_str()
+          {
             "entry" => Entry,
             "return" => Return,
             "is" => Is,
+            "as" => As,
             "true" | "false" => Boolean,
             "_" => Placeholder,
             _ => Identifier,
           }
         },
         _ => {
-          msg = "Unexpected character";
-          return None;
+          return Err("Unexpected character");
         },
       })
     })();
-    span.length = stream.pos() - span.pos();
+    let span = Span {
+      length: stream.pos() - stream_snapshot.pos(),
+      stream: stream_snapshot,
+    };
 
-    let token = match token {
-      Some(t) => t,
-      None => {
-        return Err(TokenizationError {
+    match token {
+      Ok(token) => {
+        Ok(TokenExt {
+          token,
+          src: span.string_src(),
+          span,
+        })
+      },
+      Err(msg) => {
+        Err(TokenizationError {
           span,
           msg: msg.to_string(),
         })
       },
-    };
-
-    Ok(TokenExt {
-      token,
-      src: stream.substring(span.pos(), stream.pos()),
-      span,
-    })
+    }
   }
 }
 
