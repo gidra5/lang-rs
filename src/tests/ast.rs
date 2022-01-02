@@ -109,7 +109,6 @@ fn expr_14() {
 #[test]
 fn expr_15() {
   let s = expr("1 + (2 * 3)").unwrap();
-  println!("{:?}", s);
   assert_eq!(s.to_string(), "(Add 1 (Mult 2 3))");
 }
 
@@ -160,6 +159,23 @@ fn expr_23() {
 
 fn expr_24() {
   let s = expr("(a: (c: \"d\"), b: 2 * (2 - 1)))").unwrap();
+  assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
+}
+
+#[test]
+fn expr_25() {
+  let s = expr("((1 + 2)\n * 3)").unwrap();
+  assert_eq!(s.to_string(), "(Mult (Add 1 2) 3)");
+}
+
+#[test]
+fn expr_26() {
+  let s = expr("(a: (c: \"d\"), b: 2 * (2 - 1\n)\n)").unwrap();
+  assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
+}
+#[test]
+fn expr_27() {
+  let s = expr("(\n\n\n\na: (c: \"d\"), b: 2 * (2 - 1))").unwrap();
   assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
 }
 
@@ -307,19 +323,6 @@ fn stmt_if_2() {
 }
 
 #[test]
-fn stmt_if_5() {
-  let s = stmt("if x + 2 { print x; print x; } else { print \"fuck you\"; }").unwrap();
-  assert_eq!(
-    s,
-    Statement::If(
-      expr("x + 2").unwrap(),
-      vec![stmt("print x").unwrap(), stmt("print x").unwrap()],
-      vec![stmt("print \"fuck you\"").unwrap()]
-    )
-  );
-}
-
-#[test]
 fn stmt_if_3() {
   let s = stmt("if x + 2: print x; else { print \"fuck you\"; }").unwrap();
   assert_eq!(
@@ -343,6 +346,12 @@ fn stmt_if_4() {
       vec![stmt("print \"fuck you\"").unwrap()]
     )
   );
+}
+
+#[test]
+fn stmt_if_5() {
+  let s = stmt("if x + 2 { print x; print x; } else { print \"fuck you\"; }").unwrap_err();
+  assert_eq!(s, "Missing colon after condition in if statement");
 }
 
 #[test]
@@ -388,6 +397,12 @@ fn stmt_if_no_else_bracketed() {
 fn stmt_if_missing_branch() {
   let s = stmt("if x + 2: else print x").unwrap_err();
   assert_eq!(s, "Empty true branch in if statement");
+}
+
+#[test]
+fn stmt_if_missing_branch_2() {
+  let s = stmt("if x + 2 else print x").unwrap_err();
+  assert_eq!(s, "Missing colon after condition in if statement");
 }
 
 #[test]

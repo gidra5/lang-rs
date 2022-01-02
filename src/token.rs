@@ -354,6 +354,14 @@ macro_rules! check_token {
   };
 }
 
+#[macro_export]
+macro_rules! skip {
+  ($token_stream:ident $(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
+    if check_token!($token_stream.peek() $(, { $src })?, $pattern $(if $cond)?) {
+      $token_stream.next();
+    }
+  };
+}
 
 #[macro_export]
 macro_rules! check_token_end {
@@ -361,7 +369,6 @@ macro_rules! check_token_end {
     matches!($stream.peek(), None)
   };
 }
-
 #[macro_export]
 macro_rules! punct_or_newline {
   ($token:expr, $($punct:ident)|+) => {

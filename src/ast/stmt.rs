@@ -91,13 +91,7 @@ impl<'a> Parseable<'a> for Block {
   fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
     let res = parse_stmt_vec!(stream, Token::RBracket)?;
 
-    if let TokenExt {
-      token: Token::RBracket,
-      ..
-    } = stream
-      .next()
-      .ok_or_else(|| "Missing closing bracket".to_string())?
-    {
+    if check_token!(stream.next(), Token::RBracket) {
       Ok(Self(res))
     } else {
       Err("Missing closing bracket".to_string())
@@ -120,20 +114,11 @@ impl<'a> Parseable<'a> for Statement {
         Token::Identifier if src == "if" => {
           stream.next();
           let expr = Expression::parse(stream)?;
-          println!("2 {:?}", stream.peek());
 
-          if !punct_or_newline!(stream.peek(), Colon | LBracket) {
+          if !punct_or_newline!(stream.next(), Colon) {
             return Err("Missing colon after condition in if statement".to_string());
           }
-          println!("3 {:?}", stream.peek());
 
-          if !check_token!(stream.peek(), Token::LBracket) {
-            stream.next();
-          }
-          println!("4 {:?}", stream.peek());
-
-          // let true_block = parse_stmt_vec!(stream, {src}, Token::Identifier if src ==
-          // "else");
           let true_block = if check_token!(stream.peek(), Token::LBracket) {
             stream.next();
             Block::parse(stream)?.0
@@ -142,12 +127,10 @@ impl<'a> Parseable<'a> for Statement {
           } else {
             return Err("Empty true branch in if statement".to_string());
           };
-          println!("5 {:?}", stream.peek());
 
           let false_block = if check_token!(stream.peek(), {src}, Token::Identifier if src == "else")
           {
             stream.next();
-            println!("6 {:?}", stream.peek());
             if check_token!(stream.peek(), Token::LBracket) {
               stream.next();
               Block::parse(stream)?.0
@@ -159,7 +142,6 @@ impl<'a> Parseable<'a> for Statement {
           } else {
             vec![]
           };
-          println!("7 {:?}", stream.peek());
           return Ok(Self::If(expr, true_block, false_block));
         },
         Token::LBracket => {
@@ -223,8 +205,7 @@ impl Evaluatable for Statement {
   fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
     match self {
       Self::Expression(expr) => {
-        expr.evaluate(env, logger);
-        // println!("{} = {}", expr.clone(), expr.evaluate(env))
+        return expr.evaluate(env, logger);
       },
       Self::Print(expr) => {
         let x = expr.evaluate(env, logger);
