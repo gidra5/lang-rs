@@ -48,6 +48,7 @@ impl TokenExt<'_> {
       token
       @
       (Token::Pipe
+      | Token::LBrace
       | Token::Appersand
       | Token::Arrow
       | Token::Is

@@ -142,30 +142,28 @@ fn expr_20() {
   assert_eq!(s.to_string(), "(a: 1)");
 }
 
+#[test]
 fn expr_21() {
   let s = expr("(a: 1, b: 2)").unwrap();
   assert_eq!(s.to_string(), "(a: 1, b: 2)");
 }
 
+#[test]
 fn expr_22() {
   let s = expr("(a: 1, b: 2 + 2)").unwrap();
   assert_eq!(s.to_string(), "(a: 1, b: (Add 2 2))");
 }
 
+#[test]
 fn expr_23() {
-  let s = expr("(a: 1, b: 2 * (2 - 1)))").unwrap();
+  let s = expr("(a: 1, b: 2 * (2 - 1))").unwrap();
   assert_eq!(s.to_string(), "(a: 1, b: (Mult 2 (Sub 2 1)))");
 }
 
-fn expr_24() {
-  let s = expr("(a: (c: \"d\"), b: 2 * (2 - 1)))").unwrap();
-  assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
-}
-
 #[test]
-fn expr_25() {
-  let s = expr("((1 + 2)\n * 3)").unwrap();
-  assert_eq!(s.to_string(), "(Mult (Add 1 2) 3)");
+fn expr_24() {
+  let s = expr("(a: (c: \"d\"), b: 2 * (2 - 1))").unwrap();
+  assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
 }
 
 #[test]
@@ -173,10 +171,53 @@ fn expr_26() {
   let s = expr("(a: (c: \"d\"), b: 2 * (2 - 1\n)\n)").unwrap();
   assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
 }
+
 #[test]
 fn expr_27() {
   let s = expr("(\n\n\n\na: (c: \"d\"), b: 2 * (2 - 1))").unwrap();
   assert_eq!(s.to_string(), "(a: (c: \"d\"), b: (Mult 2 (Sub 2 1)))");
+}
+
+#[test]
+fn expr_28() {
+  let s = expr("x[1]").unwrap();
+  assert_eq!(s.to_string(), "(LBrace x 1)");
+}
+
+#[test]
+fn expr_29() {
+  let s = expr("(1, 2)[3]").unwrap();
+  assert_eq!(s.to_string(), "(LBrace (0: 1, 1: 2) 3)");
+}
+
+#[test]
+fn expr_30() {
+  let s = expr("x[1+1]").unwrap();
+  assert_eq!(s.to_string(), "(LBrace x (Add 1 1))");
+}
+
+#[test]
+fn expr_31() {
+  let s = expr("(1, 2)[3] - 4").unwrap();
+  assert_eq!(s.to_string(), "(Sub (LBrace (0: 1, 1: 2) 3) 4)");
+}
+
+#[test]
+fn expr_32() {
+  let s = expr("x[1+1] - 4").unwrap();
+  assert_eq!(s.to_string(), "(Sub (LBrace x (Add 1 1)) 4)");
+}
+
+#[test]
+fn expr_33() {
+  let s = expr("not x[1+1] and false").unwrap();
+  assert_eq!(s.to_string(), "(and (not (LBrace x (Add 1 1))) false)");
+}
+
+#[test]
+fn expr_34() {
+  let s = expr("[1+1] + 1").unwrap_err();
+  assert_eq!(s.to_string(), "Unexpected indexing position");
 }
 
 #[test]

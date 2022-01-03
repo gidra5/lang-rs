@@ -243,7 +243,7 @@ fn parse_braces(token_stream: &mut TokenStream<'_>) -> Result<Expression, String
 
     let expr = Expression::parse(token_stream)?;
 
-    if !check_token!(token_stream.peek(), Token::RBrace) {
+    if !check_token!(token_stream.next(), Token::RBrace) {
       Err("Expected closing brace".to_string())
     } else {
       Ok(expr)
@@ -273,7 +273,7 @@ fn parse_block(token_stream: &mut TokenStream<'_>) -> Result<Expression, String>
       }
     };
 
-    if !check_token!(token_stream.peek(), Token::RBracket) {
+    if !check_token!(token_stream.next(), Token::RBracket) {
       Err("Expected closing bracket".to_string())
     } else {
       Ok(Expression {
@@ -351,31 +351,31 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
       continue;
     }
 
-    let token = token_stream.peek();
+    let mut token = token_stream.peek();
 
     if check_token!(token, Token::LParenthesis) {
       top.lhs = Some(parse_parens(token_stream)?);
       continue;
     } else if check_token!(token, Token::LBrace) {
-      let res = top;
-
-      top = match stack.pop() {
-        Some(it) => it,
-        None => return Ok(res.lhs.unwrap_or_default()),
-      };
-
       top.lhs = Some(Expression {
-        op:    Op::Value(
-          Operator::new(token.unwrap(), top.lhs.is_none())
-            .ok_or("Unexpected indexing position")?
-            .value,
-        ),
-        left:  top.lhs.map(Box::new),
+        op:    Op::Value(token.unwrap().value()),
         right: Some(Box::new(parse_braces(token_stream)?)),
+        left:  Some(Box::new(match stack.pop() {
+          None => top.lhs.ok_or("Unexpected indexing position")?,
+          Some(Frame { lhs, operator }) => {
+            let op = Op::Value(top.operator.ok_or("Unexpected indexing position")?.value);
+            top.operator = operator;
+
+            Expression {
+              op,
+              left: lhs.map(Box::new),
+              right: top.lhs.map(Box::new),
+            }
+          },
+        })),
       });
 
-      // top.lhs = Some(parse_braces(token_stream)?);
-      continue;
+      token = token_stream.peek();
     } else if check_token!(token, Token::LBracket) {
       top.lhs = Some(parse_block(token_stream)?);
       continue;
@@ -389,8 +389,6 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
         .map(|token| Operator::new(token, top.lhs.is_none()))
         .flatten();
       match operator {
-        // Some(None) => return Err("No such operator"),
-        // Some(t @ Some(op)) if top.operator <= t => break op,
         Some(op) if top.operator <= Some(op.clone()) => break op,
         _ => {
           let res = top;
@@ -433,7 +431,7 @@ impl Operator {
       },
     };
 
-    if op.exist() {
+    if op.exists() {
       return Some(op);
     }
 
@@ -446,61 +444,14 @@ impl Operator {
       ..op
     };
 
-    if op.exist() {
+    if op.exists() {
       return Some(op);
     }
 
     None
   }
 
-  fn exist(&self) -> bool {
-    match self {
-      Operator {
-        value:
-          Value::Identifier(_)
-          | Value::String(_)
-          | Value::Char(_)
-          | Value::Number(_)
-          | Value::Boolean(_),
-        fixity: Fixity::None,
-      } => true,
-      Operator {
-        value:
-          Value::Operator(
-            Token::LParenthesis | Token::Add | Token::Inc | Token::Dec | Token::Mult | Token::Sub,
-          ),
-        fixity: Fixity::Prefix,
-      } => true,
-      Operator {
-        value: Value::Operator(Token::RParenthesis | Token::Bang),
-        fixity: Fixity::Postfix,
-      } => true,
-      Operator {
-        value:
-          Value::Operator(
-            Token::Comma
-            | Token::Period
-            | Token::LAngleBracket
-            | Token::RAngleBracket
-            | Token::LessEqual
-            | Token::GreaterEqual
-            | Token::Equal
-            | Token::EqualEqual
-            | Token::Add
-            | Token::Sub
-            | Token::Mod
-            | Token::Mult
-            | Token::Div,
-          ),
-        fixity: Fixity::Infix,
-      } => true,
-      Operator {
-        value: Value::Identifier(id),
-        fixity: Fixity::Infix,
-      } => matches!(id.as_str(), "mod" | "and" | "or"),
-      _ => false,
-    }
-  }
+  fn exists(&self) -> bool { self.bp().is_some() }
 
   fn bp(&self) -> Option<(u8, u8)> {
     Some(match self {
@@ -520,13 +471,13 @@ impl Operator {
         (99, match value {
           Value::Operator(token) => {
             match token {
-              Token::LParenthesis => 0,
               Token::Add | Token::Sub => 9,
               Token::Inc | Token::Dec => 11,
               Token::Mult => 13,
               _ => return None,
             }
           },
+          Value::Identifier(id) if id == "not" => 30,
           _ => return None,
         })
       },
@@ -538,7 +489,6 @@ impl Operator {
           match value {
             Value::Operator(token) => {
               match token {
-                Token::RParenthesis => 0,
                 Token::Bang => 15,
                 _ => return None,
               }
@@ -555,10 +505,10 @@ impl Operator {
         match value {
           Value::Operator(token) => {
             match token {
-              Token::Comma => (22, 21),
-              Token::Colon => (18, 17),
+              Token::LBrace => (26, 27),
               Token::Period => (24, 23),
               Token::Equal => (2, 1),
+              Token::Mod => (28, 29),
               Token::Add | Token::Sub => (5, 6),
               Token::Mult | Token::Div => (7, 8),
               Token::EqualEqual => (20, 19),
