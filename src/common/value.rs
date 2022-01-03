@@ -16,6 +16,7 @@ pub enum Value {
   Char(char),
   Operator(Token),
   Record(Vec<RecordItem>),
+  // Record(HashMap<String, Value>),
   Unit,
   None,
 }

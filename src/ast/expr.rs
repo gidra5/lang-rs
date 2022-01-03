@@ -1,6 +1,7 @@
 use std::{
   cell::RefCell,
   cmp::Ordering,
+  collections::HashMap,
   fmt::{Display, Formatter},
   rc::Rc,
 };
@@ -16,6 +17,8 @@ use crate::{
     reversable_iterator::ReversableIterator,
   },
   enviroment::Enviroment,
+  map,
+  match_token,
   punct_or_newline,
   skip,
   token::{self, char_stream::value},
@@ -26,7 +29,7 @@ use super::{stmt::Statement, Evaluatable, Parseable};
 #[derive(Clone, PartialEq, Debug)]
 pub enum Op {
   Value(Value),
-  Record(Vec<RecordItem>),
+  Record(HashMap<String, Expression>),
   Block(Vec<Statement>),
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -84,7 +87,7 @@ impl Display for Expression {
       Op::Record(record_items) => {
         let mut x = record_items
           .iter()
-          .map(|RecordItem { name, expr }| (name, format!("{}", expr)))
+          .map(|(name, expr)| (name, format!("{}", expr)))
           .collect::<Vec<_>>();
         if x.len() > 1 || (x.len() == 1 && x[0].0 != "0") {
           write!(
@@ -216,7 +219,7 @@ impl Evaluatable for Expression {
       } => {
         let mut x = op
           .into_iter()
-          .map(|RecordItem { name, expr }| {
+          .map(|(name, expr)| {
             value::RecordItem {
               name,
               value: expr.evaluate(env, logger),
@@ -290,7 +293,7 @@ fn parse_parens(token_stream: &mut TokenStream<'_>) -> Result<Expression, String
     Err("Expected opening parenthesis".to_string())
   } else {
     token_stream.next();
-    let mut x = vec![];
+    let mut x = map![];
 
     if check_token!(token_stream.peek(), Token::RParenthesis) {
       token_stream.next();
@@ -323,10 +326,7 @@ fn parse_parens(token_stream: &mut TokenStream<'_>) -> Result<Expression, String
         return Err("Unexpected end of input".to_string());
       }
 
-      x.push(RecordItem {
-        name: name.unwrap_or(x.len().to_string()),
-        expr,
-      })
+      x.insert(name.unwrap_or(x.len().to_string()), expr);
     }
     token_stream.next();
 
@@ -353,35 +353,41 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
 
     let mut token = token_stream.peek();
 
-    if check_token!(token, Token::LParenthesis) {
-      top.lhs = Some(parse_parens(token_stream)?);
-      continue;
-    } else if check_token!(token, Token::LBrace) {
-      top.lhs = Some(Expression {
-        op:    Op::Value(token.unwrap().value()),
-        right: Some(Box::new(parse_braces(token_stream)?)),
-        left:  Some(Box::new(match stack.pop() {
-          None => top.lhs.ok_or("Unexpected indexing position")?,
-          Some(Frame { lhs, operator }) => {
-            let op = Op::Value(top.operator.ok_or("Unexpected indexing position")?.value);
-            top.operator = operator;
+    match token {
+      match_token!(Token::LParenthesis) => {
+        top.lhs = Some(parse_parens(token_stream)?);
+        continue;
+      },
+      match_token!(Token::LBracket) => {
+        top.lhs = Some(parse_block(token_stream)?);
+        continue;
+      },
+      match_token!(Token::RParenthesis) if !in_parens => {
+        return Err("Unexpected closing parenthesis".to_string());
+      },
+      match_token!(Token::LBrace) => {
+        top.lhs = Some(Expression {
+          op:    Op::Value(token.unwrap().value()),
+          right: Some(Box::new(parse_braces(token_stream)?)),
+          left:  Some(Box::new(match stack.pop() {
+            None => top.lhs.ok_or("Unexpected indexing position")?,
+            Some(Frame { lhs, operator }) => {
+              let op = Op::Value(top.operator.ok_or("Unexpected indexing position")?.value);
+              top.operator = operator;
 
-            Expression {
-              op,
-              left: lhs.map(Box::new),
-              right: top.lhs.map(Box::new),
-            }
-          },
-        })),
-      });
+              Expression {
+                op,
+                left: lhs.map(Box::new),
+                right: top.lhs.map(Box::new),
+              }
+            },
+          })),
+        });
 
-      token = token_stream.peek();
-    } else if check_token!(token, Token::LBracket) {
-      top.lhs = Some(parse_block(token_stream)?);
-      continue;
-    } else if check_token!(token, Token::RParenthesis) && !in_parens {
-      return Err("Unexpected closing parenthesis".to_string());
-    }
+        token = token_stream.peek();
+      },
+      _ => (),
+    };
 
     let operator = loop {
       let operator = token

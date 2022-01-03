@@ -345,6 +345,17 @@ impl<'a> ReversableIterator for TokenStream<'a> {
 }
 
 #[macro_export]
+macro_rules! match_token {
+  ($({ $src:ident }, )?$pattern:pat) => {
+    Some(TokenExt {
+      token: $pattern,
+      $(src: $src,)?
+      ..
+    })
+  };
+}
+
+#[macro_export]
 macro_rules! check_token {
   ($token:expr $(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
     matches!($token, Some(TokenExt {

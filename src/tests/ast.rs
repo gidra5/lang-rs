@@ -221,6 +221,12 @@ fn expr_34() {
 }
 
 #[test]
+fn expr_35() {
+  let s = expr("(a: 1, b: 2).b").unwrap();
+  assert_eq!(s.to_string(), "(Period (a: 1, b: 2) b)");
+}
+
+#[test]
 fn expr_consumes_just_enough() -> Result<(), String> {
   let mut logger = Logger { logs: vec![] };
   let input = "2;";

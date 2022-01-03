@@ -1,5 +1,9 @@
 #![allow(unused)]
-use crate::common::logger::char_stream::{value::Value, CharStream, Logger};
+use crate::common::logger::char_stream::{
+  value::{RecordItem, Value},
+  CharStream,
+  Logger,
+};
 
 use super::InteractiveMode;
 
@@ -43,6 +47,87 @@ fn interactive_scope_mutation() {
   assert_env!(state, {
     x: Value::Number(2.)
   });
+}
+
+#[test]
+fn interactive_indexing_tuple() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let x = (1, 2)
+
+    print x[0]
+  ",
+  );
+
+  assert_env!(state, {
+    x: Value::Record(
+      vec![
+        RecordItem {
+          name:  "0".to_string(),
+          value: Value::Number(1.),
+        },
+        RecordItem {
+          name:  "1".to_string(),
+          value: Value::Number(2.),
+        },
+      ],
+    )
+  });
+
+  // assert_env!(state, {
+  //   x: Value::Record(
+  //     map![
+  //       "0".to_string() => Value::Number(1.),
+  //       "1".to_string() => Value::Number(2.)
+  //     ],
+  //   )
+  // });
+
+  unsafe { assert!(logs.iter().eq(vec!["1"].iter())) }
+}
+
+#[test]
+fn interactive_accessing_record_item() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let x = (a: 1, b: 2)
+
+    print x.b
+  ",
+  );
+
+  assert_env!(state, {
+    x: Value::Record(
+      vec![
+        RecordItem {
+          name:  "a".to_string(),
+          value: Value::Number(1.),
+        },
+        RecordItem {
+          name:  "b".to_string(),
+          value: Value::Number(2.),
+        },
+      ],
+    )
+  });
+  // assert_env!(state, {
+  //   x: Value::Record(
+  //     map![
+  //       "a".to_string() => Value::Number(1.),
+  //       "b".to_string() => Value::Number(2.)
+  //     ],
+  //   )
+  // });
+
+  unsafe { assert!(logs.iter().eq(vec!["2"].iter())) }
 }
 
 #[test]
