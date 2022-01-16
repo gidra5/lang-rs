@@ -22,8 +22,9 @@ macro_rules! assert_env {
       assert_eq!(
         $state.borrow().get(stringify!($name).to_string()),
         Some($value),
-        "variable {} have different value",
-        stringify!($name).to_string()
+        "variable {} have different value than {}",
+        stringify!($name).to_string(),
+        $value
       );
     )*
   };
@@ -67,25 +68,16 @@ fn interactive_indexing_tuple() {
     x: Value::Record(
       vec![
         RecordItem {
-          name:  "0".to_string(),
+          key:   None,
           value: Value::Number(1.),
         },
         RecordItem {
-          name:  "1".to_string(),
+          key:   None,
           value: Value::Number(2.),
         },
       ],
     )
   });
-
-  // assert_env!(state, {
-  //   x: Value::Record(
-  //     map![
-  //       "0".to_string() => Value::Number(1.),
-  //       "1".to_string() => Value::Number(2.)
-  //     ],
-  //   )
-  // });
 
   unsafe { assert!(logs.iter().eq(vec!["1"].iter())) }
 }
@@ -108,26 +100,93 @@ fn interactive_accessing_record_item() {
     x: Value::Record(
       vec![
         RecordItem {
-          name:  "a".to_string(),
+          key:   Some(Value::Identifier("a".to_string())),
           value: Value::Number(1.),
         },
         RecordItem {
-          name:  "b".to_string(),
+          key:   Some(Value::Identifier("b".to_string())),
           value: Value::Number(2.),
         },
       ],
     )
   });
-  // assert_env!(state, {
-  //   x: Value::Record(
-  //     map![
-  //       "a".to_string() => Value::Number(1.),
-  //       "b".to_string() => Value::Number(2.)
-  //     ],
-  //   )
-  // });
 
   unsafe { assert!(logs.iter().eq(vec!["2"].iter())) }
+}
+
+#[test]
+fn interactive_for_1() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    for x in 1: print x
+  ",
+  );
+
+  unsafe { assert!(logs.iter().eq(vec!["1"].iter())) }
+}
+
+#[test]
+fn interactive_for_2() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    for x in x => (1, x => (2, x => (3, 4))): print x
+  ",
+  );
+
+  unsafe { assert!(logs.iter().eq(vec!["1", "2", "3", "4"].iter())) }
+}
+
+#[test]
+fn interactive_for_3() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    for x in x => (1, x => (2, x => (3, x => 4))): print x
+  ",
+  );
+
+  unsafe { assert!(logs.iter().eq(vec!["1", "2", "3", "4"].iter())) }
+}
+
+#[test]
+fn interactive_fn_1() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    print (x => x + 1) 1
+  ",
+  );
+
+  unsafe { assert!(logs.iter().eq(vec!["2"].iter())) }
+}
+
+#[test]
+fn interactive_fn_2() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    (x => { print x; if x > 0: self (x - 1); }) 5
+  ",
+  );
+
+  unsafe { assert!(logs.iter().eq(vec!["5", "4", "3", "2", "1", "0"].iter())) }
 }
 
 #[test]
@@ -201,7 +260,6 @@ fn interactive_2() {
   });
 
   unsafe {
-    println!("{:?}", logs);
     assert!(logs.iter().eq(
       vec![
         "\"inner a\"",
@@ -227,7 +285,7 @@ fn interactive_weird() {
     logger: Logger { logs },
   } = interpret(
     "
-    let else = (else) => else
+    let else = else => else
 
     if else: else else; else else else
   ",

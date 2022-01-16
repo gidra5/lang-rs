@@ -187,7 +187,7 @@ fn expr_28() {
 #[test]
 fn expr_29() {
   let s = expr("(1, 2)[3]").unwrap();
-  assert_eq!(s.to_string(), "(LBrace (0: 1, 1: 2) 3)");
+  assert_eq!(s.to_string(), "(LBrace (1, 2) 3)");
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn expr_30() {
 #[test]
 fn expr_31() {
   let s = expr("(1, 2)[3] - 4").unwrap();
-  assert_eq!(s.to_string(), "(Sub (LBrace (0: 1, 1: 2) 3) 4)");
+  assert_eq!(s.to_string(), "(Sub (LBrace (1, 2) 3) 4)");
 }
 
 #[test]
@@ -227,6 +227,84 @@ fn expr_35() {
 }
 
 #[test]
+fn expr_36() {
+  let s = expr("([1 + 2]: 1, [\"kek\"]: 2)[3]").unwrap();
+  assert_eq!(s.to_string(), "(LBrace ((Add 1 2): 1, \"kek\": 2) 3)");
+}
+
+#[test]
+fn expr_37() {
+  let s = expr("x => x + 1").unwrap();
+  assert_eq!(s.to_string(), "(Arrow x (Add x 1))");
+}
+
+#[test]
+fn expr_38() {
+  let s = expr("_ => 1 + 2").unwrap();
+  assert_eq!(s.to_string(), "(Arrow _ (Add 1 2))");
+}
+
+#[test]
+fn expr_39() {
+  let s = expr("() => 1 + 2").unwrap();
+  assert_eq!(s.to_string(), "(Arrow () (Add 1 2))");
+}
+
+#[test]
+fn expr_40() {
+  let s = expr("(x, y) => x + y").unwrap();
+  assert_eq!(s.to_string(), "(Arrow (x, y) (Add x y))");
+}
+
+#[test]
+fn expr_41() {
+  let s = expr("(x => x + 1) 1").unwrap();
+  assert_eq!(s.to_string(), "(Apply (Arrow x (Add x 1)) 1)");
+}
+
+#[test]
+fn expr_42() {
+  let s = expr("(x => { print x; if x > 0: self (x - 1); }) 5").unwrap();
+  assert_eq!(
+    s.to_string(),
+    format!(
+      "(Apply (Arrow x {}) 5)",
+      expr("{ print x; if x > 0: self (x - 1); }")
+        .unwrap()
+        .to_string()
+    )
+  );
+}
+
+#[test]
+fn expr_43() {
+  let s = expr("x => { print x; if x > 0: self (x - 1); }").unwrap();
+  assert_eq!(
+    s.to_string(),
+    format!(
+      "(Arrow x {})",
+      expr("{ print x; if x > 0: self (x - 1); }")
+        .unwrap()
+        .to_string()
+    )
+  );
+}
+
+#[test]
+fn expr_44() {
+  let s = expr("(x => { print x; if x > 0: self (x - 1); })").unwrap();
+  assert_eq!(
+    s.to_string(),
+    format!(
+      "(Arrow x {})",
+      expr("{ print x; if x > 0: self (x - 1); }")
+        .unwrap()
+        .to_string()
+    )
+  );
+}
+
+#[test]
 fn expr_consumes_just_enough() -> Result<(), String> {
   let mut logger = Logger { logs: vec![] };
   let input = "2;";
@@ -242,7 +320,6 @@ fn expr_consumes_just_enough() -> Result<(), String> {
 
   Ok(())
 }
-
 
 #[test]
 fn stmt_1() {
@@ -326,6 +403,54 @@ fn stmt_12() {
 fn stmt_13() {
   let s = stmt("print 2").unwrap();
   assert_eq!(s, Statement::Print(expr("2").unwrap()));
+}
+#[test]
+fn stmt_14() {
+  let s = stmt("print (x => x + 1) 1").unwrap();
+  assert_eq!(s, Statement::Print(expr("(x => x + 1) 1").unwrap()));
+}
+
+#[test]
+fn stmt_for_1() {
+  let s = stmt("for x in y: print x").unwrap();
+  assert_eq!(
+    s,
+    Statement::For("x".to_string(), expr("y").unwrap(), vec![
+      stmt("print x").unwrap()
+    ],)
+  );
+}
+
+#[test]
+fn stmt_for_2() {
+  let s = stmt("for x in y: { print x; }").unwrap();
+  assert_eq!(
+    s,
+    Statement::For("x".to_string(), expr("y").unwrap(), vec![
+      stmt("print x").unwrap()
+    ],)
+  );
+}
+
+#[test]
+fn stmt_for_3() {
+  let s = stmt("for x in range(1, 20)\n print x").unwrap();
+  assert_eq!(
+    s,
+    Statement::For("x".to_string(), expr("range(1, 20)").unwrap(), vec![stmt(
+      "print x"
+    )
+    .unwrap()],)
+  );
+}
+
+#[test]
+fn stmt_let_fn() {
+  let s = stmt("let x = () => 1 + 2").unwrap();
+  assert_eq!(
+    s,
+    Statement::Let("x".to_string(), Some(expr("() => 1 + 2").unwrap()))
+  );
 }
 
 #[test]

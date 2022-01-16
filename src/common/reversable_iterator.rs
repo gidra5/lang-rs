@@ -17,6 +17,8 @@ pub trait ReversableIterator {
   /// Returns next item
   fn next(&mut self) -> Option<Self::Item> { self.next_ext(1).pop().flatten() }
 
+  fn backtrack(&mut self, size: usize);
+
   /// Returns next item without consuming iterator (aka peeks next item)
   fn peek(&self) -> Option<Self::Item> { self.peek_ext(1).pop().flatten() }
 
@@ -99,4 +101,5 @@ impl<T: Clone + PartialEq> ReversableIterator for ReversableStream<T> {
   }
 
   fn pos(&self) -> usize { self.pos }
+  fn backtrack(&mut self, size: usize) { self.pos -= size }
 }

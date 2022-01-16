@@ -1,11 +1,27 @@
-use crate::Token;
-use std::fmt::Display;
+use crate::{enviroment::Enviroment, Token};
+use std::{cell::RefCell, fmt::Display, rc::Rc};
+
+use super::logger::char_stream::{Evaluatable, Expression};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordItem {
-  pub name:  String,
+  pub key:   Option<Value>,
   pub value: Value,
 }
+
+// #[derive(Clone, Debug, PartialEq)]
+// pub struct RecordItem {
+//   pub key:   Value,
+//   pub value: Value,
+// }
+
+// #[derive(Clone, Debug, PartialEq)]
+// pub enum Record {
+//   Tuple(Vec<Value>),
+//   Record(Vec<RecordItem>),
+//   /* Record(HashMap<String, Value>),
+//    * Map(HashMap<Value, Value>), */
+// }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -16,8 +32,9 @@ pub enum Value {
   Char(char),
   Operator(Token),
   Record(Vec<RecordItem>),
-  // Record(HashMap<String, Value>),
+  Function(String, Rc<RefCell<Enviroment>>, Box<Expression>),
   Unit,
+  Placeholder,
   None,
 }
 
@@ -35,8 +52,10 @@ impl Display for Value {
       Boolean(b) => write!(f, "{}", b),
       Char(c) => write!(f, "'{}'", c),
       Operator(op) => write!(f, "{:?}", op),
-      Record(record_items) => write!(f, "()"),
+      Record(record_items) => write!(f, "(record)"),
+      Function(_, _, _) => write!(f, "(function)"),
       Unit => write!(f, "()"),
+      Placeholder => write!(f, "_"),
       None => write!(f, "None"),
     }
   }
@@ -95,6 +114,43 @@ impl Value {
           },
           (Value::Number(left), Token::GreaterEqual, Value::Number(right)) => {
             Value::Boolean(left >= right)
+          },
+          (Value::Number(left), Token::LAngleBracket, Value::Number(right)) => {
+            Value::Boolean(left < right)
+          },
+          (Value::Number(left), Token::RAngleBracket, Value::Number(right)) => {
+            Value::Boolean(left > right)
+          },
+          (Value::Record(left), Token::Period, Value::Identifier(right)) => {
+            left
+              .iter()
+              .filter_map(|RecordItem { key, value }| {
+                match key {
+                  Some(Value::String(name) | Value::Identifier(name)) if name.clone() == right => {
+                    Some(value.clone())
+                  },
+                  _ => None,
+                }
+              })
+              .next()
+              .unwrap_or_default()
+          },
+          (Value::Record(left), Token::LBrace, Value::Number(right))
+            if right == (right as usize) as f64 && left[0].key == None =>
+          {
+            left[right as usize].value.clone()
+          },
+          (Value::Record(left), Token::LBrace, right) => {
+            left
+              .iter()
+              .filter_map(|RecordItem { key, value }| {
+                match key {
+                  Some(key) if key.clone() == right => Some(value.clone()),
+                  _ => None,
+                }
+              })
+              .next()
+              .unwrap_or_default()
           },
           _ => Value::None,
         }

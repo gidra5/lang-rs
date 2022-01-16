@@ -120,6 +120,7 @@ impl ReversableIterator for CharStream<'_> {
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> { self.stream.prev_ext(size) }
 
   fn pos(&self) -> usize { self.stream.pos() }
+  fn backtrack(&mut self, size: usize) { self.stream.backtrack(size) }
 }
 
 

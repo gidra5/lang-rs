@@ -5,7 +5,7 @@ use crate::{
   check_token_end,
   common::{
     char_stream::{value::Value, Token, TokenExt, TokenStream},
-    logger::char_stream::{Logger, LoggerTrait},
+    logger::char_stream::{value::RecordItem, Logger, LoggerTrait},
     reversable_iterator::ReversableIterator,
   },
   enviroment::Enviroment,
@@ -48,10 +48,12 @@ use super::{expr::Expression, Evaluatable, Parseable};
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
   Print(Expression),
+  Parse(Expression),
   Expression(Expression),
   Let(String, Option<Expression>),
   Block(Block),
   If(Expression, Vec<Statement>, Vec<Statement>),
+  For(String, Expression, Vec<Statement>),
 }
 
 #[macro_export]
@@ -110,6 +112,39 @@ impl<'a> Parseable<'a> for Statement {
         Token::Identifier if src == "print" => {
           stream.next();
           Self::Print(Expression::parse(stream)?)
+        },
+        Token::Identifier if src == "parse" => {
+          stream.next();
+          Self::Parse(Expression::parse(stream)?)
+        },
+        Token::Identifier if src == "for" => {
+          stream.next();
+
+          if !check_token!(stream.peek(), Token::Identifier) {
+            return Err("Expected identifier".to_string());
+          }
+          let var = stream.next().unwrap();
+
+          if !check_token!(stream.next(), { src }, Token::In) {
+            return Err("Expected 'in' after identifier".to_string());
+          }
+
+          let iterator = Expression::parse(stream)?;
+
+          if !punct_or_newline!(stream.next(), Colon) {
+            return Err("Missing colon after expression in for statement".to_string());
+          }
+
+          let body = if check_token!(stream.peek(), Token::LBracket) {
+            stream.next();
+            Block::parse(stream)?.0
+          } else if !punct_or_newline!(stream.peek(), Semicolon) {
+            vec![Statement::parse(stream)?]
+          } else {
+            return Err("Empty body in for statement".to_string());
+          };
+
+          return Ok(Self::For(var.src, iterator, body));
         },
         Token::Identifier if src == "if" => {
           stream.next();
@@ -211,6 +246,7 @@ impl Evaluatable for Statement {
         let x = expr.evaluate(env, logger);
         logger.write(format!("{}", x))
       },
+      Self::Parse(expr) => logger.write(format!("{}", expr)),
       Self::Let(id, expr) => {
         let val = expr.map_or(Value::None, |expr| expr.evaluate(env, logger));
         env.borrow_mut().define(id, val)
@@ -221,6 +257,59 @@ impl Evaluatable for Statement {
         } else {
           Statement::Block(Block(false_branch)).evaluate(env, logger)
         };
+      },
+      Self::For(var, iterator, body) => {
+        let mut iterator = iterator.evaluate(env, logger);
+
+        loop {
+          if let Value::Function(fn_var, fn_env, expr) = iterator {
+            let next = {
+              let mut new_env = Enviroment::new();
+              new_env.set_enclosing(fn_env.clone());
+              new_env.define(fn_var, Value::Unit);
+              let mut new_env = Rc::new(RefCell::new(new_env));
+
+              expr.evaluate(&mut new_env, logger)
+            };
+
+            if let Value::Record(vec) = next {
+              let RecordItem { value: val, .. } = &vec[0];
+              let RecordItem { value: iter, .. } = &vec[1];
+              let mut new_env = Enviroment::new();
+              new_env.set_enclosing(env.clone());
+              env.borrow_mut().define(var.clone(), val.clone());
+              let mut new_env = Rc::new(RefCell::new(new_env));
+
+              for stmt in &body {
+                stmt.clone().evaluate(&mut new_env, logger);
+              }
+
+              iterator = iter.clone();
+            } else {
+              let mut new_env = Enviroment::new();
+              new_env.set_enclosing(env.clone());
+              env.borrow_mut().define(var.clone(), next);
+              let mut new_env = Rc::new(RefCell::new(new_env));
+
+              for stmt in &body {
+                stmt.clone().evaluate(&mut new_env, logger);
+              }
+
+              break;
+            }
+          } else {
+            let mut new_env = Enviroment::new();
+            new_env.set_enclosing(env.clone());
+            env.borrow_mut().define(var.clone(), iterator);
+            let mut new_env = Rc::new(RefCell::new(new_env));
+
+            for stmt in &body {
+              stmt.clone().evaluate(&mut new_env, logger);
+            }
+
+            break;
+          }
+        }
       },
       Self::Block(Block(statements)) => {
         let mut new_env = Enviroment::new();

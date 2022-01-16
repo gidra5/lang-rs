@@ -45,13 +45,16 @@ impl TokenExt<'_> {
       Token::String => Value::String(self.src[1..self.span.length - 1].to_string()),
       Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
       Token::Identifier => Value::Identifier(self.src.clone()),
+      Token::Placeholder => Value::Placeholder,
       token
       @
       (Token::Pipe
       | Token::LBrace
       | Token::Appersand
       | Token::Arrow
+      | Token::Apply
       | Token::Is
+      | Token::As
       | Token::Period
       | Token::QuestionMark
       | Token::Bang
@@ -67,6 +70,8 @@ impl TokenExt<'_> {
       | Token::Pow
       | Token::Mod
       | Token::Equal
+      | Token::LAngleBracket
+      | Token::RAngleBracket
       | Token::EqualEqual
       | Token::LessEqual
       | Token::GreaterEqual) => Value::Operator(token),
@@ -84,11 +89,13 @@ pub enum Token {
 
   // Punct
   LAngleBracket,
+  LBracketParen,
   LParenthesis,
   LBracket,
   LBrace,
   RAngleBracket,
   RParenthesis,
+  RBracketParen,
   RBracket,
   RBrace,
   Semicolon,
@@ -118,8 +125,13 @@ pub enum Token {
   LessEqual,
   GreaterEqual,
   Arrow,
+  Apply,
   Is,
+  In,
   As,
+  Infix,
+  Postfix,
+  Prefix,
 
   // Literals
   Number,
@@ -147,7 +159,9 @@ impl<'a> Tokenizable<'a> for Token {
         '>' if stream.is_next('=') => GreaterEqual,
         '>' => RAngleBracket,
         '(' => LParenthesis,
+        ')' if stream.is_next('}') => RBracketParen,
         ')' => RParenthesis,
+        '{' if stream.is_next('(') => LBracketParen,
         '{' => LBracket,
         '}' => RBracket,
         '[' => LBrace,
@@ -229,7 +243,11 @@ impl<'a> Tokenizable<'a> for Token {
             "return" => Return,
             "is" => Is,
             "as" => As,
+            "in" => In,
             "true" | "false" => Boolean,
+            "infix" => Infix,
+            "postfix" => Postfix,
+            "prefix" => Prefix,
             "_" => Placeholder,
             _ => Identifier,
           }
@@ -342,6 +360,7 @@ impl<'a> ReversableIterator for TokenStream<'a> {
   fn prev_ext(&self, size: usize) -> Vec<Option<Self::Item>> { self.stream.prev_ext(size) }
 
   fn pos(&self) -> usize { self.stream.pos() }
+  fn backtrack(&mut self, size: usize) { self.stream.backtrack(size) }
 }
 
 #[macro_export]

@@ -1,7 +1,7 @@
 use crate::common::*;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Enviroment {
   variables: HashMap<String, Value>,
   enclosing: Option<Rc<RefCell<Enviroment>>>,
