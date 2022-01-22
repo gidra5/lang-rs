@@ -190,6 +190,17 @@ fn interactive_fn_2() {
 }
 
 #[test]
+fn interactive_fn_3() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("print (x => y => z => x + y + z) 1 2 3");
+
+  unsafe { assert!(logs.iter().eq(vec!["6"].iter())) }
+}
+
+#[test]
 fn interactive_if() {
   let InteractiveMode {
     rl: _,

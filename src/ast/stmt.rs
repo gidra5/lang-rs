@@ -117,7 +117,7 @@ impl<'a> Parseable<'a> for Statement {
           stream.next();
           Self::Parse(Expression::parse(stream)?)
         },
-        Token::Identifier if src == "for" => {
+        Token::For => {
           stream.next();
 
           if !check_token!(stream.peek(), Token::Identifier) {
@@ -146,7 +146,7 @@ impl<'a> Parseable<'a> for Statement {
 
           return Ok(Self::For(var.src, iterator, body));
         },
-        Token::Identifier if src == "if" => {
+        Token::If => {
           stream.next();
           let expr = Expression::parse(stream)?;
 
@@ -157,14 +157,13 @@ impl<'a> Parseable<'a> for Statement {
           let true_block = if check_token!(stream.peek(), Token::LBracket) {
             stream.next();
             Block::parse(stream)?.0
-          } else if !check_token!(stream.peek(), {src}, Token::Identifier if src == "else") {
+          } else if !check_token!(stream.peek(), Token::Else) {
             vec![Statement::parse(stream)?]
           } else {
             return Err("Empty true branch in if statement".to_string());
           };
 
-          let false_block = if check_token!(stream.peek(), {src}, Token::Identifier if src == "else")
-          {
+          let false_block = if check_token!(stream.peek(), Token::Else) {
             stream.next();
             if check_token!(stream.peek(), Token::LBracket) {
               stream.next();

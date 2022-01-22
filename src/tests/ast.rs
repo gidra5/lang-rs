@@ -305,6 +305,36 @@ fn expr_44() {
 }
 
 #[test]
+fn expr_45() {
+  let s = expr("x => y => z => x + y + z").unwrap();
+  assert_eq!(
+    s.to_string(),
+    format!("(Arrow x (Arrow y (Arrow z (Add (Add x y) z))))")
+  );
+}
+
+#[test]
+fn expr_46() {
+  let s = expr("(x => y => z => x + y + z) 1 2 3").unwrap();
+  assert_eq!(
+    s.to_string(),
+    format!("(Apply (Apply (Apply (Arrow x (Arrow y (Arrow z (Add (Add x y) z)))) 1) 2) 3)")
+  );
+}
+
+#[test]
+fn expr_47() {
+  let s = expr("x 1 2 3").unwrap();
+  assert_eq!(s.to_string(), format!("(Apply (Apply (Apply x 1) 2) 3)"));
+}
+
+#[test]
+fn expr_48() {
+  let s = expr("(x) (1)").unwrap();
+  assert_eq!(s.to_string(), format!("(Apply x 1)"));
+}
+
+#[test]
 fn expr_consumes_just_enough() -> Result<(), String> {
   let mut logger = Logger { logs: vec![] };
   let input = "2;";
@@ -521,12 +551,6 @@ fn stmt_if_4() {
 }
 
 #[test]
-fn stmt_if_5() {
-  let s = stmt("if x + 2 { print x; print x; } else { print \"fuck you\"; }").unwrap_err();
-  assert_eq!(s, "Missing colon after condition in if statement");
-}
-
-#[test]
 fn stmt_if_no_else() {
   let s = stmt("if x + 2: print x").unwrap();
   assert_eq!(
@@ -572,12 +596,6 @@ fn stmt_if_missing_branch() {
 }
 
 #[test]
-fn stmt_if_missing_branch_2() {
-  let s = stmt("if x + 2 else print x").unwrap_err();
-  assert_eq!(s, "Missing colon after condition in if statement");
-}
-
-#[test]
 fn stmt_if_missing_else_branch() {
   let s = stmt("if x + 2: print x; else ").unwrap_err();
   assert_eq!(s, "Empty false branch in if statement");
@@ -586,7 +604,7 @@ fn stmt_if_missing_else_branch() {
 #[test]
 fn stmt_if_missing_colon() {
   let s = stmt("if x + 2 print x").unwrap_err();
-  assert_eq!(s, "Missing colon after condition in if statement");
+  assert_eq!(s, "Unexpected end of statement.");
 }
 
 #[test]

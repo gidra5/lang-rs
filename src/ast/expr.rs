@@ -44,7 +44,10 @@ pub enum Op {
   Value(Value),
   Record(Vec<RecordItem>),
   Block(Vec<Statement>),
+  /* If(Box<Expression>, Box<Expression>, Box<Expression>),
+   * For(Box<Expression>, Box<Expression>, Box<Expression>), */
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
   left:  Option<Box<Expression>>,
@@ -452,47 +455,88 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
     let mut token = token_stream.peek();
 
     match token {
-      match_token!(Token::LParenthesis) => {
-        top.lhs = Some(parse_parens(token_stream)?);
-
-        match (token_stream.peek(), top.lhs.clone()) {
-          (
-            Some(x),
-            Some(Expression {
-              left: _,
-              op: Op::Record(vec),
-              right: _,
-            }),
-          ) if matches!(
-            vec.first(),
-            Some(RecordItem {
-              key:   RecordKey::None,
-              value: Expression {
-                left:  _,
-                right: _,
-                op:    Op::Value(Value::Operator(Token::Arrow)),
-              },
-            })
-          ) =>
-          {
-            token = Some(TokenExt {
-              token: Token::Apply,
-              src: "apply".to_string(),
-              ..x
-            });
-            token_stream.backtrack(1);
-          }
-          _ => continue,
-        }
-      },
-      match_token!(Token::LBracket) => {
-        top.lhs = Some(parse_block(token_stream)?);
-        continue;
-      },
+      // match_token!(Token::For) if !in_parens => {
+      //   return Err("Unexpected closing parenthesis".to_string());
+      // },
+      // match_token!(Token::If) if !in_parens => {
+      //   return Err("Unexpected closing parenthesis".to_string());
+      // },
       match_token!(Token::RParenthesis) if !in_parens => {
         return Err("Unexpected closing parenthesis".to_string());
       },
+      match_token!(Token::LParenthesis) => {
+        if matches!(
+          top.operator,
+          Some(Operator {
+            fixity: Fixity::None,
+            value:  Value::Operator(Token::Skip),
+          })
+        ) {
+          top = stack.pop().unwrap();
+        }
+
+        if let Some(lhs) = top.lhs {
+          top.lhs = Some(Expression {
+            op:    Op::Value(Value::Operator(Token::Apply)),
+            left:  Some(Box::new(lhs)),
+            right: Some(Box::new(parse_parens(token_stream)?)),
+          });
+        } else {
+          top.lhs = Some(parse_parens(token_stream)?);
+        }
+
+        stack.push(top);
+        top = Frame {
+          lhs:      None,
+          operator: Some(Operator {
+            fixity: Fixity::None,
+            value:  Value::Operator(Token::Skip),
+          }),
+        };
+        continue;
+      },
+      match_token!(Token::LBracket) => {
+        if matches!(
+          top.operator,
+          Some(Operator {
+            fixity: Fixity::None,
+            value:  Value::Operator(Token::Skip),
+          })
+        ) {
+          top = stack.pop().unwrap();
+        }
+
+        if let Some(lhs) = top.lhs {
+          top.lhs = Some(Expression {
+            op:    Op::Value(Value::Operator(Token::Apply)),
+            left:  Some(Box::new(lhs)),
+            right: Some(Box::new(parse_block(token_stream)?)),
+          });
+        } else {
+          top.lhs = Some(parse_block(token_stream)?);
+        }
+
+        stack.push(top);
+        top = Frame {
+          lhs:      None,
+          operator: Some(Operator {
+            fixity: Fixity::None,
+            value:  Value::Operator(Token::Skip),
+          }),
+        };
+        continue;
+      },
       match_token!(Token::LBrace) => {
+        if matches!(
+          top.operator,
+          Some(Operator {
+            fixity: Fixity::None,
+            value:  Value::Operator(Token::Skip),
+          })
+        ) {
+          top = stack.pop().unwrap();
+        }
+
         top.lhs = Some(Expression {
           op:    Op::Value(token.unwrap().value()),
           right: Some(Box::new(parse_braces(token_stream)?)),
@@ -502,6 +546,7 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
               let op = Op::Value(top.operator.ok_or("Unexpected indexing position")?.value);
               top.operator = operator;
 
+
               Expression {
                 op,
                 left: lhs.map(Box::new),
@@ -510,33 +555,64 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
             },
           })),
         });
-
-        token = token_stream.peek();
+        continue;
       },
       _ => (),
     };
+    // println!(
+    //   "1 ===\n\n{:?}\n\n{:?}\n\n{:?}\n\n{:?}",
+    //   stack, top, token, in_parens
+    // );
 
     let operator = loop {
-      let operator = token
+      let mut operator = token
         .clone()
         .map(|token| Operator::new(token, top.lhs.is_none()))
         .flatten();
 
       match operator {
         Some(op) if top.operator <= Some(op.clone()) => break op,
-        _ => {
-          let res = top;
+        x => {
+          // println!("2 ===\n\n{:?}\n\n{:?}\n\n{:?}", stack, top, x);
+          if matches!(
+            x,
+            Some(Operator {
+              fixity: Fixity::None,
+              value:  _,
+            })
+          ) && matches!(
+            token.clone().map(|token| Operator::new(token, false)),
+            Some(None)
+          ) {
+            token_stream.backtrack(1);
+            token = token.map(|t| {
+              TokenExt {
+                token: Token::Apply,
+                ..t
+              }
+            });
+          } else {
+            let res = top;
 
-          top = match stack.pop() {
-            Some(it) => it,
-            None => return Ok(res.lhs.unwrap_or_default()),
-          };
+            top = match stack.pop() {
+              Some(it) => it,
+              None => return Ok(res.lhs.unwrap_or_default()),
+            };
 
-          top.lhs = Some(Expression {
-            op:    Op::Value(res.operator.unwrap().value),
-            left:  top.lhs.map(Box::new),
-            right: res.lhs.map(Box::new),
-          });
+            if !matches!(
+              res.operator,
+              Some(Operator {
+                fixity: Fixity::None,
+                value:  Value::Operator(Token::Skip),
+              })
+            ) {
+              top.lhs = Some(Expression {
+                op:    Op::Value(res.operator.unwrap().value),
+                left:  top.lhs.map(Box::new),
+                right: res.lhs.map(Box::new),
+              });
+            }
+          }
         },
       };
     };
@@ -596,7 +672,8 @@ impl Operator {
           | Value::Placeholder
           | Value::Char(_)
           | Value::Number(_)
-          | Value::Boolean(_),
+          | Value::Boolean(_)
+          | Value::Operator(Token::String),
         fixity: Fixity::None,
       } => (99, 100),
       Operator {
@@ -653,7 +730,7 @@ impl Operator {
               Token::GreaterEqual => (20, 19),
               Token::Arrow => (31, 0),
               Token::Apply => (34, 35),
-              Token::In => (32, 33),
+              Token::Is => (32, 33),
               _ => return None,
             }
           },

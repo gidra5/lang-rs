@@ -86,6 +86,9 @@ pub enum Token {
   Return,
   Entry,
   Placeholder,
+  For,
+  If,
+  Else,
 
   // Punct
   LAngleBracket,
@@ -95,7 +98,7 @@ pub enum Token {
   LBrace,
   RAngleBracket,
   RParenthesis,
-  RBracketParen,
+  RParenBrace,
   RBracket,
   RBrace,
   Semicolon,
@@ -159,7 +162,7 @@ impl<'a> Tokenizable<'a> for Token {
         '>' if stream.is_next('=') => GreaterEqual,
         '>' => RAngleBracket,
         '(' => LParenthesis,
-        ')' if stream.is_next('}') => RBracketParen,
+        ')' if stream.is_next('}') => RParenBrace,
         ')' => RParenthesis,
         '{' if stream.is_next('(') => LBracketParen,
         '{' => LBracket,
@@ -249,6 +252,9 @@ impl<'a> Tokenizable<'a> for Token {
             "postfix" => Postfix,
             "prefix" => Prefix,
             "_" => Placeholder,
+            "for" => For,
+            "if" => If,
+            "else" => Else,
             _ => Identifier,
           }
         },
