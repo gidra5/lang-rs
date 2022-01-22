@@ -50,9 +50,9 @@ pub enum Op {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
-  left:  Option<Box<Expression>>,
-  op:    Op,
-  right: Option<Box<Expression>>,
+  left:   Option<Box<Expression>>,
+  pub op: Op,
+  right:  Option<Box<Expression>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -163,6 +163,54 @@ struct Frame {
   lhs:      Option<Expression>,
 }
 
+pub fn match_value<L: LoggerTrait>(
+  bind: bool,
+  val: Value,
+  pat: Op,
+  env: &mut Rc<RefCell<Enviroment>>,
+  logger: &mut L,
+) -> bool {
+  if let Op::Value(Value::Placeholder) = pat {
+    return true;
+  } else if let Op::Value(Value::Identifier(ident)) = pat {
+    if bind {
+      (*env).borrow_mut().define(ident, val);
+    }
+    return true;
+  } else if let Op::Value(value) = pat {
+    return val == value;
+  } else if let Op::Record(pat_rec) = pat {
+    if let Value::Record(val_rec) = val {
+      return pat_rec.len() == val_rec.len()
+        && pat_rec.into_iter().zip(val_rec).all(
+          |(
+            RecordItem {
+              key: pat_key,
+              value: Expression { op, .. },
+            },
+            value::RecordItem {
+              key: val_key,
+              value: val,
+            },
+          )| {
+            (match (op.clone(), pat_key, val_key) {
+              (_, RecordKey::None, None) => true,
+              (Op::Value(Value::Identifier(x)), RecordKey::None, Some(Value::Identifier(y))) => {
+                x == y
+              },
+              (_, RecordKey::Identifier(x), Some(Value::Identifier(y))) => *x == y,
+              (_, RecordKey::Value(x), Some(y)) => x.evaluate(env, logger) == y,
+              _ => false,
+            }) && match_value(bind, val, op, env, logger)
+          },
+        );
+    } else if let Value::Unit = val {
+      return pat_rec.len() == 0;
+    }
+  }
+  false
+}
+
 impl Evaluatable for Expression {
   fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
     match self {
@@ -183,22 +231,6 @@ impl Evaluatable for Expression {
       } => op.postfix((*left).evaluate(env, logger)),
       Expression {
         left: None,
-        op: Op::Value(Value::Identifier(id)),
-        right: Some(right),
-      } => {
-        if let Some(Value::Function(var, fn_env, expr)) = env.clone().borrow().get(id) {
-          let mut new_env = Enviroment::new();
-          new_env.set_enclosing(fn_env.clone());
-          new_env.define(var, (*right).evaluate(env, logger));
-          let mut new_env = Rc::new(RefCell::new(new_env));
-
-          expr.evaluate(&mut new_env, logger)
-        } else {
-          Value::None
-        }
-      },
-      Expression {
-        left: None,
         op: Op::Value(op),
         right: Some(right),
       } => op.prefix((*right).evaluate(env, logger)),
@@ -207,19 +239,18 @@ impl Evaluatable for Expression {
         op: Op::Value(op @ Value::Operator(Token::Arrow)),
         right: Some(right),
       } => {
-        let left = *left;
-        if let Expression {
-          left: None,
-          op: Op::Value(Value::Identifier(left)),
-          right: None,
-        } = left
-        {
-          let x = Value::Function(left, env.clone(), right);
-          (*env).borrow_mut().define("self".to_string(), x.clone());
-          x
-        } else {
-          Value::None
-        }
+        let x = Value::Function(left, env.clone(), right);
+        (*env).borrow_mut().define("self".to_string(), x.clone());
+        x
+      },
+      Expression {
+        left: Some(left),
+        op: Op::Value(op @ Value::Operator(Token::Is)),
+        right: Some(right),
+      } => {
+        let left = (*left).evaluate(env, logger);
+
+        Value::Boolean(match_value(false, left, (*right).op, env, logger))
       },
       Expression {
         left: Some(left),
@@ -228,11 +259,18 @@ impl Evaluatable for Expression {
       } => {
         let left = (*left).evaluate(env, logger);
 
-        if let Value::Function(var, fn_env, expr) = left {
+        if let Value::Function(pat, fn_env, expr) = left {
           let mut new_env = Enviroment::new();
           new_env.set_enclosing(fn_env.clone());
-          new_env.define(var, (*right).evaluate(env, logger));
           let mut new_env = Rc::new(RefCell::new(new_env));
+
+          match_value(
+            true,
+            (*right).evaluate(env, logger),
+            (*pat).op,
+            &mut new_env,
+            logger,
+          );
 
           expr.evaluate(&mut new_env, logger)
         } else {
@@ -483,6 +521,24 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
           });
         } else {
           top.lhs = Some(parse_parens(token_stream)?);
+        }
+
+        if let Some(
+          op @ Operator {
+            fixity: Fixity::None,
+            ..
+          },
+        ) = top.operator.clone()
+        {
+          top.lhs = Some(Expression {
+            op:    Op::Value(Value::Operator(Token::Apply)),
+            left:  Some(Box::new(Expression {
+              op:    Op::Value(op.value),
+              right: None,
+              left:  None,
+            })),
+            right: top.lhs.map(Box::new),
+          });
         }
 
         stack.push(top);

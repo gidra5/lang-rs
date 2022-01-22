@@ -28,8 +28,8 @@
 - [x] Statements block expression
 - [x] Variable declaration statement
 - [ ] Template strings
-- [ ] Pattern matching
+- [x] Pattern matching
 - [ ] Anonymous lambda fixity
-- [ ] Anonymous inline lambda
+- [ ] Anonymous lambda inlining
 - [ ] Type system
 - [ ] Virtual machine

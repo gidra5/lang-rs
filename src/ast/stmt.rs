@@ -12,7 +12,11 @@ use crate::{
   punct_or_newline,
 };
 
-use super::{expr::Expression, Evaluatable, Parseable};
+use super::{
+  expr::{match_value, Expression},
+  Evaluatable,
+  Parseable,
+};
 
 /// Statement
 ///
@@ -261,11 +265,11 @@ impl Evaluatable for Statement {
         let mut iterator = iterator.evaluate(env, logger);
 
         loop {
-          if let Value::Function(fn_var, fn_env, expr) = iterator {
+          if let Value::Function(pat, fn_env, expr) = iterator {
             let next = {
               let mut new_env = Enviroment::new();
               new_env.set_enclosing(fn_env.clone());
-              new_env.define(fn_var, Value::Unit);
+              match_value(true, Value::Unit, (*pat).op, env, logger);
               let mut new_env = Rc::new(RefCell::new(new_env));
 
               expr.evaluate(&mut new_env, logger)

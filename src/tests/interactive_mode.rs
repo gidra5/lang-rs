@@ -201,6 +201,193 @@ fn interactive_fn_3() {
 }
 
 #[test]
+fn interactive_pattern_matching() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("print () is ()");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_14() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("print x is _");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_3() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = 1; print x is 1");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_4() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = 1; print x is 2");
+
+  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_5() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (1, 2); print x is (1, 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_6() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (1, 2); print x is (_, 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_7() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (1, 2); print x is (2, 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_8() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (1, 2); print x is (1, _)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_9() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (1, 2); print x is (1, 3)");
+
+  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_10() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (a: 1, b: 2); print x is (a: 1, b: 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_11() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (a: 1, b: 2); print x is (a, b: 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_12() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (a: 1, b: 2); print x is (a: 2, b: 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_13() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = ([1+1]: 1, [2+2]: 2); print x is ([2]: _, [4]: 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_15() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("print 1 is 2");
+
+  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_16() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (a: 1, b: 2); print x is (a, b)");
+
+  unsafe { assert!(logs.iter().eq(vec!["true"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_17() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (a: 1, b: 2); print x is (a, c)");
+
+  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+}
+
+#[test]
+fn interactive_pattern_matching_18() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (a, b) => { print a; print b; }; x (1, 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["1", "2"].iter())) }
+}
+
+#[test]
 fn interactive_if() {
   let InteractiveMode {
     rl: _,

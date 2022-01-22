@@ -32,7 +32,7 @@ pub enum Value {
   Char(char),
   Operator(Token),
   Record(Vec<RecordItem>),
-  Function(String, Rc<RefCell<Enviroment>>, Box<Expression>),
+  Function(Box<Expression>, Rc<RefCell<Enviroment>>, Box<Expression>),
   Unit,
   Placeholder,
   None,
