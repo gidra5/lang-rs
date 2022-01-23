@@ -8,14 +8,10 @@ pub struct Enviroment {
 }
 
 impl Enviroment {
-  pub fn set_enclosing(&mut self, enclosing: Rc<RefCell<Enviroment>>) {
-    self.enclosing = Some(enclosing);
-  }
-
-  pub fn new() -> Enviroment {
+  pub fn new(enclosing: Option<Rc<RefCell<Enviroment>>>) -> Enviroment {
     Enviroment {
       variables: HashMap::new(),
-      enclosing: None,
+      enclosing,
     }
   }
 
@@ -31,17 +27,19 @@ impl Enviroment {
   pub fn define(&mut self, ident: String, val: Value) { self.variables.insert(ident, val); }
 
   pub fn set(&mut self, ident: String, val: Value) -> Result<(), String> {
-    Ok(match &self.enclosing {
-      Some(enclosing) => {
-        enclosing.borrow_mut().set(ident, val)?;
-      },
-      None => {
-        if self.has(&ident) {
-          self.variables.insert(ident, val);
-        } else {
-          return Err(format!("Variable {} is not declared in this scope", ident));
+    Ok(
+      if self.has(&ident) {
+        self.variables.insert(ident, val);
+      } else {
+        match &self.enclosing {
+          Some(enclosing) => {
+            enclosing.borrow_mut().set(ident, val)?;
+          },
+          None => {
+            return Err(format!("Variable {} is not declared in this scope", ident));
+          },
         }
       },
-    })
+    )
   }
 }

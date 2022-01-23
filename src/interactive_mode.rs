@@ -25,7 +25,7 @@ impl InteractiveMode {
 
     Self {
       rl,
-      env: Rc::new(RefCell::new(Enviroment::new())),
+      env: Rc::new(RefCell::new(Enviroment::new(None))),
       logger: Logger { logs: vec![] },
     }
   }

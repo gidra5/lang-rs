@@ -133,25 +133,13 @@ impl Display for Expression {
           write!(f, "()")
         }
       },
-      Op::Block(_) => {
-        write!(f, "block")
-        // let mut x = record_items
-        //   .iter()
-        //   .map(|RecordItem { name, expr }| (name, format!("{}", expr)))
-        //   .collect::<Vec<_>>();
-        // if x.len() > 1 || (x.len() == 1 && x[0].0 != "0") {
-        //   write!(
-        //     f,
-        //     "({})",
-        //     x.iter()
-        //       .map(|(name, expr)| format!("{}: {}", name, expr))
-        //       .join(", ")
-        //   )
-        // } else if x.len() == 1 {
-        //   write!(f, "{}", x.pop().unwrap().1)
-        // } else {
-        //   write!(f, "()")
-        // }
+      Op::Block(stmts) => {
+        // write!(f, "block")
+        write!(
+          f,
+          "{{\n{}\n}}",
+          stmts.iter().map(|stmt| format!("\t{:?}", stmt)).join(";\n")
+        )
       },
     }
   }
@@ -260,9 +248,7 @@ impl Evaluatable for Expression {
         let left = (*left).evaluate(env, logger);
 
         if let Value::Function(pat, fn_env, expr) = left {
-          let mut new_env = Enviroment::new();
-          new_env.set_enclosing(fn_env.clone());
-          let mut new_env = Rc::new(RefCell::new(new_env));
+          let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(fn_env.clone()))));
 
           match_value(
             true,
@@ -321,9 +307,7 @@ impl Evaluatable for Expression {
         op: Op::Block(statements),
         right: _,
       } => {
-        let mut new_env = Enviroment::new();
-        new_env.set_enclosing(env.clone());
-        let mut new_env = Rc::new(RefCell::new(new_env));
+        let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(env.clone()))));
         let mut iter = statements.into_iter().peekable();
 
         loop {
@@ -530,6 +514,13 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
           },
         ) = top.operator.clone()
         {
+          let res = top;
+
+          top = match stack.pop() {
+            Some(it) => it,
+            None => return Ok(res.lhs.unwrap_or_default()),
+          };
+
           top.lhs = Some(Expression {
             op:    Op::Value(Value::Operator(Token::Apply)),
             left:  Some(Box::new(Expression {
@@ -537,7 +528,7 @@ fn parse_expr(token_stream: &mut TokenStream<'_>, in_parens: bool) -> Result<Exp
               right: None,
               left:  None,
             })),
-            right: top.lhs.map(Box::new),
+            right: res.lhs.map(Box::new),
           });
         }
 

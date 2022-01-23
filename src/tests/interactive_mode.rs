@@ -30,6 +30,12 @@ macro_rules! assert_env {
   };
 }
 
+macro_rules! assert_log {
+  ($logs:ident, {$($line:expr),*}) => {
+    unsafe { assert!($logs.iter().eq(vec![$($line),*].iter())) }
+  };
+}
+
 #[test]
 fn interactive_scope_mutation() {
   let InteractiveMode {
@@ -396,6 +402,151 @@ fn interactive_pattern_matching_19() {
   } = interpret("let x = (x, y) => x + y; print x (1, 2)");
 
   unsafe { assert!(logs.iter().eq(vec!["3"].iter())) }
+}
+
+#[test]
+fn interactive_range() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => {
+      let range = self
+      let res
+
+      if left < right: {
+        res = (left, range(left + 1, right))
+      } else if left > right: {
+        res = (left, range(left - 1, right))
+      } else {
+        res = right
+      }
+
+      _ => res
+    }
+
+    for x in range(1,3): print x
+  ",
+  );
+
+  assert_log!(logs, { "1", "2", "3" });
+}
+
+#[test]
+fn interactive_range_5() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => {
+      let res
+
+      if left < right: {
+        res = (left, self (left + 1, right))
+      } else if left > right: {
+        res = (left, self (left - 1, right))
+      } else {
+        res = right
+      }
+
+      _ => res
+    }
+
+    for x in range(1,3): print x
+  ",
+  );
+
+  assert_log!(logs, { "1", "2", "3" });
+}
+
+#[test]
+fn interactive_range_2() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => {
+      let range = self
+      let res
+
+      if left < right
+        res = (left, range(left + 1, right))
+      else if left > right
+        res = (left, range(left - 1, right))
+      else
+        res = right
+
+      _ => res
+    }
+
+    for x in range(1,3): print x
+  ",
+  );
+
+  assert_log!(logs, { "1", "2", "3" });
+}
+
+#[test]
+fn interactive_range_3() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => {
+      let range = self
+      let res = {
+        if left < right
+          (left, range(left + 1, right))
+        else if left > right
+          (left, range(left - 1, right))
+        else
+          right
+      }
+
+      _ => res
+    }
+
+    for x in range(1,3): print x
+  ",
+  );
+
+  assert_log!(logs, { "1", "2", "3" });
+}
+
+#[test]
+fn interactive_range_4() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => {
+      let range = self
+
+      _ => {
+        if left < right
+          (left, range(left + 1, right))
+        else if left > right
+          (left, range(left - 1, right))
+        else
+          right
+      }
+    }
+
+    for x in range(1,3): print x
+  ",
+  );
+
+  assert_log!(logs, { "1", "2", "3" });
 }
 
 #[test]

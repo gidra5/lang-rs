@@ -248,14 +248,17 @@ impl Evaluatable for Statement {
       Self::Print(expr) => {
         let x = expr.evaluate(env, logger);
         logger.write(format!("{}", x))
+        // logger.write(format!("{:?}", x))
       },
       Self::Parse(expr) => logger.write(format!("{}", expr)),
       Self::Let(id, expr) => {
-        let val = expr.map_or(Value::None, |expr| expr.evaluate(env, logger));
+        let val = expr
+          .map(|expr| expr.evaluate(env, logger))
+          .unwrap_or_default();
         env.borrow_mut().define(id, val)
       },
       Self::If(condition, true_branch, false_branch) => {
-        if let Value::Boolean(true) = condition.evaluate(env, logger) {
+        return if let Value::Boolean(true) = condition.evaluate(env, logger) {
           Statement::Block(Block(true_branch)).evaluate(env, logger)
         } else {
           Statement::Block(Block(false_branch)).evaluate(env, logger)
@@ -263,14 +266,13 @@ impl Evaluatable for Statement {
       },
       Self::For(var, iterator, body) => {
         let mut iterator = iterator.evaluate(env, logger);
+        let mut accumulator = Value::Unit;
 
-        loop {
+        return loop {
           if let Value::Function(pat, fn_env, expr) = iterator {
             let next = {
-              let mut new_env = Enviroment::new();
-              new_env.set_enclosing(fn_env.clone());
-              match_value(true, Value::Unit, (*pat).op, env, logger);
-              let mut new_env = Rc::new(RefCell::new(new_env));
+              let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(fn_env.clone()))));
+              match_value(true, accumulator, (*pat).op, env, logger);
 
               expr.evaluate(&mut new_env, logger)
             };
@@ -278,46 +280,57 @@ impl Evaluatable for Statement {
             if let Value::Record(vec) = next {
               let RecordItem { value: val, .. } = &vec[0];
               let RecordItem { value: iter, .. } = &vec[1];
-              let mut new_env = Enviroment::new();
-              new_env.set_enclosing(env.clone());
+              let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(env.clone()))));
               env.borrow_mut().define(var.clone(), val.clone());
-              let mut new_env = Rc::new(RefCell::new(new_env));
-
-              for stmt in &body {
-                stmt.clone().evaluate(&mut new_env, logger);
-              }
 
               iterator = iter.clone();
-            } else {
-              let mut new_env = Enviroment::new();
-              new_env.set_enclosing(env.clone());
-              env.borrow_mut().define(var.clone(), next);
-              let mut new_env = Rc::new(RefCell::new(new_env));
+              let mut stmts = body.iter().cloned().peekable();
 
-              for stmt in &body {
-                stmt.clone().evaluate(&mut new_env, logger);
+              accumulator = loop {
+                if let Some(stmt) = stmts.next() {
+                  if let Some(_) = stmts.peek() {
+                    stmt.evaluate(&mut new_env, logger);
+                  } else {
+                    break stmt.evaluate(&mut new_env, logger);
+                  }
+                }
               }
+            } else {
+              env.borrow_mut().define(var.clone(), next);
+              let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(env.clone()))));
 
-              break;
+              let mut stmts = body.iter().cloned().peekable();
+
+              break loop {
+                if let Some(stmt) = stmts.next() {
+                  if let Some(_) = stmts.peek() {
+                    stmt.evaluate(&mut new_env, logger);
+                  } else {
+                    break stmt.evaluate(&mut new_env, logger);
+                  }
+                }
+              };
             }
           } else {
-            let mut new_env = Enviroment::new();
-            new_env.set_enclosing(env.clone());
+            let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(env.clone()))));
             env.borrow_mut().define(var.clone(), iterator);
-            let mut new_env = Rc::new(RefCell::new(new_env));
 
-            for stmt in &body {
-              stmt.clone().evaluate(&mut new_env, logger);
-            }
+            let mut stmts = body.iter().cloned().peekable();
 
-            break;
+            break loop {
+              if let Some(stmt) = stmts.next() {
+                if let Some(_) = stmts.peek() {
+                  stmt.evaluate(&mut new_env, logger);
+                } else {
+                  break stmt.evaluate(&mut new_env, logger);
+                }
+              }
+            };
           }
-        }
+        };
       },
       Self::Block(Block(statements)) => {
-        let mut new_env = Enviroment::new();
-        new_env.set_enclosing(env.clone());
-        let mut new_env = Rc::new(RefCell::new(new_env));
+        let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(env.clone()))));
 
         for stmt in statements {
           stmt.evaluate(&mut new_env, logger);

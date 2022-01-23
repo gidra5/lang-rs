@@ -335,6 +335,12 @@ fn expr_48() {
 }
 
 #[test]
+fn expr_49() {
+  let s = expr("x (1)").unwrap();
+  assert_eq!(s.to_string(), format!("(Apply x 1)"));
+}
+
+#[test]
 fn expr_consumes_just_enough() -> Result<(), String> {
   let mut logger = Logger { logs: vec![] };
   let input = "2;";

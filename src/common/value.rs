@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::{enviroment::Enviroment, Token};
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
@@ -52,8 +54,36 @@ impl Display for Value {
       Boolean(b) => write!(f, "{}", b),
       Char(c) => write!(f, "'{}'", c),
       Operator(op) => write!(f, "{:?}", op),
-      Record(record_items) => write!(f, "(record)"),
-      Function(_, _, _) => write!(f, "(function)"),
+      Record(record_items) => {
+        let mut x = record_items
+          .iter()
+          .map(|RecordItem { key, value }| {
+            (
+              key.as_ref().map(|value| format!("[{}]", value)),
+              format!("{}", value),
+            )
+          })
+          .collect::<Vec<_>>();
+        if x.len() > 1 || (x.len() == 1 && x[0].0 != Option::None) {
+          write!(
+            f,
+            "({})",
+            x.iter()
+              .map(|(name, expr)| {
+                match name {
+                  Some(x) => format!("{}: {}", x, expr),
+                  Option::None => format!("{}", expr),
+                }
+              })
+              .join(", ")
+          )
+        } else if x.len() == 1 {
+          write!(f, "{}", x.pop().unwrap().1)
+        } else {
+          write!(f, "()")
+        }
+      },
+      Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
       Unit => write!(f, "()"),
       Placeholder => write!(f, "_"),
       None => write!(f, "None"),
