@@ -388,6 +388,17 @@ fn interactive_pattern_matching_18() {
 }
 
 #[test]
+fn interactive_pattern_matching_19() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret("let x = (x, y) => x + y; print x (1, 2)");
+
+  unsafe { assert!(logs.iter().eq(vec!["3"].iter())) }
+}
+
+#[test]
 fn interactive_if() {
   let InteractiveMode {
     rl: _,
