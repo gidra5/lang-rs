@@ -272,7 +272,7 @@ impl Evaluatable for Statement {
           if let Value::Function(pat, fn_env, expr) = iterator {
             let next = {
               let mut new_env = Rc::new(RefCell::new(Enviroment::new(Some(fn_env.clone()))));
-              match_value(true, accumulator, (*pat).op, env, logger);
+              match_value(true, accumulator, (*pat), env, logger);
 
               expr.evaluate(&mut new_env, logger)
             };

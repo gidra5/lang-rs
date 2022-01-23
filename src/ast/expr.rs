@@ -154,49 +154,73 @@ struct Frame {
 pub fn match_value<L: LoggerTrait>(
   bind: bool,
   val: Value,
-  pat: Op,
+  pat: Expression,
   env: &mut Rc<RefCell<Enviroment>>,
   logger: &mut L,
 ) -> bool {
-  if let Op::Value(Value::Placeholder) = pat {
-    return true;
-  } else if let Op::Value(Value::Identifier(ident)) = pat {
-    if bind {
-      (*env).borrow_mut().define(ident, val);
-    }
-    return true;
-  } else if let Op::Value(value) = pat {
-    return val == value;
-  } else if let Op::Record(pat_rec) = pat {
-    if let Value::Record(val_rec) = val {
-      return pat_rec.len() == val_rec.len()
-        && pat_rec.into_iter().zip(val_rec).all(
-          |(
-            RecordItem {
-              key: pat_key,
-              value: Expression { op, .. },
-            },
-            value::RecordItem {
-              key: val_key,
-              value: val,
-            },
-          )| {
-            (match (op.clone(), pat_key, val_key) {
-              (_, RecordKey::None, None) => true,
-              (Op::Value(Value::Identifier(x)), RecordKey::None, Some(Value::Identifier(y))) => {
-                x == y
+  match pat {
+    Expression {
+      left: Some(pat),
+      op: Op::Value(Value::Operator(Token::Equal)),
+      right: Some(right),
+    } => {
+      let res = match_value(bind, val, *pat.clone(), env, logger);
+      if bind && !res {
+        match_value(bind, (*right).evaluate(env, logger), *pat, env, logger)
+      } else {
+        res
+      }
+    },
+    Expression {
+      left: None,
+      op: pat,
+      right: None,
+    } => {
+      if let Op::Value(Value::Placeholder) = pat {
+        return true;
+      } else if let Op::Value(Value::Identifier(ident)) = pat {
+        if bind {
+          (*env).borrow_mut().define(ident, val);
+        }
+        return true;
+      } else if let Op::Value(value) = pat {
+        return val == value;
+      } else if let Op::Value(Value::Operator(Token::Equal)) = pat {
+      } else if let Op::Record(pat_rec) = pat {
+        if let Value::Record(val_rec) = val {
+          return pat_rec.len() == val_rec.len()
+            && pat_rec.into_iter().zip(val_rec).all(
+              |(
+                RecordItem {
+                  key: pat_key,
+                  value: pat,
+                },
+                value::RecordItem {
+                  key: val_key,
+                  value: val,
+                },
+              )| {
+                (match (pat.op.clone(), pat_key, val_key) {
+                  (_, RecordKey::None, None) => true,
+                  (
+                    Op::Value(Value::Identifier(x)),
+                    RecordKey::None,
+                    Some(Value::Identifier(y)),
+                  ) => x == y,
+                  (_, RecordKey::Identifier(x), Some(Value::Identifier(y))) => *x == y,
+                  (_, RecordKey::Value(x), Some(y)) => x.evaluate(env, logger) == y,
+                  _ => false,
+                }) && match_value(bind, val, pat, env, logger)
               },
-              (_, RecordKey::Identifier(x), Some(Value::Identifier(y))) => *x == y,
-              (_, RecordKey::Value(x), Some(y)) => x.evaluate(env, logger) == y,
-              _ => false,
-            }) && match_value(bind, val, op, env, logger)
-          },
-        );
-    } else if let Value::Unit = val {
-      return pat_rec.len() == 0;
-    }
+            );
+        } else if let Value::Unit = val {
+          return pat_rec.len() == 0;
+        }
+      }
+      false
+    },
+    _ => false,
   }
-  false
 }
 
 impl Evaluatable for Expression {
@@ -238,7 +262,7 @@ impl Evaluatable for Expression {
       } => {
         let left = (*left).evaluate(env, logger);
 
-        Value::Boolean(match_value(false, left, (*right).op, env, logger))
+        Value::Boolean(match_value(false, left, (*right), env, logger))
       },
       Expression {
         left: Some(left),
@@ -253,7 +277,7 @@ impl Evaluatable for Expression {
           match_value(
             true,
             (*right).evaluate(env, logger),
-            (*pat).op,
+            (*pat),
             &mut new_env,
             logger,
           );
@@ -263,6 +287,16 @@ impl Evaluatable for Expression {
           Value::None
         }
       },
+      // fuck
+      // Expression {
+      //   left: Some(pat),
+      //   op: Op::Value(op @ Value::Operator(Token::Equal)),
+      //   right: Some(right),
+      // } => {
+      //   let right = (*right).evaluate(env, logger);
+      //   match_value(true, right.clone(), *pat, env, logger);
+      //   right
+      // },
       Expression {
         left: Some(left),
         op: Op::Value(op @ Value::Operator(Token::Equal)),

@@ -550,6 +550,34 @@ fn interactive_range_4() {
 }
 
 #[test]
+fn interactive_range_6() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => {
+      let range = self
+
+      _ => {
+        if left < right
+          (left, range(left + 1, right))
+        else if left > right
+          (left, range(left - 1, right))
+        else
+          right
+      }
+    }
+
+    for x in range(1,3): print x
+  ",
+  );
+
+  assert_log!(logs, { "1", "2", "3" });
+}
+
+#[test]
 fn interactive_if() {
   let InteractiveMode {
     rl: _,

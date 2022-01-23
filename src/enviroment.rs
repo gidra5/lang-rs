@@ -15,7 +15,7 @@ impl Enviroment {
     }
   }
 
-  fn has(&self, ident: &String) -> bool { matches!(self.variables.get(ident), Some(_)) }
+  pub fn has(&self, ident: &String) -> bool { matches!(self.variables.get(ident), Some(_)) }
 
   pub fn get(&self, ident: String) -> Option<Value> {
     Some(match self.variables.get(&ident) {
