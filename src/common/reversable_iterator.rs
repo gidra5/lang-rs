@@ -47,7 +47,7 @@ macro_rules! check_any {
   };
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ReversableStream<T: Clone + PartialEq> {
   data: Vec<T>,
   pos:  usize,

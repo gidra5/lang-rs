@@ -14,8 +14,8 @@ use super::{stmt::Statement, Evaluatable, Parseable};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Program(pub Vec<Statement>);
 
-impl<'a> Parseable<'a> for Program {
-  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
+impl Parseable for Program {
+  fn parse(stream: &mut TokenStream) -> Result<Self, String> {
     let res = parse_stmt_vec!(stream)?;
 
     Ok(Self(res))

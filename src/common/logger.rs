@@ -11,11 +11,11 @@ pub trait LoggerTrait {
 
   fn error(&mut self, msg: &str) { Self::write(self, format!("Error: {}", msg)); }
 
-  fn error_token(&mut self, TokenizationError { msg, span }: TokenizationError<'_>) {
+  fn error_token(&mut self, TokenizationError { msg, span }: TokenizationError) {
     Self::error(self, format!("{} at\n{}", msg, span).as_str());
   }
 
-  fn error_parse(&mut self, ParsingError { error, span }: ParsingError<'_>) {
+  fn error_parse(&mut self, ParsingError { error, span }: ParsingError) {
     match error {
       ErrorType::Generic(msg) => Self::error(self, format!("{}\n{}", span, msg).as_str()),
     }
@@ -34,7 +34,7 @@ impl LoggerTrait for Logger {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Span<T: ReversableIterator> {
   /// Stream snapshot where occured error
   pub stream: T,
@@ -48,7 +48,7 @@ impl<T: ReversableIterator> Span<T> {
   pub fn src(&self) -> Vec<Option<<T>::Item>> { self.stream.peek_ext(self.length) }
 }
 
-impl<'a> Span<CharStream<'a>> {
+impl Span<CharStream> {
   pub fn string_src(&self) -> String {
     self
       .src()
@@ -63,7 +63,7 @@ impl<'a> Span<CharStream<'a>> {
   }
 }
 
-impl<'a> std::fmt::Display for Span<TokenStream<'a>> {
+impl std::fmt::Display for Span<TokenStream> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let err_token = self.stream.peek();
     let err_end_token = self.stream.peek_ext(self.length).pop().flatten();
@@ -127,7 +127,7 @@ impl<'a> std::fmt::Display for Span<TokenStream<'a>> {
       .collect::<Vec<String>>()
       .join("\n");
 
-    match char_stream.file {
+    match char_stream.file.as_str() {
       "." => {
         write!(
           f,

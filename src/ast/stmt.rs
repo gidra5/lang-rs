@@ -93,8 +93,8 @@ macro_rules! parse_stmt_vec {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Block(pub Vec<Statement>);
 
-impl<'a> Parseable<'a> for Block {
-  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
+impl Parseable for Block {
+  fn parse(stream: &mut TokenStream) -> Result<Self, String> {
     let res = parse_stmt_vec!(stream, Token::RBracket)?;
 
     if check_token!(stream.next(), Token::RBracket) {
@@ -105,8 +105,8 @@ impl<'a> Parseable<'a> for Block {
   }
 }
 
-impl<'a> Parseable<'a> for Statement {
-  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String> {
+impl Parseable for Statement {
+  fn parse(stream: &mut TokenStream) -> Result<Self, String> {
     let res = {
       let TokenExt { token, src, span } = stream
         .peek()

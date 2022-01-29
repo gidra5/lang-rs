@@ -1,5 +1,6 @@
 #![allow(clippy::inconsistent_struct_constructor, dead_code)] //TODO: should remove dead_code when ready
 #![feature(box_patterns)]
+#![feature(derive_default_enum)]
 extern crate automata;
 extern crate either;
 extern crate fancy_regex;

@@ -1,6 +1,7 @@
 #![allow(unused)]
 pub use crate::common::*;
 use std::{
+  default,
   fmt::Debug,
   hash::{Hash, Hasher},
 };
@@ -8,15 +9,14 @@ use std::{
 #[path = "tests/token.rs"]
 mod tests;
 
-#[derive(Clone)]
-pub struct TokenExt<'a> {
+#[derive(Clone, Default)]
+pub struct TokenExt {
   pub token: Token,
   pub src:   String,
-  pub span:  Span<CharStream<'a>>,
+  pub span:  Span<CharStream>,
 }
 
-
-impl Debug for TokenExt<'_> {
+impl Debug for TokenExt {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     f.debug_struct("TokenExt")
       .field("token", &self.token)
@@ -26,12 +26,12 @@ impl Debug for TokenExt<'_> {
 }
 
 
-impl PartialEq for TokenExt<'_> {
+impl PartialEq for TokenExt {
   fn eq(&self, other: &Self) -> bool { self.token == other.token && self.value() == other.value() }
 }
-impl Eq for TokenExt<'_> {}
+impl Eq for TokenExt {}
 
-impl TokenExt<'_> {
+impl TokenExt {
   pub fn value(&self) -> Value {
     match self.token {
       Token::Number => Value::Number(self.src.parse::<f64>().unwrap()),
@@ -46,9 +46,7 @@ impl TokenExt<'_> {
       Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
       Token::Identifier => Value::Identifier(self.src.clone()),
       Token::Placeholder => Value::Placeholder,
-      token
-      @
-      (Token::Pipe
+      token @ (Token::Pipe
       | Token::LBrace
       | Token::Appersand
       | Token::Arrow
@@ -80,7 +78,7 @@ impl TokenExt<'_> {
   }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Token {
   // Keywords
   Return,
@@ -145,11 +143,12 @@ pub enum Token {
   // Identifier
   Identifier,
 
+  #[default]
   Skip,
 }
 
-impl<'a> Tokenizable<'a> for Token {
-  fn tokenize(stream: &mut CharStream<'a>) -> Result<TokenExt<'a>, TokenizationError<'a>> {
+impl Tokenizable for Token {
+  fn tokenize(stream: &mut CharStream) -> Result<TokenExt, TokenizationError> {
     use Token::*;
     let stream_snapshot = stream.clone();
 
@@ -286,28 +285,25 @@ impl<'a> Tokenizable<'a> for Token {
   }
 }
 
-pub struct TokenizationError<'a> {
-  pub span: Span<CharStream<'a>>,
+pub struct TokenizationError {
+  pub span: Span<CharStream>,
   pub msg:  String,
 }
 
-pub trait Tokenizable<'a>
+pub trait Tokenizable
 where
   Self: Sized + Clone + PartialEq,
 {
-  fn tokenize(stream: &mut CharStream<'a>) -> Result<TokenExt<'a>, TokenizationError<'a>>;
+  fn tokenize(stream: &mut CharStream) -> Result<TokenExt, TokenizationError>;
 }
 
 #[derive(Clone, Debug)]
-pub struct TokenStream<'a> {
-  pub stream: ReversableStream<TokenExt<'a>>,
+pub struct TokenStream {
+  pub stream: ReversableStream<TokenExt>,
 }
 
-impl<'a> TokenStream<'a> {
-  pub fn new<L: LoggerTrait>(
-    mut char_stream: CharStream<'a>,
-    logger: &mut L,
-  ) -> Option<TokenStream<'a>> {
+impl TokenStream {
+  pub fn new<L: LoggerTrait>(mut char_stream: CharStream, logger: &mut L) -> Option<TokenStream> {
     let mut tokens = vec![];
     let mut had_err = false;
     let mut err_info: Option<TokenizationError> = None;
@@ -356,8 +352,8 @@ impl<'a> TokenStream<'a> {
   }
 }
 
-impl<'a> ReversableIterator for TokenStream<'a> {
-  type Item = TokenExt<'a>;
+impl ReversableIterator for TokenStream {
+  type Item = TokenExt;
 
   fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> { self.stream.next_ext(size) }
 

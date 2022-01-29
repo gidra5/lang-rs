@@ -27,17 +27,17 @@ pub enum ErrorType {
 }
 
 #[derive(Debug)]
-pub struct ParsingError<'a> {
+pub struct ParsingError {
   pub error: ErrorType,
-  pub span:  Span<TokenStream<'a>>,
+  pub span:  Span<TokenStream>,
 }
 
-pub trait Parseable<'a>
+pub trait Parseable
 where
   Self: Sized,
 {
-  fn parse(stream: &mut TokenStream<'a>) -> Result<Self, String>;
-  fn parse_ext(stream: &mut TokenStream<'a>) -> Result<ASTNodeExt<'a, Self>, ParsingError<'a>> {
+  fn parse(stream: &mut TokenStream) -> Result<Self, String>;
+  fn parse_ext(stream: &mut TokenStream) -> Result<ASTNodeExt<Self>, ParsingError> {
     let mut span = Span {
       stream: stream.clone(),
       length: 1,
@@ -58,15 +58,15 @@ where
   }
 }
 
-pub trait Synchronizable<'a> {
-  fn synchronize(stream: &mut TokenStream<'a>) {
+pub trait Synchronizable {
+  fn synchronize(stream: &mut TokenStream) {
     stream.next();
     while !Self::sync_point(stream) && stream.peek().is_some() {
       stream.next();
     }
   }
 
-  fn sync_point(stream: &mut TokenStream<'a>) -> bool { true }
+  fn sync_point(stream: &mut TokenStream) -> bool { true }
 }
 
 pub trait Evaluatable {
@@ -74,7 +74,7 @@ pub trait Evaluatable {
 }
 
 #[derive(Clone, Debug)]
-pub struct ASTNodeExt<'a, T> {
+pub struct ASTNodeExt<T> {
   pub node: T,
-  pub span: Span<TokenStream<'a>>,
+  pub span: Span<TokenStream>,
 }

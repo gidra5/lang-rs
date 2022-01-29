@@ -8,13 +8,13 @@ impl From<String> for ReversableStream<char> {
   fn from(s: String) -> Self { Self::from(s.as_str()) }
 }
 
-#[derive(Debug, Clone)]
-pub struct CharStream<'a> {
+#[derive(Debug, Clone, Default)]
+pub struct CharStream {
   stream:   ReversableStream<char>,
-  pub file: &'a str,
+  pub file: String,
 }
 
-impl CharStream<'_> {
+impl CharStream {
   pub fn new(filename: &str) -> Result<CharStream, &str> {
     std::fs::read(filename)
       .map(|file| {
@@ -22,7 +22,7 @@ impl CharStream<'_> {
           stream: ReversableStream::<char>::from(
             String::from_utf8(file).expect("Failed to parse as utf8 text"),
           ),
-          file:   filename,
+          file:   filename.to_string(),
         }
       })
       .map_err(|err| {
@@ -37,17 +37,17 @@ impl CharStream<'_> {
       })
   }
 
-  pub fn from_string<'a>(s: String) -> CharStream<'a> {
+  pub fn from_string(s: String) -> CharStream {
     CharStream {
       stream: ReversableStream::<char>::from(s),
-      file:   ".",
+      file:   ".".to_string(),
     }
   }
 
-  pub fn from_str<'a>(s: &str) -> CharStream<'a> {
+  pub fn from_str(s: &str) -> CharStream {
     CharStream {
       stream: ReversableStream::<char>::from(s),
-      file:   ".",
+      file:   ".".to_string(),
     }
   }
 
@@ -100,7 +100,7 @@ impl CharStream<'_> {
   }
 }
 
-impl std::fmt::Display for CharStream<'_> {
+impl std::fmt::Display for CharStream {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
@@ -110,7 +110,7 @@ impl std::fmt::Display for CharStream<'_> {
   }
 }
 
-impl ReversableIterator for CharStream<'_> {
+impl ReversableIterator for CharStream {
   type Item = char;
 
   fn next_ext(&mut self, size: usize) -> Vec<Option<Self::Item>> { self.stream.next_ext(size) }
@@ -124,7 +124,7 @@ impl ReversableIterator for CharStream<'_> {
 }
 
 
-impl<'a> std::fmt::Display for Span<CharStream<'a>> {
+impl std::fmt::Display for Span<CharStream> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let stream = &self.stream;
     let src = self.stream.to_string();
@@ -165,7 +165,7 @@ impl<'a> std::fmt::Display for Span<CharStream<'a>> {
       .collect::<Vec<String>>()
       .join("\n");
 
-    match self.stream.file {
+    match self.stream.file.as_str() {
       "." => {
         write!(
           f,
