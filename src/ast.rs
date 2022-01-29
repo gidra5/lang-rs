@@ -70,7 +70,7 @@ pub trait Synchronizable<'a> {
 }
 
 pub trait Evaluatable {
-  fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value;
+  fn evaluate<L: LoggerTrait>(self, env: &mut Enviroment, logger: &mut L) -> Value;
 }
 
 #[derive(Clone, Debug)]

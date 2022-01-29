@@ -3,7 +3,7 @@ pub use crate::{ast::*, either::Either, token::*};
 use fancy_regex::Regex;
 
 #[path = "tests/common.rs"]
-mod tests;
+pub mod tests;
 
 pub mod value;
 pub use value::*;

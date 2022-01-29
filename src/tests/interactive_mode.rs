@@ -1,8 +1,13 @@
 #![allow(unused)]
-use crate::common::logger::char_stream::{
-  value::{RecordItem, Value},
-  CharStream,
-  Logger,
+use std::{cell::RefCell, fmt::Result, rc::Rc};
+
+use crate::{
+  common::logger::char_stream::{
+    value::{RecordItem, Value},
+    CharStream,
+    Logger,
+  },
+  enviroment::Enviroment,
 };
 
 use super::InteractiveMode;
@@ -20,7 +25,7 @@ macro_rules! assert_env {
   ($state:ident, {$($name:ident: $value:expr),*}) => {
     $(
       assert_eq!(
-        $state.borrow().get(stringify!($name).to_string()),
+        $state.get(&stringify!($name).to_string()),
         Some($value),
         "variable {} have different value than {}",
         stringify!($name).to_string(),
@@ -413,36 +418,6 @@ fn interactive_range() {
   } = interpret(
     "
     let range = (left, right) => {
-      let range = self
-      let res
-
-      if left < right: {
-        res = (left, range(left + 1, right))
-      } else if left > right: {
-        res = (left, range(left - 1, right))
-      } else {
-        res = right
-      }
-
-      _ => res
-    }
-
-    for x in range(1,3): print x
-  ",
-  );
-
-  assert_log!(logs, { "1", "2", "3" });
-}
-
-#[test]
-fn interactive_range_5() {
-  let InteractiveMode {
-    rl: _,
-    env: state,
-    logger: Logger { logs },
-  } = interpret(
-    "
-    let range = (left, right) => {
       let res
 
       if left < right: {
@@ -550,7 +525,7 @@ fn interactive_range_4() {
 }
 
 #[test]
-fn interactive_range_6() {
+fn interactive_range_5() {
   let InteractiveMode {
     rl: _,
     env: state,
@@ -610,6 +585,76 @@ fn interactive_if() {
     ))
   }
 }
+
+#[test]
+fn interactive_block_if_expr() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let x = true
+    let y = false
+    let z = { if x: 1; else 2; }
+    let w = { if y: 3; else 4; }
+
+    print z
+    print w
+  ",
+  );
+
+  assert_log!(logs, { "1", "4" })
+}
+
+#[test]
+fn interactive_if_equal() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let x = true
+    let y = false
+    let z
+
+    if x: z = 1
+
+    print z
+  ",
+  );
+
+  assert_log!(logs, { "1" })
+}
+
+// #[test]
+// fn interactive_block_if_2() -> std::result::Result<(), String> {
+//   let InteractiveMode {
+//     rl: _,
+//     env: state,
+//     logger: Logger { logs },
+//   } = interpret(
+//     "
+//     let left = 1
+//     let right = 2
+//     let range = {
+//       let res
+
+//     //   if left < right
+//     //     res = (left, (left + 1, right))
+//     //   else if left > right
+//     //     res = (left, (left - 1, right))
+//     //   else
+//     //     res = right
+
+//       _ => res
+//     }
+//   ",
+//   );
+
+//   Ok(())
+// }
 
 #[test]
 fn interactive_2() {

@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{common::*, enviroment::*};
 use rustyline::{error::*, *};
 use rustyline_derive::*;
@@ -12,7 +10,7 @@ pub struct InteractiveModeHelper {}
 
 pub struct InteractiveMode {
   rl:         Editor<InteractiveModeHelper>,
-  env:        Rc<RefCell<Enviroment>>,
+  env:        Enviroment,
   pub logger: Logger,
 }
 
@@ -25,7 +23,7 @@ impl InteractiveMode {
 
     Self {
       rl,
-      env: Rc::new(RefCell::new(Enviroment::new(None))),
+      env: Enviroment::new(),
       logger: Logger { logs: vec![] },
     }
   }

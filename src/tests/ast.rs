@@ -1,23 +1,16 @@
-use crate::common::logger::char_stream::{value::Value, CharStream, Logger, TokenStream};
-
-use super::{
-  expr::Expression,
-  stmt::{Block, Statement},
-  ASTNodeExt,
-  Parseable,
+use crate::common::{
+  logger::char_stream::{
+    stmt::{Block, Statement},
+    ASTNodeExt,
+    CharStream,
+    Expression,
+    Logger,
+    Op,
+    Parseable,
+    TokenStream,
+  },
+  tests::{expr, stmt},
 };
-
-fn str_parse<'a, T: Parseable<'a>>(input: &str) -> Result<T, String> {
-  let mut logger = Logger { logs: vec![] };
-  let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
-    .ok_or("Failed to create TokenStream")?;
-
-  T::parse(&mut stream)
-}
-
-fn stmt(input: &str) -> Result<Statement, String> { str_parse::<Statement>(input) }
-
-fn expr(input: &str) -> Result<Expression, String> { str_parse::<Expression>(input) }
 
 #[test]
 fn expr_1() {
@@ -490,21 +483,6 @@ fn stmt_let_fn() {
 }
 
 #[test]
-fn stmt_empty_block() {
-  let s = stmt("{}").unwrap();
-  assert_eq!(s, Statement::Block(Block(vec![])));
-}
-
-#[test]
-fn stmt_block_no_trailing_semicolon() {
-  let s = stmt("{ print 2; }").unwrap();
-  assert_eq!(
-    s,
-    Statement::Block(Block(vec![Statement::Print(expr("2").unwrap())]))
-  );
-}
-
-#[test]
 fn stmt_if_1() {
   let s = stmt("if x + 2: print x; else print \"fuck you\"").unwrap();
   assert_eq!(
@@ -618,17 +596,21 @@ fn stmt_2_ifs() {
   let s = stmt("{ if x + 2: print x; else print x; if x + 2: print x; else print x; }").unwrap();
   assert_eq!(
     s,
-    Statement::Block(Block(vec![
-      Statement::If(
-        expr("x + 2").unwrap(),
-        vec![stmt("print x").unwrap()],
-        vec![stmt("print x").unwrap()]
-      ),
-      Statement::If(
-        expr("x + 2").unwrap(),
-        vec![stmt("print x").unwrap()],
-        vec![stmt("print x").unwrap()]
-      )
-    ]))
+    Statement::Expression(Expression {
+      left:  None,
+      right: None,
+      op:    Op::Block(vec![
+        Statement::If(
+          expr("x + 2").unwrap(),
+          vec![stmt("print x").unwrap()],
+          vec![stmt("print x").unwrap()]
+        ),
+        Statement::If(
+          expr("x + 2").unwrap(),
+          vec![stmt("print x").unwrap()],
+          vec![stmt("print x").unwrap()]
+        )
+      ]),
+    })
   );
 }

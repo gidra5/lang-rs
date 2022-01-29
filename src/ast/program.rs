@@ -23,7 +23,7 @@ impl<'a> Parseable<'a> for Program {
 }
 
 impl Evaluatable for Program {
-  fn evaluate<L: LoggerTrait>(self, env: &mut Rc<RefCell<Enviroment>>, logger: &mut L) -> Value {
+  fn evaluate<L: LoggerTrait>(self, env: &mut Enviroment, logger: &mut L) -> Value {
     for stmt in self.0 {
       stmt.evaluate(env, logger);
     }
