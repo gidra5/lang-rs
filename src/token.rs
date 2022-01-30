@@ -2,12 +2,63 @@
 pub use crate::common::*;
 use std::{
   default,
-  fmt::Debug,
+  fmt::{Debug, Display, Formatter},
   hash::{Hash, Hasher},
 };
 
 #[path = "tests/token.rs"]
 mod tests;
+
+#[macro_export]
+macro_rules! token_pat {
+  ($($token_ident:ident $(: $($token_pat:ident)|+)? $(, $src_ident:ident$(: $($src_pat:pat)|+)? )?)?) => {
+    TokenExt {
+      $($token_ident $(: $(Token::$token_pat)|+)?,
+      $($src_ident $(: $($src_pat)|+)?, )?)?
+      ..
+    }
+  };
+}
+
+#[macro_export]
+macro_rules! match_token {
+  ($({ $src:ident }, )?$pattern:ident) => {
+    Some(token_pat!(token: $pattern $(, $src)?))
+  };
+}
+
+#[macro_export]
+macro_rules! check_token {
+  ($token:expr $(, { $src:ident })?, $pattern:ident $(if $cond:expr)?) => {
+    matches!($token, Some(TokenExt {
+      token: Token::$pattern,
+      $(src: $src,)?
+      ..
+    }) $(if $cond)?)
+  };
+}
+
+#[macro_export]
+macro_rules! skip {
+  ($token_stream:ident $(, { $src:ident })?, $pattern:ident $(if $cond:expr)?) => {
+    if check_token!($token_stream.peek() $(, { $src })?, $pattern $(if $cond)?) {
+      $token_stream.next();
+    }
+  };
+}
+
+#[macro_export]
+macro_rules! check_token_end {
+  ($stream:ident) => {
+    matches!($stream.peek(), None)
+  };
+}
+#[macro_export]
+macro_rules! punct_or_newline {
+  ($token:expr, $($punct:ident)|+) => {
+    matches!($token, Some(TokenExt { token: Token::NewLine | $(Token::$punct)|+, ..}) | None)
+  };
+}
 
 #[derive(Clone, Default)]
 pub struct TokenExt {
@@ -44,35 +95,7 @@ impl TokenExt {
       },
       Token::String => Value::String(self.src[1..self.span.length - 1].to_string()),
       Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
-      Token::Identifier => Value::Identifier(self.src.clone()),
-      Token::Placeholder => Value::Placeholder,
-      token @ (Token::Pipe
-      | Token::LBrace
-      | Token::Appersand
-      | Token::Arrow
-      | Token::Apply
-      | Token::Is
-      | Token::As
-      | Token::Period
-      | Token::QuestionMark
-      | Token::Bang
-      | Token::Hash
-      | Token::Dollar
-      | Token::At
-      | Token::Add
-      | Token::Sub
-      | Token::Dec
-      | Token::Inc
-      | Token::Mult
-      | Token::Div
-      | Token::Pow
-      | Token::Mod
-      | Token::Equal
-      | Token::LAngleBracket
-      | Token::RAngleBracket
-      | Token::EqualEqual
-      | Token::LessEqual
-      | Token::GreaterEqual) => Value::Operator(token),
+      // Token::Placeholder => Value::Placeholder,
       _ => Value::None,
     }
   }
@@ -145,6 +168,24 @@ pub enum Token {
 
   #[default]
   Skip,
+}
+
+impl Display for Token {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Token::Placeholder => write!(f, "_"),
+      token => write!(f, "{:?}", token),
+    }
+  }
+}
+
+impl Display for TokenExt {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      token_pat!(token: Identifier | String | Number | Boolean | Char, src) => write!(f, "{}", src),
+      token_pat!(token) => write!(f, "{}", token),
+    }
+  }
 }
 
 impl Tokenizable for Token {
@@ -310,9 +351,7 @@ impl TokenStream {
 
     while char_stream.peek() != None {
       match Token::tokenize(&mut char_stream) {
-        Ok(TokenExt {
-          token: Token::Skip, ..
-        }) => {},
+        Ok(token_pat!(token: Skip)) => {},
         Ok(token) => {
           tokens.push(token);
 
@@ -363,48 +402,4 @@ impl ReversableIterator for TokenStream {
 
   fn pos(&self) -> usize { self.stream.pos() }
   fn backtrack(&mut self, size: usize) { self.stream.backtrack(size) }
-}
-
-#[macro_export]
-macro_rules! match_token {
-  ($({ $src:ident }, )?$pattern:pat) => {
-    Some(TokenExt {
-      token: $pattern,
-      $(src: $src,)?
-      ..
-    })
-  };
-}
-
-#[macro_export]
-macro_rules! check_token {
-  ($token:expr $(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
-    matches!($token, Some(TokenExt {
-      token: $pattern,
-      $(src: $src,)?
-      ..
-    }) $(if $cond)?)
-  };
-}
-
-#[macro_export]
-macro_rules! skip {
-  ($token_stream:ident $(, { $src:ident })?, $pattern:pat $(if $cond:expr)?) => {
-    if check_token!($token_stream.peek() $(, { $src })?, $pattern $(if $cond)?) {
-      $token_stream.next();
-    }
-  };
-}
-
-#[macro_export]
-macro_rules! check_token_end {
-  ($stream:ident) => {
-    matches!($stream.peek(), None)
-  };
-}
-#[macro_export]
-macro_rules! punct_or_newline {
-  ($token:expr, $($punct:ident)|+) => {
-    matches!($token, Some(TokenExt { token: Token::NewLine | $(Token::$punct)|+, ..}) | None)
-  };
 }

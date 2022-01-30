@@ -62,7 +62,7 @@ pub enum Statement {
 
 #[macro_export]
 macro_rules! parse_stmt_vec {
-  ($stream:ident $($(, { $src:ident })?, $pattern:pat $(if $cond:expr)?)?) => {{
+  ($stream:ident $($(, { $src:ident })?, $pattern:ident $(if $cond:expr)?)?) => {{
     use crate::{check_token, check_token_end,
       ast::expr::Expression, common::{
         char_stream::{Token, TokenExt, TokenStream},
@@ -95,9 +95,9 @@ pub struct Block(pub Vec<Statement>);
 
 impl Parseable for Block {
   fn parse(stream: &mut TokenStream) -> Result<Self, String> {
-    let res = parse_stmt_vec!(stream, Token::RBracket)?;
+    let res = parse_stmt_vec!(stream, RBracket)?;
 
-    if check_token!(stream.next(), Token::RBracket) {
+    if check_token!(stream.next(), RBracket) {
       Ok(Self(res))
     } else {
       Err("Missing closing bracket".to_string())
@@ -124,12 +124,12 @@ impl Parseable for Statement {
         Token::For => {
           stream.next();
 
-          if !check_token!(stream.peek(), Token::Identifier) {
+          if !check_token!(stream.peek(), Identifier) {
             return Err("Expected identifier".to_string());
           }
           let var = stream.next().unwrap();
 
-          if !check_token!(stream.next(), { src }, Token::In) {
+          if !check_token!(stream.next(), { src }, In) {
             return Err("Expected 'in' after identifier".to_string());
           }
 
@@ -139,7 +139,7 @@ impl Parseable for Statement {
             return Err("Missing colon after expression in for statement".to_string());
           }
 
-          let body = if check_token!(stream.peek(), Token::LBracket) {
+          let body = if check_token!(stream.peek(), LBracket) {
             stream.next();
             Block::parse(stream)?.0
           } else if !punct_or_newline!(stream.peek(), Semicolon) {
@@ -158,18 +158,18 @@ impl Parseable for Statement {
             return Err("Missing colon after condition in if statement".to_string());
           }
 
-          let true_block = if check_token!(stream.peek(), Token::LBracket) {
+          let true_block = if check_token!(stream.peek(), LBracket) {
             stream.next();
             Block::parse(stream)?.0
-          } else if !check_token!(stream.peek(), Token::Else) {
+          } else if !check_token!(stream.peek(), Else) {
             vec![Statement::parse(stream)?]
           } else {
             return Err("Empty true branch in if statement".to_string());
           };
 
-          let false_block = if check_token!(stream.peek(), Token::Else) {
+          let false_block = if check_token!(stream.peek(), Else) {
             stream.next();
-            if check_token!(stream.peek(), Token::LBracket) {
+            if check_token!(stream.peek(), LBracket) {
               stream.next();
               Block::parse(stream)?.0
             } else if !check_token_end!(stream) {
@@ -196,9 +196,9 @@ impl Parseable for Statement {
             .flatten()
             .ok_or_else(|| "Expected identifier at let statement.".to_string())?;
 
-          if check_token!(stream.peek(), Token::Equal) {
+          if check_token!(stream.peek(), Equal) {
             stream.next();
-            while check_token!(stream.peek(), Token::NewLine) {
+            while check_token!(stream.peek(), NewLine) {
               stream.next();
             }
             Self::Let(
@@ -243,7 +243,6 @@ impl Evaluatable for Statement {
       Self::Print(expr) => {
         let x = expr.evaluate(env, logger);
         logger.write(format!("{}", x))
-        // logger.write(format!("{:?}", x))
       },
       Self::Parse(expr) => logger.write(format!("{}", expr)),
       Self::Let(id, expr) => {
@@ -260,7 +259,6 @@ impl Evaluatable for Statement {
             op:    Op::Block(true_branch),
           }
           .evaluate(env, logger)
-          // Statement::Block(Block(true_branch)).evaluate(env, logger)
         } else {
           Expression {
             left:  None,
@@ -268,7 +266,6 @@ impl Evaluatable for Statement {
             op:    Op::Block(false_branch),
           }
           .evaluate(env, logger)
-          // Statement::Block(Block(false_branch)).evaluate(env, logger)
         };
       },
       Self::For(var, iterator, body) => {

@@ -111,11 +111,11 @@ fn interactive_accessing_record_item() {
     x: Value::Record(
       vec![
         RecordItem {
-          key:   Some(Value::Identifier("a".to_string())),
+          key:   Some(Value::String("a".to_string())),
           value: Value::Number(1.),
         },
         RecordItem {
-          key:   Some(Value::Identifier("b".to_string())),
+          key:   Some(Value::String("b".to_string())),
           value: Value::Number(2.),
         },
       ],

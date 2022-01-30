@@ -26,6 +26,7 @@ use crate::{
     self,
     char_stream::{value, Span},
   },
+  token_pat,
 };
 
 use super::{stmt::Statement, Evaluatable, Parseable};
@@ -85,10 +86,10 @@ impl Display for Expression {
     match op {
       Op::Value(op) => {
         match (left, right) {
-          (None, None) => write!(f, "{}", op.value()),
-          (Some(left), None) => write!(f, "({} {})", op.value(), left),
-          (None, Some(right)) => write!(f, "({} {})", op.value(), right),
-          (Some(left), Some(right)) => write!(f, "({} {} {})", op.value(), left, right),
+          (None, None) => write!(f, "{}", op),
+          (Some(left), None) => write!(f, "({} {})", op, left),
+          (None, Some(right)) => write!(f, "({} {})", op, right),
+          (Some(left), Some(right)) => write!(f, "({} {} {})", op, left, right),
         }
       },
       Op::Record(record_items) => {
@@ -152,12 +153,7 @@ pub fn match_value<L: LoggerTrait>(
   match pat {
     Expression {
       left: Some(pat),
-      op:
-        Op::Value(TokenExt {
-          token: Token::Equal,
-          src: _,
-          span: _,
-        }),
+      op: Op::Value(token_pat!(token: Equal)),
       right: Some(right),
     } => {
       let res = match_value(bind, val, *pat.clone(), env, logger);
@@ -172,19 +168,9 @@ pub fn match_value<L: LoggerTrait>(
       op: pat,
       right: None,
     } => {
-      if let Op::Value(TokenExt {
-        token: Token::Placeholder,
-        src: ident,
-        span: _,
-      }) = pat
-      {
+      if let Op::Value(token_pat!(token: Placeholder)) = pat {
         return true;
-      } else if let Op::Value(TokenExt {
-        token: Token::Identifier,
-        src: ident,
-        span: _,
-      }) = pat
-      {
+      } else if let Op::Value(token_pat!(token: Identifier, src: ident)) = pat {
         if bind == 1 {
           env.define(ident, val);
         } else if bind == 2 {
@@ -193,12 +179,6 @@ pub fn match_value<L: LoggerTrait>(
         return true;
       } else if let Op::Value(token) = pat {
         return val == token.value();
-      } else if let Op::Value(TokenExt {
-        token: Token::Equal,
-        src: _,
-        span: _,
-      }) = pat
-      {
       } else if let Op::Record(pat_rec) = pat {
         if let Value::Record(val_rec) = val {
           return pat_rec.len() == val_rec.len()
@@ -216,15 +196,11 @@ pub fn match_value<L: LoggerTrait>(
                 (match (pat.op.clone(), pat_key, val_key) {
                   (_, RecordKey::None, None) => true,
                   (
-                    Op::Value(TokenExt {
-                      token: Token::Identifier,
-                      src: x,
-                      span: _,
-                    }),
+                    Op::Value(token_pat!(token: Identifier, src: x)),
                     RecordKey::None,
-                    Some(Value::Identifier(y)),
+                    Some(Value::String(y)),
                   ) => x == y,
-                  (_, RecordKey::Identifier(x), Some(Value::Identifier(y))) => *x == y,
+                  (_, RecordKey::Identifier(x), Some(Value::String(y))) => *x == y,
                   (_, RecordKey::Value(x), Some(y)) => x.evaluate(env, logger) == y,
                   _ => false,
                 }) && match_value(bind, val, pat, env, logger)
@@ -240,17 +216,20 @@ pub fn match_value<L: LoggerTrait>(
   }
 }
 
+fn fact(n: f64) -> f64 {
+  if n <= 1. {
+    1.
+  } else {
+    n * fact(n - 1.)
+  }
+}
+
 impl Evaluatable for Expression {
   fn evaluate<L: LoggerTrait>(self, env: &mut Enviroment, logger: &mut L) -> Value {
     match self {
       Expression {
         left: None,
-        op:
-          Op::Value(TokenExt {
-            token: Token::Identifier,
-            src: id,
-            span: _,
-          }),
+        op: Op::Value(token_pat!(token: Identifier, src: id)),
         right: None,
       } => env.get(&id).unwrap_or_default(),
       Expression {
@@ -260,32 +239,35 @@ impl Evaluatable for Expression {
       } => op.value(),
       Expression {
         left: Some(left),
-        op: Op::Value(op),
+        op: Op::Value(token_pat!(token)),
         right: None,
-      } => op.value().postfix((*left).evaluate(env, logger)),
+      } => {
+        match (token, (*left).evaluate(env, logger)) {
+          (Token::Bang, Value::Number(num)) => Value::Number(fact(num)),
+          _ => Value::None,
+        }
+      },
       Expression {
         left: None,
-        op: Op::Value(op),
+        op: Op::Value(token_pat!(token)),
         right: Some(right),
-      } => op.value().prefix((*right).evaluate(env, logger)),
+      } => {
+        match (token, (*right).evaluate(env, logger)) {
+          (Token::Sub, Value::Number(num)) => Value::Number(-num),
+          (Token::Bang, Value::Boolean(val)) => Value::Boolean(!val),
+          (Token::Dec, Value::Number(val)) => Value::Number(val - 1.),
+          (Token::Inc, Value::Number(val)) => Value::Number(val + 1.),
+          _ => Value::None,
+        }
+      },
       Expression {
         left: Some(left),
-        op:
-          Op::Value(TokenExt {
-            token: Token::Arrow,
-            src: _,
-            span: _,
-          }),
+        op: Op::Value(token_pat!(token: Arrow)),
         right: Some(right),
       } => Value::Function(left, Box::new(env.clone()), right),
       Expression {
         left: Some(left),
-        op:
-          Op::Value(TokenExt {
-            token: Token::Is,
-            src: _,
-            span: _,
-          }),
+        op: Op::Value(token_pat!(token: Is)),
         right: Some(right),
       } => {
         let left = (*left).evaluate(env, logger);
@@ -294,12 +276,7 @@ impl Evaluatable for Expression {
       },
       Expression {
         left: Some(left),
-        op:
-          Op::Value(TokenExt {
-            token: Token::Apply,
-            src: _,
-            span: _,
-          }),
+        op: Op::Value(token_pat!(token: Apply)),
         right: Some(right),
       } => {
         let mut left = (*left).evaluate(env, logger);
@@ -318,12 +295,7 @@ impl Evaluatable for Expression {
       },
       Expression {
         left: Some(pat),
-        op:
-          Op::Value(TokenExt {
-            token: Token::Equal,
-            src: _,
-            span: _,
-          }),
+        op: Op::Value(token_pat!(token: Equal)),
         right: Some(right),
       } => {
         let right = (*right).evaluate(env, logger);
@@ -332,37 +304,87 @@ impl Evaluatable for Expression {
       },
       Expression {
         left: Some(left),
-        op:
-          Op::Value(
-            op @ TokenExt {
-              token: Token::Period,
-              src: _,
-              span: _,
-            },
-          ),
+        op: Op::Value(op @ token_pat!(token: Period)),
         right:
           Some(box Expression {
             left: None,
-            op:
-              Op::Value(
-                id @ TokenExt {
-                  token: Token::Identifier,
-                  src: _,
-                  span: _,
-                },
-              ),
+            op: Op::Value(token_pat!(token: Identifier, src)),
             right: None,
           }),
-      } => op.value().infix((*left).evaluate(env, logger), id.value()),
+      } => {
+        match (*left).evaluate(env, logger) {
+          Value::Record(left) => {
+            left
+              .iter()
+              .find_map(|value::RecordItem { key, value }| {
+                match key {
+                  Some(Value::String(name)) if name.clone() == src => Some(value.clone()),
+                  _ => None,
+                }
+              })
+              .unwrap_or_default()
+          },
+          _ => Value::None,
+        }
+      },
       Expression {
         left: Some(left),
-        op: Op::Value(op),
+        op: Op::Value(token_pat!(token, src)),
         right: Some(right),
       } => {
-        op.value().infix(
+        match (
           (*left).evaluate(env, logger),
+          token,
           (*right).evaluate(env, logger),
-        )
+        ) {
+          (Value::Number(left), Token::Sub, Value::Number(right)) => Value::Number(left - right),
+          (Value::Number(left), Token::Add, Value::Number(right)) => Value::Number(left + right),
+          (Value::Number(left), Token::Mult, Value::Number(right)) => Value::Number(left * right),
+          (Value::Number(left), Token::Div, Value::Number(right)) => Value::Number(left / right),
+          (Value::Number(left), Token::Pow, Value::Number(right)) => {
+            Value::Number(left.powf(right))
+          },
+          (Value::Number(left), Token::EqualEqual, Value::Number(right)) => {
+            Value::Boolean((left - right).abs() < f64::EPSILON)
+          },
+          (Value::Number(left), Token::LessEqual, Value::Number(right)) => {
+            Value::Boolean(left <= right)
+          },
+          (Value::Number(left), Token::GreaterEqual, Value::Number(right)) => {
+            Value::Boolean(left >= right)
+          },
+          (Value::Number(left), Token::LAngleBracket, Value::Number(right)) => {
+            Value::Boolean(left < right)
+          },
+          (Value::Number(left), Token::RAngleBracket, Value::Number(right)) => {
+            Value::Boolean(left > right)
+          },
+          (Value::Record(left), Token::LBrace, Value::Number(right))
+            if right == (right as usize) as f64 && left[0].key == None =>
+          {
+            left[right as usize].value.clone()
+          },
+          (Value::Record(left), Token::LBrace, right) => {
+            left
+              .iter()
+              .find_map(|value::RecordItem { key, value }| {
+                match key {
+                  Some(key) if key.clone() == right => Some(value.clone()),
+                  _ => None,
+                }
+              })
+              .unwrap_or_default()
+          },
+          (left, Token::Identifier, right) => {
+            match (left, src.as_str(), right) {
+              (Value::Number(left), "mod", Value::Number(right)) => Value::Number(left % right),
+              (Value::Boolean(left), "and", Value::Boolean(right)) => Value::Boolean(left && right),
+              (Value::Boolean(left), "or", Value::Boolean(right)) => Value::Boolean(left || right),
+              _ => Value::None,
+            }
+          },
+          _ => Value::None,
+        }
       },
       Expression {
         left: _,
@@ -395,7 +417,7 @@ impl Evaluatable for Expression {
           .map(|RecordItem { key, value }| {
             value::RecordItem {
               key:   match key {
-                RecordKey::Identifier(name) => Some(Value::Identifier(name)),
+                RecordKey::Identifier(name) => Some(Value::String(name)),
                 RecordKey::Value(expr) => Some(expr.evaluate(env, logger)),
                 RecordKey::None => None,
               },
@@ -416,14 +438,14 @@ impl Evaluatable for Expression {
 }
 
 fn parse_braces(token_stream: &mut TokenStream) -> Result<Expression, String> {
-  if !check_token!(token_stream.peek(), Token::LBrace) {
+  if !check_token!(token_stream.peek(), LBrace) {
     Err("Expected opening brace".to_string())
   } else {
     token_stream.next();
 
     let expr = Expression::parse(token_stream)?;
 
-    if !check_token!(token_stream.next(), Token::RBrace) {
+    if !check_token!(token_stream.next(), RBrace) {
       Err("Expected closing brace".to_string())
     } else {
       Ok(expr)
@@ -432,7 +454,7 @@ fn parse_braces(token_stream: &mut TokenStream) -> Result<Expression, String> {
 }
 
 fn parse_block(token_stream: &mut TokenStream) -> Result<Expression, String> {
-  if !check_token!(token_stream.peek(), Token::LBracket) {
+  if !check_token!(token_stream.peek(), LBracket) {
     Err("Expected opening bracket".to_string())
   } else {
     token_stream.next();
@@ -441,7 +463,7 @@ fn parse_block(token_stream: &mut TokenStream) -> Result<Expression, String> {
       let mut res = vec![];
 
       loop {
-        if !check_token!(token_stream.peek(), Token::RBracket) && !check_token_end!(token_stream) {
+        if !check_token!(token_stream.peek(), RBracket) && !check_token_end!(token_stream) {
           match Statement::parse(token_stream) {
             Ok(Statement::Expression(expr)) if expr == Expression::default() => (),
             Ok(stmt) => res.push(stmt),
@@ -453,7 +475,7 @@ fn parse_block(token_stream: &mut TokenStream) -> Result<Expression, String> {
       }
     };
 
-    if !check_token!(token_stream.next(), Token::RBracket) {
+    if !check_token!(token_stream.next(), RBracket) {
       Err("Expected closing bracket".to_string())
     } else {
       Ok(Expression {
@@ -466,13 +488,13 @@ fn parse_block(token_stream: &mut TokenStream) -> Result<Expression, String> {
 }
 
 fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
-  if !check_token!(token_stream.peek(), Token::LParenthesis) {
+  if !check_token!(token_stream.peek(), LParenthesis) {
     Err("Expected opening parenthesis".to_string())
   } else {
     token_stream.next();
     let mut x = vec![];
 
-    if check_token!(token_stream.peek(), Token::RParenthesis) {
+    if check_token!(token_stream.peek(), RParenthesis) {
       token_stream.next();
 
       return Ok(Expression {
@@ -482,8 +504,8 @@ fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
       });
     }
 
-    while !check_token!(token_stream.peek(), Token::RParenthesis) {
-      if check_token!(token_stream.peek(), Token::NewLine) {
+    while !check_token!(token_stream.peek(), RParenthesis) {
+      if check_token!(token_stream.peek(), NewLine) {
         token_stream.next();
         continue;
       }
@@ -491,15 +513,15 @@ fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
       let mut key = RecordKey::None;
 
 
-      if check_token!(y[0], Token::Identifier) && check_token!(y[1], Token::Colon) {
+      if check_token!(y[0], Identifier) && check_token!(y[1], Colon) {
         key = RecordKey::Identifier(token_stream.next().unwrap().src);
         token_stream.next();
-      } else if check_token!(y[0], Token::LBrace) {
+      } else if check_token!(y[0], LBrace) {
         token_stream.next();
         key = RecordKey::Value(parse_expr(token_stream, true)?);
         let y = token_stream.peek_ext(2);
 
-        if !(check_token!(y[0], Token::RBrace) && check_token!(y[1], Token::Colon)) {
+        if !(check_token!(y[0], RBrace) && check_token!(y[1], Colon)) {
           return Err("Expected closing brace and colon".to_string());
         } else {
           token_stream.next_ext(2);
@@ -508,7 +530,7 @@ fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
 
       let expr = parse_expr(token_stream, true)?;
 
-      skip!(token_stream, Token::Comma);
+      skip!(token_stream, Comma);
 
       if check_token_end!(token_stream) {
         return Err("Unexpected end of input".to_string());
@@ -534,7 +556,7 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
   let mut stack = Vec::new();
 
   loop {
-    if check_token!(token_stream.peek(), Token::NewLine) && in_parens {
+    if check_token!(token_stream.peek(), NewLine) && in_parens {
       token_stream.next();
       continue;
     }
@@ -548,19 +570,15 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
       // match_token!(Token::If) if !in_parens => {
       //   return Err("Unexpected closing parenthesis".to_string());
       // },
-      match_token!(Token::RParenthesis) if !in_parens => {
+      match_token!(RParenthesis) if !in_parens => {
         return Err("Unexpected closing parenthesis".to_string());
       },
-      match_token!(Token::LParenthesis) => {
+      match_token!(LParenthesis) => {
         if matches!(
           top.operator,
           Some(Operator {
             fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   _,
-              span:  _,
-            },
+            token:  token_pat!(token: Skip),
           })
         ) {
           top = stack.pop().unwrap();
@@ -623,16 +641,12 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
         };
         continue;
       },
-      match_token!(Token::LBracket) => {
+      match_token!(LBracket) => {
         if matches!(
           top.operator,
           Some(Operator {
             fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   _,
-              span:  _,
-            },
+            token:  token_pat!(token: Skip),
           })
         ) {
           top = stack.pop().unwrap();
@@ -666,16 +680,12 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
         };
         continue;
       },
-      match_token!(Token::LBrace) => {
+      match_token!(LBrace) => {
         if matches!(
           top.operator,
           Some(Operator {
             fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   _,
-              span:  _,
-            },
+            token:  token_pat!(token: Skip),
           })
         ) {
           top = stack.pop().unwrap();
@@ -747,11 +757,7 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
               res.operator,
               Some(Operator {
                 fixity: Fixity::None,
-                token:  TokenExt {
-                  token: Token::Skip,
-                  src:   _,
-                  span:  _,
-                },
+                token:  token_pat!(token: Skip),
               })
             ) {
               top.lhs = Some(Expression {
@@ -815,25 +821,18 @@ impl Operator {
     Some(match self {
       Operator {
         token:
-          TokenExt {
-            token:
-              Token::Identifier
-              | Token::String
-              | Token::Placeholder
-              | Token::Char
-              | Token::Number
-              | Token::Boolean,
-            src: _,
-            span: _,
-          },
+          token_pat!(
+            token: Identifier
+              | String
+              | Placeholder
+              | Char
+              | Number
+              | Boolean
+          ),
         fixity: Fixity::None,
       } => (99, 100),
       Operator {
-        token: TokenExt {
-          token,
-          src,
-          span: _,
-        },
+        token: token_pat!(token, src),
         fixity: Fixity::Prefix,
       } => {
         (99, match token {
@@ -845,11 +844,7 @@ impl Operator {
         })
       },
       Operator {
-        token: TokenExt {
-          token,
-          src,
-          span: _,
-        },
+        token: token_pat!(token, src),
         fixity: Fixity::Postfix,
       } => {
         (
@@ -861,11 +856,7 @@ impl Operator {
         )
       },
       Operator {
-        token: TokenExt {
-          token,
-          src,
-          span: _,
-        },
+        token: token_pat!(token, src),
         fixity: Fixity::Infix,
       } => {
         match token {
