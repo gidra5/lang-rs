@@ -1,9 +1,8 @@
 use itertools::Itertools;
 
-use crate::{enviroment::Enviroment, Token};
+use crate::{ast::Expression, enviroment::Enviroment};
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
-use super::logger::char_stream::{Evaluatable, Expression};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecordItem {

@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::{common::*, enviroment::Enviroment, *};
+use crate::{common::*, enviroment::*, token::*, *};
 use std::{
   cell::RefCell,
   cmp::Ordering,
@@ -17,8 +17,8 @@ pub use stmt::*;
 pub mod program;
 pub use program::*;
 
-#[path = "tests/ast.rs"]
-mod tests;
+pub mod inline;
+pub use inline::*;
 
 /// matches error productions
 #[derive(Debug)]

@@ -1,4 +1,4 @@
-pub use crate::common::*;
+use crate::common::*;
 
 impl From<&str> for ReversableStream<char> {
   fn from(s: &str) -> Self { Self::new(s.chars().collect::<Vec<char>>()) }

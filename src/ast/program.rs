@@ -3,9 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
   check_token,
   check_token_end,
-  common::{char_stream::TokenStream, logger::LoggerTrait, value::Value},
+  common::{LoggerTrait, Value},
   enviroment::Enviroment,
   parse_stmt_vec,
+  token::TokenStream,
 };
 
 use super::{stmt::Statement, Evaluatable, Parseable};

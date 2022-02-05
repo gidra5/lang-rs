@@ -1,5 +1,5 @@
 #![allow(unused)]
-pub use crate::common::*;
+use crate::common::*;
 use std::{
   default,
   fmt::{Debug, Display, Formatter},
@@ -12,8 +12,8 @@ mod tests;
 #[macro_export]
 macro_rules! token_pat {
   ($($token_ident:ident $(: $($token_pat:ident)|+)? $(, $src_ident:ident$(: $($src_pat:pat)|+)? )?)?) => {
-    TokenExt {
-      $($token_ident $(: $(Token::$token_pat)|+)?,
+    crate::token::TokenExt {
+      $($token_ident $(: $(crate::token::Token::$token_pat)|+)?,
       $($src_ident $(: $($src_pat)|+)?, )?)?
       ..
     }
@@ -31,7 +31,7 @@ macro_rules! match_token {
 macro_rules! check_token {
   ($token:expr $(, { $src:ident })?, $pattern:ident $(if $cond:expr)?) => {
     matches!($token, Some(TokenExt {
-      token: Token::$pattern,
+      token: crate::token::Token::$pattern,
       $(src: $src,)?
       ..
     }) $(if $cond)?)
@@ -56,7 +56,7 @@ macro_rules! check_token_end {
 #[macro_export]
 macro_rules! punct_or_newline {
   ($token:expr, $($punct:ident)|+) => {
-    matches!($token, Some(TokenExt { token: Token::NewLine | $(Token::$punct)|+, ..}) | None)
+    matches!($token, Some(crate::token::TokenExt { token: crate::token::Token::NewLine | $(crate::token::Token::$punct)|+, ..}) | None)
   };
 }
 
@@ -149,13 +149,16 @@ pub enum Token {
   LessEqual,
   GreaterEqual,
   Arrow,
-  Apply,
+
   Is,
   In,
   As,
   Infix,
   Postfix,
   Prefix,
+  Async,
+  Await,
+  Inline,
 
   // Literals
   Number,
@@ -166,8 +169,10 @@ pub enum Token {
   // Identifier
   Identifier,
 
+  // Artificial
   #[default]
   Skip,
+  Apply,
 }
 
 impl Display for Token {
@@ -295,6 +300,9 @@ impl Tokenizable for Token {
             "for" => For,
             "if" => If,
             "else" => Else,
+            "async" => Async,
+            "await" => Await,
+            "inline" => Inline,
             _ => Identifier,
           }
         },

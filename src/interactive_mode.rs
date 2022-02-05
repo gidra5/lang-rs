@@ -1,4 +1,4 @@
-use crate::{common::*, enviroment::*};
+use crate::{ast::*, common::*, enviroment::*, token::*};
 use rustyline::{error::*, *};
 use rustyline_derive::*;
 

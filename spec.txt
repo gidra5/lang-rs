@@ -38,6 +38,10 @@ alg_type = sum | product | exponent | unit | void
 unit = "()"
 void = "void" 
 
+There is enum operator that can downgrade exponents and products (aka logarithm?) preserving labels.
+enum exponent -> enum type1 => type2 -> (type1, type2)
+enum (type1, type2) -> type1 | type2
+
 These operations have some properties to adjust
 They can be either ordered or not (meaning elements can be accessed by indexing, though exponents are already ordered), 
 labeled or not (elements are accessed by labels). 
@@ -58,16 +62,61 @@ enumeration (labeled unordered unions),
 sums (unlabeled unordered unions)
 ordered enumeration (c-style enums) and type tuple?
 
-There are also notions of iterated types, mutability, ownership and convertions (which also could describe type narrowing).
+There are also notions of iterated types, mutability, ownership and equivalences.
 
 Iterated types are product types for which its data can be accessed one at a time and only once.
 Variables of such types can be collected into tuples and tuples can be iterated.
 Ownership describes which scope handles data, thus scope implies some finite lifetime of this data
 Mutability simply describes whether data can be modified or only transfomed. 
 Concept of execution time can be described as count of calls to evaluation function and can be used to model computation complexity to decide optimisation strategy for particular code piece 
+Equivalences describe what expressions can be treated as interchengeable by the compiler. 
+Equivalences are defined by expression pattern, optional expression context and result
+Possible syntax:
+
+equivalence = "equivalence" (expr | { "..."? (stmt (";" | "\n"))* stmt ";"? "..."? }) ("given" context)? "~" expr
+context = "let" ident = expr | value-pattern | equivalence
+
+Examples:
+equvalence x + x + x <=> 3 * x
+equvalence x given let x = y <=> y
+
+Equivalences may be used to assist programmer by proposing simplifications.
 
 We may have ternary logic. 
 Meaning there are three logical values - true, false, unknown
 
 There can be declared a class. 
 Each instance of an encapsulating class is an actor.
+
+There are async\await operators:
+
+async operator - takes any value and constructs Future from it. 
+Futures are lazy - if no one awaits its result then it's not evaluated at all.
+await operator - takes any value and if it was a Future then unwraps it by awaiting result of all of its computations (i.e. Future<A> -> A).
+
+As means of simple macros is inline operator - takes any value expression (will take anything immediatly after it) 
+and inlines any variables in it at compile time if possible (i.e. equvalence inline (x z) given let x = y <=> y z).
+Inlining may fail to find an expression to inline if all variables are mutable.
+Functions with mutable closure are considered mutable values as well.
+Together with optimisation via equivalences and expression simplification may compute expressions at compile time.
+
+Expression simplification will proceed by minimising expression complexity (EC) evaluated as following:
+
+EC(expr) = 
+  top of expr is built in operator (including func application, =>, tuple and block literal) -> sum(EC(arg_n))
+  top of expr is built in literal or an identifier -> 1
+
+Expression optimisation then consists of these steps:
+
+1) Evaluate complexity.
+2) If complecity = 1 return given expression
+3) Search for all equivalences that match given expression and expression context.
+4) For each equivalence substitute, optimise and evaluate variant complexity.
+5) Choose variant with least complexity.
+
+Since this process is recursive and complexity may grow during substitution it may never halt, so we should guarantee that it is monotonously decreasing in terms of EC.
+Possible solution is to restrict equivalences only to those which are strictly decreasing in EC.
+
+Declarations are parsed breadth first - before parsing any expressions we must declare everything we may need
+In script file we may separate declarations and statements as following: 
+entities in file are expected to be declaration until we fail to parse declaration, then afterwards everything is expected to be statement.

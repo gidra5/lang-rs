@@ -3,18 +3,20 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
   check_token,
   check_token_end,
-  common::{
-    char_stream::{value::Value, Token, TokenExt, TokenStream},
-    logger::char_stream::{value::RecordItem, Logger, LoggerTrait},
-    reversable_iterator::ReversableIterator,
-  },
+  common::{reversable_iterator::ReversableIterator, value::RecordItem, LoggerTrait, Value},
   enviroment::Enviroment,
   punct_or_newline,
-  scoped,
+  scoped, token::{TokenStream, TokenExt, Token},
 };
 
+#[path = "../tests/stmt.rs"]
+mod tests;
+
 use super::{
-  expr::{match_value, Expression, Op},
+  expr::{
+    Expression, Op,
+    match_value,
+  },
   Evaluatable,
   Parseable,
 };
@@ -50,6 +52,7 @@ use super::{
 ///
 /// Syntax:
 /// "if" expr(: | "\n") stmt "else" stmt
+/// 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
   Print(Expression),
@@ -63,11 +66,17 @@ pub enum Statement {
 #[macro_export]
 macro_rules! parse_stmt_vec {
   ($stream:ident $($(, { $src:ident })?, $pattern:ident $(if $cond:expr)?)?) => {{
-    use crate::{check_token, check_token_end,
-      ast::expr::Expression, common::{
-        char_stream::{Token, TokenExt, TokenStream},
+    use crate::{
+      check_token, 
+      check_token_end,
+      ast::expr::expr_struct::Expression, 
+      common::{
         reversable_iterator::ReversableIterator,
-      }, enviroment::Enviroment, punct_or_newline};
+      }, 
+      enviroment::Enviroment, 
+      punct_or_newline
+    };
+    
     let mut res = vec![];
     let mut err = None;
 
@@ -88,21 +97,6 @@ macro_rules! parse_stmt_vec {
       Ok(res)
     }
   }};
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Block(pub Vec<Statement>);
-
-impl Parseable for Block {
-  fn parse(stream: &mut TokenStream) -> Result<Self, String> {
-    let res = parse_stmt_vec!(stream, RBracket)?;
-
-    if check_token!(stream.next(), RBracket) {
-      Ok(Self(res))
-    } else {
-      Err("Missing closing bracket".to_string())
-    }
-  }
 }
 
 impl Parseable for Statement {
@@ -141,7 +135,13 @@ impl Parseable for Statement {
 
           let body = if check_token!(stream.peek(), LBracket) {
             stream.next();
-            Block::parse(stream)?.0
+            let res = parse_stmt_vec!(stream, RBracket)?;
+
+            if check_token!(stream.next(), RBracket) {
+              res
+            } else {
+              return Err("Missing closing bracket".to_string())
+            }
           } else if !punct_or_newline!(stream.peek(), Semicolon) {
             vec![Statement::parse(stream)?]
           } else {
@@ -160,7 +160,13 @@ impl Parseable for Statement {
 
           let true_block = if check_token!(stream.peek(), LBracket) {
             stream.next();
-            Block::parse(stream)?.0
+            let res = parse_stmt_vec!(stream, RBracket)?;
+
+            if check_token!(stream.next(), RBracket) {
+              res
+            } else {
+              return Err("Missing closing bracket".to_string())
+            }
           } else if !check_token!(stream.peek(), Else) {
             vec![Statement::parse(stream)?]
           } else {
@@ -171,7 +177,13 @@ impl Parseable for Statement {
             stream.next();
             if check_token!(stream.peek(), LBracket) {
               stream.next();
-              Block::parse(stream)?.0
+              let res = parse_stmt_vec!(stream, RBracket)?;
+  
+              if check_token!(stream.next(), RBracket) {
+                res
+              } else {
+                return Err("Missing closing bracket".to_string())
+              }
             } else if !check_token_end!(stream) {
               vec![Statement::parse(stream)?]
             } else {
