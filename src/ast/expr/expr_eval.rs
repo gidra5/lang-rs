@@ -93,17 +93,27 @@ fn fact(n: f64) -> f64 {
 }
 
 impl Evaluatable for Expression {
-  fn evaluate<L: LoggerTrait>(self, env: &mut Enviroment, logger: &mut L) -> Value {
+  fn evaluate<L: LoggerTrait>(&self, env: &mut Enviroment, logger: &mut L) -> Value {
     match self {
       Expression {
         left: None,
         op: Op::Value(token_pat!(token: Identifier, src: id)),
         right: None,
+      } => env.get(&id).unwrap_or_default(),
+      Expression {
+        left:
+          Some(box Expression {
+            left: None,
+            op: Op::Value(token_pat!(token: Identifier, src: id)),
+            right: None,
+          }),
+        op: Op::Value(token_pat!(token: Hash)),
+        right: Some(right),
       } => {
-        let mut x = id.split('#');
-        let id = x.next().unwrap();
-        let scope = x.next().map(|x| x.parse::<usize>().unwrap()).unwrap_or(0);
-        env.get_from(scope, &id.to_string()).unwrap_or_default()
+        match (*right).evaluate(env, logger) {
+          Value::Number(n) => env.get_from(n as usize, &id).unwrap_or_default(),
+          _ => env.get(&id).unwrap_or_default(),
+        }
       },
       Expression {
         left: None,
@@ -122,7 +132,15 @@ impl Evaluatable for Expression {
       },
       Expression {
         left: None,
-        op: Op::Value(token_pat!(token)),
+        op: Op::Value(token_pat!(token: Identifier, src)),
+        right: Some(right),
+      } if src == "parse" => {
+        logger.write(format!("{}", right));
+        (*right).evaluate(env, logger)
+      },
+      Expression {
+        left: None,
+        op: Op::Value(token_pat!(token, src)),
         right: Some(right),
       } => {
         match (token, (*right).evaluate(env, logger)) {
@@ -130,6 +148,10 @@ impl Evaluatable for Expression {
           (Token::Bang, Value::Boolean(val)) => Value::Boolean(!val),
           (Token::Dec, Value::Number(val)) => Value::Number(val - 1.),
           (Token::Inc, Value::Number(val)) => Value::Number(val + 1.),
+          (Token::Identifier, value) if src == "print" => {
+            logger.write(format!("{}", value));
+            value
+          },
           _ => Value::None,
         }
       },
@@ -137,7 +159,11 @@ impl Evaluatable for Expression {
         left: Some(left),
         op: Op::Value(token_pat!(token: Arrow)),
         right: Some(right),
-      } => Value::Function(left, Box::new(env.clone()), right),
+      } => {
+        // println!("{:?}", env);
+
+        Value::Function(left.clone(), Box::new(env.clone()), right.clone())
+      },
       Expression {
         left: Some(left),
         op: Op::Value(token_pat!(token: Is)),
@@ -145,14 +171,14 @@ impl Evaluatable for Expression {
       } => {
         let left = (*left).evaluate(env, logger);
 
-        Value::Boolean(match_value(0, left, (*right), env, logger))
+        Value::Boolean(match_value(0, left, (*right.clone()), env, logger))
       },
       Expression {
         left: Some(left),
         op: Op::Value(token_pat!(token: Apply)),
         right: Some(right),
       } => {
-        let mut left = (*left).evaluate(env, logger);
+        let mut left = (*left).clone().evaluate(env, logger);
 
         if let Value::Function(pat, ref mut fn_env, expr) = left.clone() {
           scoped!(fn_env, {
@@ -172,7 +198,7 @@ impl Evaluatable for Expression {
         right: Some(right),
       } => {
         let right = (*right).evaluate(env, logger);
-        match_value(2, right.clone(), *pat, env, logger);
+        match_value(2, right.clone(), *pat.clone(), env, logger);
         right
       },
       Expression {
@@ -191,7 +217,7 @@ impl Evaluatable for Expression {
               .iter()
               .find_map(|value::RecordItem { key, value }| {
                 match key {
-                  Some(Value::String(name)) if name.clone() == src => Some(value.clone()),
+                  Some(Value::String(name)) if name.clone() == src.clone() => Some(value.clone()),
                   _ => None,
                 }
               })
@@ -290,7 +316,7 @@ impl Evaluatable for Expression {
           .map(|RecordItem { key, value }| {
             value::RecordItem {
               key:   match key {
-                RecordKey::Identifier(name) => Some(Value::String(name)),
+                RecordKey::Identifier(name) => Some(Value::String(name.clone())),
                 RecordKey::Value(expr) => Some(expr.evaluate(env, logger)),
                 RecordKey::None => None,
               },

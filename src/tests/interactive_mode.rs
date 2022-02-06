@@ -517,11 +517,47 @@ fn interactive_range_4() {
       }
     }
 
+    // let iter = range(1,3)()
+    // // print (iter, iter[1], iter[1]())
+
+    // print (iter[1](), iter[1]())
+    
+    // // print (iter[1](), iter[1]()[1], iter[1]()[1]())
+
+    // iter = iter[1]()
+    // print (iter, iter[1], iter[1]())
+
+    // iter = iter[1]()
+    // print (iter, iter[1], iter[1]())
+
     for x in range(1,3): print x
   ",
   );
 
   assert_log!(logs, { "1", "2", "3" });
+}
+
+#[test]
+fn interactive_range_7() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = x => {
+      let y = 1
+      _ => {
+        let z = 2
+        _ => (x, y, z)
+      }
+    }
+
+    print range(3)()() == range(3)()()
+  ",
+  );
+
+  assert_log!(logs, { "true" });
 }
 
 #[test]
@@ -552,29 +588,28 @@ fn interactive_range_5() {
   assert_log!(logs, { "1", "2", "3" });
 }
 
-// #[test]
-// fn interactive_range_6() {
-//   let InteractiveMode {
-//     rl: _,
-//     env: state,
-//     logger: Logger { logs },
-//   } = interpret(
-//     "
-//     let range = (left, right) => _ =>
-//       if left < right
-//         (left, self#1 (left + 1, right))
-//       else if left > right
-//         (left, self#1 (left - 1, right))
-//       else
-//         right
+#[test]
+fn interactive_range_6() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = (left, right) => _ =>
+      if left < right
+        (left, self#1 (left + 1, right))
+      else if left > right
+        (left, self#1 (left - 1, right))
+      else
+        right
 
+    for x in range(1,3): print x
+  ",
+  );
 
-//     for x in range(1,3): print x
-//   ",
-//   );
-
-//   assert_log!(logs, { "1", "2", "3" });
-// }
+  assert_log!(logs, { "1", "2", "3" });
+}
 
 #[test]
 fn interactive_if() {
@@ -652,33 +687,33 @@ fn interactive_if_equal() {
   assert_log!(logs, { "1" })
 }
 
-// #[test]
-// fn interactive_block_if_2() -> std::result::Result<(), String> {
-//   let InteractiveMode {
-//     rl: _,
-//     env: state,
-//     logger: Logger { logs },
-//   } = interpret(
-//     "
-//     let left = 1
-//     let right = 2
-//     let range = {
-//       let res
+#[test]
+fn interactive_block_if_2() -> std::result::Result<(), String> {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let left = 1
+    let right = 2
+    let range = {
+      let res
 
-//     //   if left < right
-//     //     res = (left, (left + 1, right))
-//     //   else if left > right
-//     //     res = (left, (left - 1, right))
-//     //   else
-//     //     res = right
+      if left < right
+        res = (left, (left + 1, right))
+      else if left > right
+        res = (left, (left - 1, right))
+      else
+        res = right
 
-//       _ => res
-//     }
-//   ",
-//   );
+      _ => res
+    }
+  ",
+  );
 
-//   Ok(())
-// }
+  Ok(())
+}
 
 #[test]
 fn interactive_2() {
@@ -723,6 +758,60 @@ fn interactive_2() {
         "\"outer b\"",
         "\"global c\"",
         "\"outer a\"",
+        "\"outer b\"",
+        "\"global c\"",
+        "\"global a\"",
+        "\"global b\"",
+        "\"global c\""
+      ]
+      .iter()
+    ))
+  }
+}
+
+#[test]
+fn interactive_3() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let a = \"global a\"
+    let b = \"global b\"
+    let c = \"global c\"
+    {
+      let a = \"outer a\"
+      let b = \"outer b\"
+      {
+        let a = \"inner a\"
+        print a#1
+        print b
+        print c
+      }
+      print a#1
+      print b
+      print c
+    }
+    print a
+    print b
+    print c
+  ",
+  );
+
+  assert_env!(state, {
+    a: Value::String("global a".to_string()),
+    b: Value::String("global b".to_string()),
+    c: Value::String("global c".to_string())
+  });
+
+  unsafe {
+    assert!(logs.iter().eq(
+      vec![
+        "\"outer a\"",
+        "\"outer b\"",
+        "\"global c\"",
+        "\"global a\"",
         "\"outer b\"",
         "\"global c\"",
         "\"global a\"",

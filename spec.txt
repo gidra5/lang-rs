@@ -91,7 +91,6 @@ Each instance of an encapsulating class is an actor.
 There are async\await operators:
 
 async operator - takes any value and constructs Future from it. 
-Futures are lazy - if no one awaits its result then it's not evaluated at all.
 await operator - takes any value and if it was a Future then unwraps it by awaiting result of all of its computations (i.e. Future<A> -> A).
 
 As means of simple macros is inline operator - takes any value expression (will take anything immediatly after it) 
@@ -109,7 +108,7 @@ EC(expr) =
 Expression optimisation then consists of these steps:
 
 1) Evaluate complexity.
-2) If complecity = 1 return given expression
+2) If complexity = 1 return given expression
 3) Search for all equivalences that match given expression and expression context.
 4) For each equivalence substitute, optimise and evaluate variant complexity.
 5) Choose variant with least complexity.

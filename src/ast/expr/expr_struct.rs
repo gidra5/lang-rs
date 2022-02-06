@@ -107,7 +107,7 @@ impl Display for Expression {
         write!(
           f,
           "{{\n{}\n}}",
-          stmts.iter().map(|stmt| format!("\t{:?}", stmt)).join(";\n")
+          stmts.iter().map(|stmt| format!("\t{}", stmt)).join(";\n")
         )
       },
     }

@@ -1,12 +1,13 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, fmt::{Display, Formatter}};
 
+use itertools::Itertools;
 use crate::{
   check_token,
   check_token_end,
   common::{reversable_iterator::ReversableIterator, value::RecordItem, LoggerTrait, Value},
   enviroment::Enviroment,
   punct_or_newline,
-  scoped, token::{TokenStream, TokenExt, Token},
+  scoped, token::{TokenStream, TokenExt, Token}, skip,
 };
 
 #[path = "../tests/stmt.rs"]
@@ -55,12 +56,22 @@ use super::{
 /// 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
-  Print(Expression),
-  Parse(Expression),
   Expression(Expression),
   Let(String, Option<Expression>),
   If(Expression, Vec<Statement>, Vec<Statement>),
   For(String, Expression, Vec<Statement>),
+}
+
+impl Display for Statement {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Expression(expr) => write!(f, "{}", expr),
+      Self::Let(x, Some(expr)) => write!(f, "let {} = {}", x, expr),
+      Self::Let(x, None) => write!(f, "let {}", x),
+      Self::If(cond, true_branch, false_branch) => write!(f, "if {}: {{\n\t{}\n}} else {{\n\t{}\n}}", cond, true_branch.iter().map(|stmt| format!("\t{}", stmt)).join(";\n"), false_branch.iter().map(|stmt| format!("\t{}", stmt)).join(";\n")),
+      Self::For(x, iter, block) => write!(f, "for {} in {}: {{\n\t{}\n}}", x, iter, block.iter().map(|stmt| format!("\t{}", stmt)).join(";\n")),
+    }
+  }
 }
 
 #[macro_export]
@@ -107,14 +118,6 @@ impl Parseable for Statement {
         .ok_or_else(|| "Unexpected end of statement.".to_string())?;
 
       match token {
-        Token::Identifier if src == "print" => {
-          stream.next();
-          Self::Print(Expression::parse(stream)?)
-        },
-        Token::Identifier if src == "parse" => {
-          stream.next();
-          Self::Parse(Expression::parse(stream)?)
-        },
         Token::For => {
           stream.next();
 
@@ -155,7 +158,7 @@ impl Parseable for Statement {
           let expr = Expression::parse(stream)?;
 
           if !punct_or_newline!(stream.next(), Colon) {
-            return Err("Missing colon after condition in if statement".to_string());
+            return Err("Missing colon after condition in an if statement".to_string());
           }
 
           let true_block = if check_token!(stream.peek(), LBracket) {
@@ -185,6 +188,7 @@ impl Parseable for Statement {
                 return Err("Missing closing bracket".to_string())
               }
             } else if !check_token_end!(stream) {
+              skip!(stream, NewLine);
               vec![Statement::parse(stream)?]
             } else {
               return Err("Empty false branch in if statement".to_string());
@@ -247,35 +251,30 @@ impl Parseable for Statement {
 }
 
 impl Evaluatable for Statement {
-  fn evaluate<L: LoggerTrait>(self, env: &mut Enviroment, logger: &mut L) -> Value {
+  fn evaluate<L: LoggerTrait>(&self, env: &mut Enviroment, logger: &mut L) -> Value {
     match self {
       Self::Expression(expr) => {
         return expr.evaluate(env, logger);
       },
-      Self::Print(expr) => {
-        let x = expr.evaluate(env, logger);
-        logger.write(format!("{}", x))
-      },
-      Self::Parse(expr) => logger.write(format!("{}", expr)),
       Self::Let(id, expr) => {
-        let val = expr
+        let val = expr.clone()
           .map(|expr| expr.evaluate(env, logger))
           .unwrap_or_default();
-        env.define(id, val)
+        env.define(id.clone(), val)
       },
       Self::If(condition, true_branch, false_branch) => {
         return if let Value::Boolean(true) = condition.evaluate(env, logger) {
           Expression {
             left:  None,
             right: None,
-            op:    Op::Block(true_branch),
+            op:    Op::Block(true_branch.clone()),
           }
           .evaluate(env, logger)
         } else {
           Expression {
             left:  None,
             right: None,
-            op:    Op::Block(false_branch),
+            op:    Op::Block(false_branch.clone()),
           }
           .evaluate(env, logger)
         };

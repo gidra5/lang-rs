@@ -481,6 +481,7 @@ impl Operator {
           Token::Arrow => (37, 0),
           Token::Apply => (34, 35),
           Token::Is => (32, 33),
+          Token::Hash => (97, 97),
 
           Token::Identifier if src == "mod" => (22, 21),
           Token::Identifier if src == "and" => (24, 23),

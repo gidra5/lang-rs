@@ -17,13 +17,13 @@ fn stmt_1() {
 #[test]
 fn stmt_2() {
   let s = stmt("print 2;").unwrap();
-  assert_eq!(s, Statement::Print(expr("2").unwrap()));
+  assert_eq!(s, Statement::Expression(expr("print 2").unwrap()));
 }
 
 #[test]
 fn stmt_3() {
   let s = stmt("print ;").unwrap();
-  assert_eq!(s, Statement::Print(expr("").unwrap()));
+  assert_eq!(s, Statement::Expression(expr("print").unwrap()));
 }
 
 #[test]
@@ -89,12 +89,15 @@ fn stmt_12() {
 #[test]
 fn stmt_13() {
   let s = stmt("print 2").unwrap();
-  assert_eq!(s, Statement::Print(expr("2").unwrap()));
+  assert_eq!(s, Statement::Expression(expr("print 2").unwrap()));
 }
 #[test]
 fn stmt_14() {
   let s = stmt("print (x => x + 1) 1").unwrap();
-  assert_eq!(s, Statement::Print(expr("(x => x + 1) 1").unwrap()));
+  assert_eq!(
+    s,
+    Statement::Expression(expr("print (x => x + 1) 1").unwrap())
+  );
 }
 
 #[test]
@@ -246,7 +249,63 @@ fn stmt_if_missing_else_branch() {
 #[test]
 fn stmt_if_missing_colon() {
   let s = stmt("if x + 2 print x").unwrap_err();
-  assert_eq!(s, "Unexpected end of statement.");
+  assert_eq!(s, "Missing colon after condition in an if statement");
+}
+
+#[test]
+fn stmt_if_nesting() {
+  let s = stmt("if a\n 1\n else if b\n 2\n else\n 3").unwrap();
+  assert_eq!(
+    s,
+    Statement::If(expr("a").unwrap(), vec![stmt("1").unwrap()], vec![
+      Statement::If(expr("b").unwrap(), vec![stmt("2").unwrap()], vec![stmt(
+        "3"
+      )
+      .unwrap()])
+    ])
+  );
+}
+
+#[test]
+fn stmt_if_block_nesting() {
+  let s = stmt("{ \nif a\n 1\n else if b\n 2\n else\n 3\n }").unwrap();
+  assert_eq!(
+    s,
+    Statement::Expression(Expression {
+      left:  None,
+      right: None,
+      op:    Op::Block(vec![Statement::If(
+        expr("a").unwrap(),
+        vec![stmt("1").unwrap()],
+        vec![Statement::If(
+          expr("b").unwrap(),
+          vec![stmt("2").unwrap()],
+          vec![stmt("3").unwrap()]
+        )]
+      )]),
+    })
+  );
+}
+
+#[test]
+fn stmt_if_block_nesting_equal() {
+  let s = stmt("{ \nif a\n x = 1\n else if b\n x = 2\n else\n x = 3\n }").unwrap();
+  assert_eq!(
+    s,
+    Statement::Expression(Expression {
+      left:  None,
+      right: None,
+      op:    Op::Block(vec![Statement::If(
+        expr("a").unwrap(),
+        vec![stmt("x = 1").unwrap()],
+        vec![Statement::If(
+          expr("b").unwrap(),
+          vec![stmt("x = 2").unwrap()],
+          vec![stmt("x = 3").unwrap()]
+        )]
+      )]),
+    })
+  );
 }
 
 #[test]

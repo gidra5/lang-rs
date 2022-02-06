@@ -201,7 +201,12 @@ impl Tokenizable for Token {
     let token = (|| {
       Ok(match stream.next().ok_or("Unexpected end of stream")? {
         ' ' | '\t' | '\r' => Skip,
-        '\n' => NewLine,
+        '\n' => {
+          while let Some(' ' | '\t' | '\r' | '\n') = stream.peek() {
+            stream.next();
+          }
+          NewLine
+        },
         '<' if stream.is_next('=') => LessEqual,
         '<' => LAngleBracket,
         '>' if stream.is_next('=') => GreaterEqual,

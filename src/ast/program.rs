@@ -24,8 +24,8 @@ impl Parseable for Program {
 }
 
 impl Evaluatable for Program {
-  fn evaluate<L: LoggerTrait>(self, env: &mut Enviroment, logger: &mut L) -> Value {
-    for stmt in self.0 {
+  fn evaluate<L: LoggerTrait>(&self, env: &mut Enviroment, logger: &mut L) -> Value {
+    for stmt in self.0.iter() {
       stmt.evaluate(env, logger);
     }
 

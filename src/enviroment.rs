@@ -32,11 +32,9 @@ impl Enviroment {
   pub fn has(&self, ident: &String) -> bool { self.variables.borrow().contains_key(ident) }
 
   pub fn get_from(&self, index: usize, ident: &String) -> Option<Value> {
+    println!("{:?}", self);
     if index != 0 {
-      self.stack[self.stack.len() - index + 1]
-        .borrow()
-        .get(ident)
-        .map(|x| x.clone())
+      self.stack[index - 1].borrow().get(ident).map(|x| x.clone())
     } else {
       self.variables.borrow().get(ident).map(|x| x.clone())
     }

@@ -108,3 +108,46 @@ fn token_char() {
   let s = tokens("'t'").unwrap();
   check!(s, [(Char, "'t'")])
 }
+
+#[test]
+fn token_skip_spaces() {
+  let s = tokens("x   y").unwrap();
+  check!(s, [(Identifier, "x"), (Identifier, "y")])
+}
+
+#[test]
+fn token_new_line() {
+  let s = tokens("x \n y").unwrap();
+  check!(s, [(Identifier, "x"), (NewLine, "\n "), (Identifier, "y")])
+}
+
+#[test]
+fn token_multiple_newline_counts_as_one() {
+  let s = tokens("x\n\n\ny").unwrap();
+  check!(s, [
+    (Identifier, "x"),
+    (NewLine, "\n\n\n"),
+    (Identifier, "y")
+  ])
+}
+
+#[test]
+fn token_whitespace_chars_after_new_line() {
+  let s = tokens("x\n \n \ny").unwrap();
+  check!(s, [
+    (Identifier, "x"),
+    (NewLine, "\n \n \n"),
+    (Identifier, "y")
+  ])
+}
+
+#[test]
+fn token_whitespace_chars_after_new_line_2() {
+  let s = tokens("x\n\t\n \ny").unwrap();
+  println!("{:?}", s);
+  check!(s, [
+    (Identifier, "x"),
+    (NewLine, "\n\t\n \n"),
+    (Identifier, "y")
+  ])
+}
