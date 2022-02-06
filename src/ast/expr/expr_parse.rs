@@ -6,6 +6,7 @@ use crate::{
   check_token_end,
   common::{ReversableIterator, Span},
   match_token,
+  punct_or_newline,
   skip,
   token::{Token, TokenExt, TokenStream},
   token_pat,
@@ -44,6 +45,80 @@ pub struct Operator {
 struct Frame {
   operator: Option<Operator>,
   lhs:      Option<Expression>,
+}
+
+fn parse_for(token_stream: &mut TokenStream) -> Result<Expression, String> {
+  if !check_token!(token_stream.peek(), For) {
+    Err("Expected for expression".to_string())
+  } else {
+    token_stream.next();
+
+    let pat = Expression::parse(token_stream)?;
+
+    if !check_token!(token_stream.next(), In) {
+      return Err("Expected 'in' after identifier".to_string());
+    }
+
+    let iterator = Expression::parse(token_stream)?;
+
+    if !punct_or_newline!(token_stream.next(), Colon) {
+      return Err("Missing colon after expression in for statement".to_string());
+    }
+
+    let body = Expression::parse(token_stream)?;
+
+    return Ok(Expression {
+      left:  None,
+      right: None,
+      op:    Op::For(Box::new(pat), Box::new(iterator), Box::new(body)),
+    });
+  }
+}
+
+fn parse_if(token_stream: &mut TokenStream) -> Result<Expression, String> {
+  if !check_token!(token_stream.peek(), If) {
+    Err("Expected if expression".to_string())
+  } else {
+    token_stream.next();
+    let expr = Expression::parse(token_stream)?;
+
+    if !punct_or_newline!(token_stream.next(), Colon) {
+      return Err("Missing colon after condition expression in an if expression".to_string());
+    }
+
+    let true_block =
+      Expression::parse(token_stream).map_err(|err| format!("Can't parse true branch: {}", err))?;
+
+    if true_block == Expression::default() {
+      return Err("Empty true branch in if expression".to_string());
+    }
+    let y = token_stream.peek_ext(2);
+
+    let false_block = if check_token!(token_stream.peek(), Else)
+      || check_token!(y[0], NewLine) && check_token!(y[1], Else)
+    {
+      skip!(token_stream, NewLine);
+      token_stream.next();
+      skip!(token_stream, NewLine);
+
+      let false_block = Expression::parse(token_stream)
+        .map_err(|err| format!("Can't parse false branch: {}", err))?;
+
+      if false_block == Expression::default() {
+        return Err("Empty false branch in if expression".to_string());
+      }
+
+      Some(Box::new(false_block))
+    } else {
+      None
+    };
+
+    return Ok(Expression {
+      left:  None,
+      right: None,
+      op:    Op::If(Box::new(expr), Box::new(true_block), false_block),
+    });
+  }
 }
 
 fn parse_braces(token_stream: &mut TokenStream) -> Result<Expression, String> {
@@ -173,12 +248,84 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
     let mut token = token_stream.peek();
 
     match token {
-      // match_token!(Token::For) if !in_parens => {
-      //   return Err("Unexpected closing parenthesis".to_string());
-      // },
-      // match_token!(Token::If) if !in_parens => {
-      //   return Err("Unexpected closing parenthesis".to_string());
-      // },
+      match_token!(For) => {
+        if matches!(
+          top.operator,
+          Some(Operator {
+            fixity: Fixity::None,
+            token:  token_pat!(token: Skip),
+          })
+        ) {
+          top = stack.pop().unwrap();
+        }
+
+        if let Some(lhs) = top.lhs {
+          top.lhs = Some(Expression {
+            op:    Op::Value(TokenExt {
+              token: Token::Apply,
+              src:   "".to_string(),
+              span:  Span::default(),
+            }),
+            left:  Some(Box::new(lhs)),
+            right: Some(Box::new(parse_for(token_stream)?)),
+          });
+        } else {
+          top.lhs = Some(parse_for(token_stream)?);
+        }
+
+        stack.push(top);
+        top = Frame {
+          lhs:      None,
+          operator: Some(Operator {
+            fixity: Fixity::None,
+            token:  TokenExt {
+              token: Token::Skip,
+              src:   "".to_string(),
+              span:  Span::default(),
+            },
+          }),
+        };
+        continue;
+      },
+      match_token!(If) => {
+        if matches!(
+          top.operator,
+          Some(Operator {
+            fixity: Fixity::None,
+            token:  token_pat!(token: Skip),
+          })
+        ) {
+          top = stack.pop().unwrap();
+        }
+
+        if let Some(lhs) = top.lhs {
+          top.lhs = Some(Expression {
+            op:    Op::Value(TokenExt {
+              token: Token::Apply,
+              src:   "".to_string(),
+              span:  Span::default(),
+            }),
+            left:  Some(Box::new(lhs)),
+            right: Some(Box::new(parse_if(token_stream)?)),
+          });
+        } else {
+          top.lhs = Some(parse_if(token_stream)?);
+        }
+
+        stack.push(top);
+        top = Frame {
+          lhs:      None,
+          operator: Some(Operator {
+            fixity: Fixity::None,
+            token:  TokenExt {
+              token: Token::Skip,
+              src:   "".to_string(),
+              span:  Span::default(),
+            },
+          }),
+        };
+        continue;
+      },
       match_token!(RParenthesis) if !in_parens => {
         return Err("Unexpected closing parenthesis".to_string());
       },

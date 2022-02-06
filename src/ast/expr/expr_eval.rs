@@ -97,6 +97,114 @@ impl Evaluatable for Expression {
     match self {
       Expression {
         left: None,
+        op: Op::For(for_pat, iter, body),
+        right: None,
+      } => {
+        let mut iterator = iter.evaluate(env, logger);
+        let mut accumulator = Value::Unit;
+
+        return loop {
+          if let Value::Function(ref fn_pat, ref mut fn_env, ref expr) = iterator {
+            let next = scoped!(fn_env, {
+              match_value(1, accumulator, (*fn_pat.clone()), fn_env, logger);
+
+              expr.evaluate(fn_env, logger)
+            });
+
+            let val = if let Value::Record(vec) = next {
+              let value::RecordItem { value: val, .. } = &vec[0];
+              let value::RecordItem { value: iter, .. } = &vec[1];
+              iterator = iter.clone();
+              val.clone()
+            } else {
+              iterator = Value::None;
+              next
+            };
+
+            accumulator = scoped!(env, {
+              match_value(1, val.clone(), (*for_pat.clone()), env, logger);
+
+              body.evaluate(env, logger)
+            })
+          } else {
+            break accumulator;
+          }
+        };
+
+        // return loop {
+        //   let mut stmts = body.iter().cloned().peekable();
+
+        //   if let Value::Function(pat, ref mut fn_env, expr) = iterator {
+        //     let next = scoped!(fn_env, {
+        //       match_value(1, accumulator, (*pat), fn_env, logger);
+
+        //       expr.evaluate(fn_env, logger)
+        //     });
+
+        //     if let Value::Record(vec) = next {
+        //       let RecordItem { value: val, .. } = &vec[0];
+        //       let RecordItem { value: iter, .. } = &vec[1];
+
+        //       scoped!(env, {
+        //         env.define(var.clone(), val.clone());
+
+        //         iterator = iter.clone();
+
+        //         accumulator = loop {
+        //           if let Some(stmt) = stmts.next() {
+        //             if let Some(_) = stmts.peek() {
+        //               stmt.evaluate(env, logger);
+        //             } else {
+        //               break stmt.evaluate(env, logger);
+        //             }
+        //           }
+        //         }
+        //       })
+        //     } else {
+        //       env.define(var.clone(), next);
+        //       break scoped!(env, {
+        //         loop {
+        //           if let Some(stmt) = stmts.next() {
+        //             if let Some(_) = stmts.peek() {
+        //               stmt.evaluate(env, logger);
+        //             } else {
+        //               break stmt.evaluate(env, logger);
+        //             }
+        //           }
+        //         }
+        //       });
+        //     }
+        //   } else {
+        //     env.define(var.clone(), iterator);
+        //     break scoped!(env, {
+        //       loop {
+        //         if let Some(stmt) = stmts.next() {
+        //           if let Some(_) = stmts.peek() {
+        //             stmt.evaluate(env, logger);
+        //           } else {
+        //             break stmt.evaluate(env, logger);
+        //           }
+        //         }
+        //       }
+        //     });
+        //   }
+        // };
+      },
+      Expression {
+        left: None,
+        op: Op::If(condition, true_branch, false_branch),
+        right: None,
+      } => {
+        if let Value::Boolean(true) = (*condition).evaluate(env, logger) {
+          (*true_branch).evaluate(env, logger)
+        } else if let Some(false_branch) = false_branch {
+          (*false_branch).evaluate(env, logger)
+        } else {
+          Value::None
+        }
+      },
+      Expression {
+        left: None,
         op: Op::Value(token_pat!(token: Identifier, src: id)),
         right: None,
       } => env.get(&id).unwrap_or_default(),

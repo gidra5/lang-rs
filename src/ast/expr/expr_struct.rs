@@ -42,8 +42,8 @@ pub enum Op {
   Value(TokenExt),
   Record(Vec<RecordItem>),
   Block(Vec<Statement>),
-  /* If(Box<Expression>, Box<Expression>, Box<Expression>),
-   * For(Box<Expression>, Box<Expression>, Box<Expression>), */
+  If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+  For(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
 impl Default for Op {
@@ -102,6 +102,9 @@ impl Display for Expression {
           write!(f, "()")
         }
       },
+      Op::If(cond, t_b, Some(f_b)) => write!(f, "(if {}: {} else {})", cond, t_b, f_b),
+      Op::If(cond, t_b, None) => write!(f, "(if {}: {} else None)", cond, t_b),
+      Op::For(pat, iter, body) => write!(f, "(for {} in {}: {})", pat, iter, body),
       Op::Block(stmts) => {
         // write!(f, "block")
         write!(

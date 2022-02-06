@@ -133,7 +133,7 @@ fn interactive_for_1() {
     logger: Logger { logs },
   } = interpret(
     "
-    for x in 1: print x
+    for x in _ => 1: print x
   ",
   );
 
@@ -148,7 +148,7 @@ fn interactive_for_2() {
     logger: Logger { logs },
   } = interpret(
     "
-    for x in x => (1, x => (2, x => (3, 4))): print x
+    for x in _ => (1, _ => (2, _ => (3, _ => 4))): print x
   ",
   );
 
@@ -447,13 +447,12 @@ fn interactive_range_2() {
   } = interpret(
     "
     let range = (left, right) => {
-      let range = self
       let res
 
       if left < right
-        res = (left, range(left + 1, right))
+        res = (left, self (left + 1, right))
       else if left > right
-        res = (left, range(left - 1, right))
+        res = (left, self (left - 1, right))
       else
         res = right
 
@@ -517,47 +516,11 @@ fn interactive_range_4() {
       }
     }
 
-    // let iter = range(1,3)()
-    // // print (iter, iter[1], iter[1]())
-
-    // print (iter[1](), iter[1]())
-    
-    // // print (iter[1](), iter[1]()[1], iter[1]()[1]())
-
-    // iter = iter[1]()
-    // print (iter, iter[1], iter[1]())
-
-    // iter = iter[1]()
-    // print (iter, iter[1], iter[1]())
-
     for x in range(1,3): print x
   ",
   );
 
   assert_log!(logs, { "1", "2", "3" });
-}
-
-#[test]
-fn interactive_range_7() {
-  let InteractiveMode {
-    rl: _,
-    env: state,
-    logger: Logger { logs },
-  } = interpret(
-    "
-    let range = x => {
-      let y = 1
-      _ => {
-        let z = 2
-        _ => (x, y, z)
-      }
-    }
-
-    print range(3)()() == range(3)()()
-  ",
-  );
-
-  assert_log!(logs, { "true" });
 }
 
 #[test]
@@ -612,6 +575,29 @@ fn interactive_range_6() {
 }
 
 #[test]
+fn interactive_range_7() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    logger: Logger { logs },
+  } = interpret(
+    "
+    let range = x => {
+      let y = 1
+      _ => {
+        let z = 2
+        _ => (x, y, z)
+      }
+    }
+
+    print range(3)()() == range(3)()()
+  ",
+  );
+
+  assert_log!(logs, { "true" });
+}
+
+#[test]
 fn interactive_if() {
   let InteractiveMode {
     rl: _,
@@ -625,9 +611,9 @@ fn interactive_if() {
     if true: print \"true\"
     if false: print \"false\"
     if x: print \"x\"
-    if y: print \"unreachable\"; else print \"not y\"
-    if y and x: print \"unreachable\"; else print \"not (y and x)\"
-    if y or x: print \"y or x\"; else print \"unreachable\"
+    if y: print \"unreachable\" else print \"not y\"
+    if y and x: print \"unreachable\" else print \"not (y and x)\"
+    if y or x: print \"y or x\" else print \"unreachable\"
   ",
   );
 
@@ -655,8 +641,8 @@ fn interactive_block_if_expr() {
     "
     let x = true
     let y = false
-    let z = { if x: 1; else 2; }
-    let w = { if y: 3; else 4; }
+    let z = { if x: 1 else 2; }
+    let w = { if y: 3 else 4; }
 
     print z
     print w
@@ -679,12 +665,10 @@ fn interactive_if_equal() {
     let z
 
     if x: z = 1
-
-    print z
   ",
   );
 
-  assert_log!(logs, { "1" })
+  assert_env!(state, { z: Value::Number(1.) });
 }
 
 #[test]

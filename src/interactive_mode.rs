@@ -34,6 +34,7 @@ impl InteractiveMode {
       Some(mut tokens) => {
         match Program::parse_ext(&mut tokens) {
           Ok(tree) => {
+            println!("{:?}", tree);
             tree.node.evaluate(&mut self.env, &mut self.logger);
           },
           Err(msg) => self.logger.error_parse(msg),
