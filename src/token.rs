@@ -29,9 +29,9 @@ macro_rules! match_token {
 
 #[macro_export]
 macro_rules! check_token {
-  ($token:expr $(, { $src:ident })?, $pattern:ident $(if $cond:expr)?) => {
+  ($token:expr $(, { $src:ident })?, $($pattern:ident)|+ $(if $cond:expr)?) => {
     matches!($token, Some(TokenExt {
-      token: crate::token::Token::$pattern,
+      token: $(crate::token::Token::$pattern)|+,
       $(src: $src,)?
       ..
     }) $(if $cond)?)
@@ -40,8 +40,8 @@ macro_rules! check_token {
 
 #[macro_export]
 macro_rules! skip {
-  ($token_stream:ident $(, { $src:ident })?, $pattern:ident $(if $cond:expr)?) => {
-    if check_token!($token_stream.peek() $(, { $src })?, $pattern $(if $cond)?) {
+  ($token_stream:ident $(, { $src:ident })?, $($pattern:ident)|+ $(if $cond:expr)?) => {
+    if check_token!($token_stream.peek() $(, { $src })?, $($pattern)|+ $(if $cond)?) {
       $token_stream.next();
     }
   };

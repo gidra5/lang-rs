@@ -1,10 +1,11 @@
 use crate::{
-  ast::{ASTNodeExt, Expression, Op, Parseable, Statement},
+  ast::{ASTNodeExt, Expression, Op, Parseable, ParsingContext, Statement},
   common::{
     tests::{expr, stmt},
     CharStream,
     Logger,
   },
+  map,
   token::TokenStream,
 };
 
@@ -339,7 +340,10 @@ fn expr_consumes_just_enough() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream).map_err(|err| format!("{:?}", err.error))?;
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
+    declarations: map![],
+  })
+  .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 1);
 
@@ -453,6 +457,7 @@ fn expr_if_1() {
 #[test]
 fn expr_if_2() {
   let s = expr("if x + 2: { print x; print x; } else { print \"fuck you\"; }").unwrap();
+
   assert_eq!(s, Expression {
     left:  None,
     right: None,

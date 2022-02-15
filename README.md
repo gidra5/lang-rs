@@ -18,6 +18,7 @@
 - [ ] Records
 - [ ] Maps
 - [ ] Type casting
+- [ ] List comprehension
 - [ ] Equivalence declaration
 - [ ] Namespaces
 - [ ] Modularity through files

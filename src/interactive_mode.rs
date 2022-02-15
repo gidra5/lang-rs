@@ -11,6 +11,7 @@ pub struct InteractiveModeHelper {}
 pub struct InteractiveMode {
   rl:         Editor<InteractiveModeHelper>,
   env:        Enviroment,
+  context:    ParsingContext,
   pub logger: Logger,
 }
 
@@ -23,6 +24,7 @@ impl InteractiveMode {
 
     Self {
       rl,
+      context: ParsingContext::new(),
       env: Enviroment::new(),
       logger: Logger { logs: vec![] },
     }
@@ -32,7 +34,7 @@ impl InteractiveMode {
   pub fn exec(&mut self, code: CharStream) {
     match TokenStream::new(code, &mut self.logger) {
       Some(mut tokens) => {
-        match Program::parse_ext(&mut tokens) {
+        match Script::parse_ext(&mut tokens, &mut self.context) {
           Ok(tree) => {
             println!("{:?}", tree);
             tree.node.evaluate(&mut self.env, &mut self.logger);
@@ -59,7 +61,7 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line), &mut self.logger) {
             Some(mut tokens) => {
-              match Statement::parse_ext(&mut tokens) {
+              match Statement::parse_ext(&mut tokens, &mut self.context) {
                 Ok(tree) => {
                   tree.node.evaluate(&mut self.env, &mut self.logger);
                 },

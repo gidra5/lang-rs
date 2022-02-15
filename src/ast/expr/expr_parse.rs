@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::{
-  ast::{Parseable, Statement},
+  ast::{Parseable, ParsingContext, ParsingError, Statement},
   check_token,
   check_token_end,
   common::{ReversableIterator, Span},
@@ -47,25 +47,32 @@ struct Frame {
   lhs:      Option<Expression>,
 }
 
-fn parse_for(token_stream: &mut TokenStream) -> Result<Expression, String> {
+fn parse_for(
+  token_stream: &mut TokenStream,
+  context: &mut ParsingContext,
+) -> Result<Expression, ParsingError> {
   if !check_token!(token_stream.peek(), For) {
-    Err("Expected for expression".to_string())
+    Err(ParsingError::Generic("Expected for expression".to_string()))
   } else {
     token_stream.next();
 
-    let pat = Expression::parse(token_stream)?;
+    let pat = Expression::parse(token_stream, context)?;
 
     if !check_token!(token_stream.next(), In) {
-      return Err("Expected 'in' after identifier".to_string());
+      return Err(ParsingError::Generic(
+        "Expected 'in' after identifier".to_string(),
+      ));
     }
 
-    let iterator = Expression::parse(token_stream)?;
+    let iterator = Expression::parse(token_stream, context)?;
 
     if !punct_or_newline!(token_stream.next(), Colon) {
-      return Err("Missing colon after expression in for statement".to_string());
+      return Err(ParsingError::Generic(
+        "Missing colon after expression in for statement".to_string(),
+      ));
     }
 
-    let body = Expression::parse(token_stream)?;
+    let body = Expression::parse(token_stream, context)?;
 
     return Ok(Expression {
       left:  None,
@@ -75,25 +82,33 @@ fn parse_for(token_stream: &mut TokenStream) -> Result<Expression, String> {
   }
 }
 
-fn parse_if(token_stream: &mut TokenStream) -> Result<Expression, String> {
+fn parse_if(
+  token_stream: &mut TokenStream,
+  context: &mut ParsingContext,
+) -> Result<Expression, ParsingError> {
   if !check_token!(token_stream.peek(), If) {
-    Err("Expected if expression".to_string())
+    Err(ParsingError::Generic("Expected if expression".to_string()))
   } else {
     token_stream.next();
-    let expr = Expression::parse(token_stream)?;
+    let expr = Expression::parse(token_stream, context)?;
 
     if !punct_or_newline!(token_stream.next(), Colon) {
-      return Err("Missing colon after condition expression in an if expression".to_string());
+      return Err(ParsingError::Generic(
+        "Missing colon after condition expression in an if expression".to_string(),
+      ));
     }
 
-    let true_block =
-      Expression::parse(token_stream).map_err(|err| format!("Can't parse true branch: {}", err))?;
+    let true_block = Expression::parse(token_stream, context)
+      .map_err(|err| ParsingError::Generic(format!("Can't parse true branch: {}", err)))?;
 
     if true_block == Expression::default() {
-      return Err("Empty true branch in if expression".to_string());
+      return Err(ParsingError::Generic(
+        "Empty true branch in if expression".to_string(),
+      ));
     }
     let y = token_stream.peek_ext(2);
 
+    println!("{:?}", y);
     let false_block = if check_token!(token_stream.peek(), Else)
       || check_token!(y[0], NewLine) && check_token!(y[1], Else)
     {
@@ -101,11 +116,13 @@ fn parse_if(token_stream: &mut TokenStream) -> Result<Expression, String> {
       token_stream.next();
       skip!(token_stream, NewLine);
 
-      let false_block = Expression::parse(token_stream)
-        .map_err(|err| format!("Can't parse false branch: {}", err))?;
+      let false_block = Expression::parse(token_stream, context)
+        .map_err(|err| ParsingError::Generic(format!("Can't parse false branch: {}", err)))?;
 
       if false_block == Expression::default() {
-        return Err("Empty false branch in if expression".to_string());
+        return Err(ParsingError::Generic(
+          "Empty false branch in if expression".to_string(),
+        ));
       }
 
       Some(Box::new(false_block))
@@ -121,59 +138,71 @@ fn parse_if(token_stream: &mut TokenStream) -> Result<Expression, String> {
   }
 }
 
-fn parse_braces(token_stream: &mut TokenStream) -> Result<Expression, String> {
+fn parse_braces(
+  token_stream: &mut TokenStream,
+  context: &mut ParsingContext,
+) -> Result<Expression, ParsingError> {
   if !check_token!(token_stream.peek(), LBrace) {
-    Err("Expected opening brace".to_string())
+    Err(ParsingError::Generic("Expected opening brace".to_string()))
   } else {
     token_stream.next();
 
-    let expr = Expression::parse(token_stream)?;
+    let expr = Expression::parse(token_stream, context)?;
 
     if !check_token!(token_stream.next(), RBrace) {
-      Err("Expected closing brace".to_string())
+      Err(ParsingError::Generic("Expected closing brace".to_string()))
     } else {
       Ok(expr)
     }
   }
 }
 
-fn parse_block(token_stream: &mut TokenStream) -> Result<Expression, String> {
+fn parse_block(
+  token_stream: &mut TokenStream,
+  context: &mut ParsingContext,
+) -> Result<Expression, ParsingError> {
   if !check_token!(token_stream.peek(), LBracket) {
-    Err("Expected opening bracket".to_string())
+    Err(ParsingError::Generic(
+      "Expected opening bracket".to_string(),
+    ))
   } else {
     token_stream.next();
 
-    let x = {
-      let mut res = vec![];
+    let mut res = vec![];
 
-      loop {
-        if !check_token!(token_stream.peek(), RBracket) && !check_token_end!(token_stream) {
-          match Statement::parse(token_stream) {
-            Ok(Statement::Expression(expr)) if expr == Expression::default() => (),
-            Ok(stmt) => res.push(stmt),
-            Err(msg) => return Err(msg),
-          };
-        } else {
-          break res;
-        }
+    loop {
+      if check_token!(token_stream.peek(), RBracket) {
+        token_stream.next();
+        break Ok(Expression {
+          left:  None,
+          right: None,
+          op:    Op::Block(res),
+        });
+      } else if check_token_end!(token_stream) {
+        break Err(ParsingError::Generic(
+          "Expected closing bracket".to_string(),
+        ));
       }
-    };
 
-    if !check_token!(token_stream.next(), RBracket) {
-      Err("Expected closing bracket".to_string())
-    } else {
-      Ok(Expression {
-        left:  None,
-        right: None,
-        op:    Op::Block(x),
-      })
+      skip!(token_stream, Semicolon | NewLine);
+
+      match Expression::parse(token_stream, context) {
+        Ok(expr) if expr == Expression::default() => (),
+        Ok(expr) => res.push(Statement::Expression(expr)),
+        Err(msg) => return Err(msg),
+      };
     }
   }
 }
 
-fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
+fn parse_parens(
+  token_stream: &mut TokenStream,
+  context: &mut ParsingContext,
+) -> Result<Expression, ParsingError> {
   if !check_token!(token_stream.peek(), LParenthesis) {
-    Err("Expected opening parenthesis".to_string())
+    Err(ParsingError::Generic(
+      "Expected opening parenthesis".to_string(),
+    ))
   } else {
     token_stream.next();
     let mut x = vec![];
@@ -202,22 +231,24 @@ fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
         token_stream.next();
       } else if check_token!(y[0], LBrace) {
         token_stream.next();
-        key = RecordKey::Value(parse_expr(token_stream, true)?);
+        key = RecordKey::Value(parse_expr(token_stream, context, true)?);
         let y = token_stream.peek_ext(2);
 
         if !(check_token!(y[0], RBrace) && check_token!(y[1], Colon)) {
-          return Err("Expected closing brace and colon".to_string());
+          return Err(ParsingError::Generic(
+            "Expected closing brace and colon".to_string(),
+          ));
         } else {
           token_stream.next_ext(2);
         }
       }
 
-      let expr = parse_expr(token_stream, true)?;
+      let expr = parse_expr(token_stream, context, true)?;
 
       skip!(token_stream, Comma);
 
       if check_token_end!(token_stream) {
-        return Err("Unexpected end of input".to_string());
+        return Err(ParsingError::Generic("Unexpected end of input".to_string()));
       }
 
       x.push(RecordItem { key, value: expr });
@@ -232,7 +263,11 @@ fn parse_parens(token_stream: &mut TokenStream) -> Result<Expression, String> {
   }
 }
 
-fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Expression, String> {
+fn parse_expr(
+  token_stream: &mut TokenStream,
+  context: &mut ParsingContext,
+  in_parens: bool,
+) -> Result<Expression, ParsingError> {
   let mut top = Frame {
     lhs:      None,
     operator: None,
@@ -267,10 +302,10 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
               span:  Span::default(),
             }),
             left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_for(token_stream)?)),
+            right: Some(Box::new(parse_for(token_stream, context)?)),
           });
         } else {
-          top.lhs = Some(parse_for(token_stream)?);
+          top.lhs = Some(parse_for(token_stream, context)?);
         }
 
         stack.push(top);
@@ -306,10 +341,10 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
               span:  Span::default(),
             }),
             left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_if(token_stream)?)),
+            right: Some(Box::new(parse_if(token_stream, context)?)),
           });
         } else {
-          top.lhs = Some(parse_if(token_stream)?);
+          top.lhs = Some(parse_if(token_stream, context)?);
         }
 
         stack.push(top);
@@ -327,7 +362,9 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
         continue;
       },
       match_token!(RParenthesis) if !in_parens => {
-        return Err("Unexpected closing parenthesis".to_string());
+        return Err(ParsingError::Generic(
+          "Unexpected closing parenthesis".to_string(),
+        ));
       },
       match_token!(LParenthesis) => {
         if matches!(
@@ -348,10 +385,10 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
               span:  Span::default(),
             }),
             left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_parens(token_stream)?)),
+            right: Some(Box::new(parse_parens(token_stream, context)?)),
           });
         } else {
-          top.lhs = Some(parse_parens(token_stream)?);
+          top.lhs = Some(parse_parens(token_stream, context)?);
         }
 
         if let Some(
@@ -416,10 +453,10 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
               span:  Span::default(),
             }),
             left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_block(token_stream)?)),
+            right: Some(Box::new(parse_block(token_stream, context)?)),
           });
         } else {
-          top.lhs = Some(parse_block(token_stream)?);
+          top.lhs = Some(parse_block(token_stream, context)?);
         }
 
         stack.push(top);
@@ -449,11 +486,22 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
 
         top.lhs = Some(Expression {
           op:    Op::Value(token.unwrap()),
-          right: Some(Box::new(parse_braces(token_stream)?)),
+          right: Some(Box::new(parse_braces(token_stream, context)?)),
           left:  Some(Box::new(match stack.pop() {
-            None => top.lhs.ok_or("Unexpected indexing position")?,
+            None => {
+              top.lhs.ok_or(ParsingError::Generic(
+                "Unexpected indexing position".to_string(),
+              ))?
+            },
             Some(Frame { lhs, operator }) => {
-              let op = Op::Value(top.operator.ok_or("Unexpected indexing position")?.token);
+              let op = Op::Value(
+                top
+                  .operator
+                  .ok_or(ParsingError::Generic(
+                    "Unexpected indexing position".to_string(),
+                  ))?
+                  .token,
+              );
               top.operator = operator;
 
 
@@ -537,7 +585,9 @@ fn parse_expr(token_stream: &mut TokenStream, in_parens: bool) -> Result<Express
 }
 
 impl Parseable for Expression {
-  fn parse(stream: &mut TokenStream) -> Result<Self, String> { parse_expr(stream, false) }
+  fn parse(stream: &mut TokenStream, context: &mut ParsingContext) -> Result<Self, ParsingError> {
+    parse_expr(stream, context, false)
+  }
 }
 
 impl Operator {

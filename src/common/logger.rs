@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::{ast::*, common::*, token::*};
 
 pub trait LoggerTrait {
@@ -15,9 +17,14 @@ pub trait LoggerTrait {
     Self::error(self, format!("{} at\n{}", msg, span).as_str());
   }
 
-  fn error_parse(&mut self, ParsingError { error, span }: ParsingError) {
+  fn error_parse(&mut self, (error, span): (ParsingError, Span<TokenStream>)) {
     match error {
-      ErrorType::Generic(msg) => Self::error(self, format!("{}\n{}", span, msg).as_str()),
+      ParsingError::Generic(msg) => Self::error(self, format!("{}\n\n{}", span, msg).as_str()),
+      ParsingError::Aggregate(errs) => {
+        errs
+          .into_iter()
+          .for_each(|x| self.error_parse((x, span.clone())))
+      },
     }
   }
 }

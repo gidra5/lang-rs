@@ -46,6 +46,7 @@ fn interactive_scope_mutation() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -66,6 +67,7 @@ fn interactive_indexing_tuple() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -98,6 +100,7 @@ fn interactive_accessing_record_item() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -130,6 +133,7 @@ fn interactive_for_1() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -145,6 +149,7 @@ fn interactive_for_2() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -160,6 +165,7 @@ fn interactive_for_3() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -175,6 +181,7 @@ fn interactive_fn_1() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -190,6 +197,7 @@ fn interactive_fn_2() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -205,6 +213,7 @@ fn interactive_fn_3() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("print (x => y => z => x + y + z) 1 2 3");
 
@@ -216,6 +225,7 @@ fn interactive_pattern_matching() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("print () is ()");
 
@@ -227,6 +237,7 @@ fn interactive_pattern_matching_14() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("print x is _");
 
@@ -238,6 +249,7 @@ fn interactive_pattern_matching_3() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = 1; print x is 1");
 
@@ -249,6 +261,7 @@ fn interactive_pattern_matching_4() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = 1; print x is 2");
 
@@ -260,6 +273,7 @@ fn interactive_pattern_matching_5() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (1, 2)");
 
@@ -271,6 +285,7 @@ fn interactive_pattern_matching_6() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (_, 2)");
 
@@ -282,6 +297,7 @@ fn interactive_pattern_matching_7() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (2, 2)");
 
@@ -293,6 +309,7 @@ fn interactive_pattern_matching_8() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (1, _)");
 
@@ -304,6 +321,7 @@ fn interactive_pattern_matching_9() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (1, 3)");
 
@@ -315,6 +333,7 @@ fn interactive_pattern_matching_10() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (a: 1, b: 2); print x is (a: 1, b: 2)");
 
@@ -326,6 +345,7 @@ fn interactive_pattern_matching_11() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (a: 1, b: 2); print x is (a, b: 2)");
 
@@ -337,6 +357,7 @@ fn interactive_pattern_matching_12() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (a: 1, b: 2); print x is (a: 2, b: 2)");
 
@@ -348,6 +369,7 @@ fn interactive_pattern_matching_13() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = ([1+1]: 1, [2+2]: 2); print x is ([2]: _, [4]: 2)");
 
@@ -359,6 +381,7 @@ fn interactive_pattern_matching_15() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("print 1 is 2");
 
@@ -370,6 +393,7 @@ fn interactive_pattern_matching_16() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (a: 1, b: 2); print x is (a, b)");
 
@@ -381,6 +405,7 @@ fn interactive_pattern_matching_17() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (a: 1, b: 2); print x is (a, c)");
 
@@ -392,6 +417,7 @@ fn interactive_pattern_matching_18() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (a, b) => { print a; print b; }; x (1, 2)");
 
@@ -403,6 +429,7 @@ fn interactive_pattern_matching_19() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret("let x = (x, y) => x + y; print x (1, 2)");
 
@@ -414,6 +441,7 @@ fn interactive_range() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -443,6 +471,7 @@ fn interactive_range_2() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -471,6 +500,7 @@ fn interactive_range_3() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -500,6 +530,7 @@ fn interactive_range_4() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -528,6 +559,7 @@ fn interactive_range_5() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -556,6 +588,7 @@ fn interactive_range_6() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -579,6 +612,7 @@ fn interactive_range_7() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -602,6 +636,7 @@ fn interactive_if() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -636,6 +671,7 @@ fn interactive_block_if_expr() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -657,6 +693,7 @@ fn interactive_if_equal() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -676,6 +713,7 @@ fn interactive_block_if_2() -> std::result::Result<(), String> {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -704,6 +742,7 @@ fn interactive_2() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -758,6 +797,7 @@ fn interactive_3() {
   let InteractiveMode {
     rl: _,
     env: state,
+    context,
     logger: Logger { logs },
   } = interpret(
     "
@@ -807,17 +847,18 @@ fn interactive_3() {
   }
 }
 
-#[test]
-fn interactive_weird() {
-  let InteractiveMode {
-    rl: _,
-    env: state,
-    logger: Logger { logs },
-  } = interpret(
-    "
-    let else = else => else
+// #[test]
+// fn interactive_weird() {
+//   let InteractiveMode {
+//     rl: _,
+//     env: state,
+//     context,
+//     logger: Logger { logs },
+//   } = interpret(
+//     "
+//     let else = else => else
 
-    if else: else else; else else else
-  ",
-  );
-}
+//     if else: else else; else else else
+//   ",
+//   );
+// }
