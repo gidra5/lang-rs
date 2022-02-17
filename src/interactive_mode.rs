@@ -36,7 +36,6 @@ impl InteractiveMode {
       Some(mut tokens) => {
         match Script::parse_ext(&mut tokens, &mut self.context) {
           Ok(tree) => {
-            println!("{:?}", tree);
             tree.node.evaluate(&mut self.env, &mut self.logger);
           },
           Err(msg) => self.logger.error_parse(msg),

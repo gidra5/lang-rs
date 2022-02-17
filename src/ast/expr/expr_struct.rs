@@ -38,38 +38,38 @@ pub struct RecordItem {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum Op {
+pub enum Expression {
   Value(TokenExt),
   Record(Vec<RecordItem>),
+
   Block(Vec<Statement>),
   If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
   For(Box<Expression>, Box<Expression>, Box<Expression>),
+
+  Prefix {
+    op:    Box<Expression>,
+    right: Box<Expression>,
+  },
+  Postfix {
+    left: Box<Expression>,
+    op:   Box<Expression>,
+  },
+  Infix {
+    left:  Box<Expression>,
+    op:    Box<Expression>,
+    right: Box<Expression>,
+  },
 }
 
-impl Default for Op {
-  fn default() -> Op { Op::Value(TokenExt::default()) }
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Expression {
-  pub left:  Option<Box<Expression>>,
-  pub op:    Op,
-  pub right: Option<Box<Expression>>,
+impl Default for Expression {
+  fn default() -> Expression { Expression::Value(TokenExt::default()) }
 }
 
 impl Display for Expression {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    let Self { left, op, right } = self;
-    match op {
-      Op::Value(op) => {
-        match (left, right) {
-          (None, None) => write!(f, "{}", op),
-          (Some(left), None) => write!(f, "({} {})", op, left),
-          (None, Some(right)) => write!(f, "({} {})", op, right),
-          (Some(left), Some(right)) => write!(f, "({} {} {})", op, left, right),
-        }
-      },
-      Op::Record(record_items) => {
+    match self {
+      Expression::Value(op) => write!(f, "{}", op),
+      Expression::Record(record_items) => {
         let mut x = record_items
           .iter()
           .map(|RecordItem { key, value }| {
@@ -102,16 +102,49 @@ impl Display for Expression {
           write!(f, "()")
         }
       },
-      Op::If(cond, t_b, Some(f_b)) => write!(f, "(if {}: {} else {})", cond, t_b, f_b),
-      Op::If(cond, t_b, None) => write!(f, "(if {}: {} else None)", cond, t_b),
-      Op::For(pat, iter, body) => write!(f, "(for {} in {}: {})", pat, iter, body),
-      Op::Block(stmts) => {
-        // write!(f, "block")
+      Expression::If(cond, t_b, Some(f_b)) => write!(f, "(if {}: {} else {})", cond, t_b, f_b),
+      Expression::If(cond, t_b, None) => write!(f, "(if {}: {} else None)", cond, t_b),
+      Expression::For(pat, iter, body) => write!(f, "(for {} in {}: {})", pat, iter, body),
+      Expression::Block(stmts) => {
         write!(
           f,
           "{{\n{}\n}}",
           stmts.iter().map(|stmt| format!("\t{}", stmt)).join(";\n")
         )
+      },
+      Expression::Infix { left, op, right } => write!(f, "({} {} {})", op, left, right),
+      Expression::Prefix { op, right } => write!(f, "({} {})", op, right),
+      Expression::Postfix { left, op } => write!(f, "({} {})", op, left),
+    }
+  }
+}
+
+impl Expression {
+  pub fn from_options(
+    op: Expression,
+    left: Option<Expression>,
+    right: Option<Expression>,
+  ) -> Expression {
+    match (left, right) {
+      (None, None) => op,
+      (Some(expr), None) => {
+        Expression::Postfix {
+          left: Box::new(expr),
+          op:   Box::new(op),
+        }
+      },
+      (Some(left), Some(right)) => {
+        Expression::Infix {
+          left:  Box::new(left),
+          op:    Box::new(op),
+          right: Box::new(right),
+        }
+      },
+      (None, Some(right)) => {
+        Expression::Prefix {
+          op:    Box::new(op),
+          right: Box::new(right),
+        }
       },
     }
   }

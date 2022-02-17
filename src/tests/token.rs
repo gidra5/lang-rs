@@ -144,7 +144,6 @@ fn token_whitespace_chars_after_new_line() {
 #[test]
 fn token_whitespace_chars_after_new_line_2() {
   let s = tokens("x\n\t\n \ny").unwrap();
-  println!("{:?}", s);
   check!(s, [
     (Identifier, "x"),
     (NewLine, "\n\t\n \n"),

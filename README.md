@@ -1,6 +1,5 @@
 # lang-rs
 
-
 ## Feature list
 
 - [x] Variable declaration

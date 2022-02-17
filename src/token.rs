@@ -11,9 +11,9 @@ mod tests;
 
 #[macro_export]
 macro_rules! token_pat {
-  ($($token_ident:ident $(: $($token_pat:ident)|+)? $(, $src_ident:ident$(: $($src_pat:pat)|+)? )?)?) => {
+  ($($token_ident:ident $(: $(@$id:ident)? $($token_pat:ident)|+)? $(, $src_ident:ident$(: $($src_pat:pat)|+)? )?)?) => {
     crate::token::TokenExt {
-      $($token_ident $(: $(crate::token::Token::$token_pat)|+)?,
+      $($token_ident $(: $($id @ )? ($(crate::token::Token::$token_pat)|+))?,
       $($src_ident $(: $($src_pat)|+)?, )?)?
       ..
     }
@@ -22,8 +22,8 @@ macro_rules! token_pat {
 
 #[macro_export]
 macro_rules! match_token {
-  ($({ $src:ident }, )?$pattern:ident) => {
-    Some(token_pat!(token: $pattern $(, $src)?))
+  ($({ $src:ident }, )? $(@$token_ident:ident)? $($pattern:ident)|+) => {
+    Some(token_pat!(token: $(@$token_ident)? $($pattern)|+ $(, $src)?))
   };
 }
 

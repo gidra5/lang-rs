@@ -36,6 +36,15 @@ pub enum ParsingError {
   Aggregate(Vec<ParsingError>),
 }
 
+#[macro_export]
+macro_rules! parse_error {
+  ($($rest: expr),+) => {
+    ParsingError::Generic(
+      format!($($rest),+)
+    )
+  };
+}
+
 pub enum Type {
   String,
   Number,

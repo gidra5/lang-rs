@@ -1,5 +1,5 @@
 use crate::{
-  ast::{ASTNodeExt, Expression, Op, Parseable, Statement},
+  ast::{ASTNodeExt, Expression, Parseable, Statement},
   common::{
     tests::{expr, stmt},
     CharStream,

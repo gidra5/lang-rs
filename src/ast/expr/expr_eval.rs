@@ -18,10 +18,10 @@ pub fn match_value<L: LoggerTrait>(
 ) -> bool {
   match pat {
     // expr_pat!(value token: Equal, left: ident pat, right)
-    Expression {
-      left: Some(pat),
-      op: Op::Value(token_pat!(token: Equal)),
-      right: Some(right),
+    Expression::Infix {
+      left: pat,
+      op: box Expression::Value(token_pat!(token: Equal)),
+      right,
     } => {
       let res = match_value(bind, val, *pat.clone(), env, logger);
 
@@ -31,25 +31,21 @@ pub fn match_value<L: LoggerTrait>(
         res
       }
     },
-    Expression {
-      left: None,
-      op: pat,
-      right: None,
-    } => {
-      if let Op::Value(token_pat!(token: Placeholder)) = pat {
-        return true;
-      } else if let Op::Value(token_pat!(token: Identifier, src: ident)) = pat {
-        if bind == 1 {
-          env.define(ident, val);
-        } else if bind == 2 {
-          env.set(ident, val);
-        }
-        return true;
-      } else if let Op::Value(token) = pat {
-        return val == token.value();
-      } else if let Op::Record(pat_rec) = pat {
-        if let Value::Record(val_rec) = val {
-          return pat_rec.len() == val_rec.len()
+    Expression::Value(token_pat!(token: Placeholder)) => true,
+    Expression::Value(token_pat!(token: Identifier, src: ident)) => {
+      if bind == 1 {
+        env.define(ident, val);
+      } else if bind == 2 {
+        env.set(ident, val);
+      }
+      true
+    },
+    Expression::Value(token) => val == token.value(),
+
+    Expression::Record(pat_rec) => {
+      match val {
+        Value::Record(val_rec) => {
+          pat_rec.len() == val_rec.len()
             && pat_rec.into_iter().zip(val_rec).all(
               |(
                 RecordItem {
@@ -61,10 +57,10 @@ pub fn match_value<L: LoggerTrait>(
                   value: val,
                 },
               )| {
-                (match (pat.op.clone(), pat_key, val_key) {
+                (match (pat.clone(), pat_key, val_key) {
                   (_, RecordKey::None, None) => true,
                   (
-                    Op::Value(token_pat!(token: Identifier, src: x)),
+                    Expression::Value(token_pat!(token: Identifier, src: x)),
                     RecordKey::None,
                     Some(Value::String(y)),
                   ) => x == y,
@@ -73,12 +69,11 @@ pub fn match_value<L: LoggerTrait>(
                   _ => false,
                 }) && match_value(bind, val, pat, env, logger)
               },
-            );
-        } else if let Value::Unit = val {
-          return pat_rec.len() == 0;
-        }
+            )
+        },
+        Value::Unit => pat_rec.len() == 0,
+        _ => false,
       }
-      false
     },
     _ => false,
   }
@@ -95,11 +90,7 @@ fn fact(n: f64) -> f64 {
 impl Evaluatable for Expression {
   fn evaluate<L: LoggerTrait>(&self, env: &mut Enviroment, logger: &mut L) -> Value {
     match self {
-      Expression {
-        left: None,
-        op: Op::For(for_pat, iter, body),
-        right: None,
-      } => {
+      Expression::For(for_pat, iter, body) => {
         let mut iterator = iter.evaluate(env, logger);
         let mut accumulator = Value::Unit;
 
@@ -190,11 +181,7 @@ impl Evaluatable for Expression {
         //   }
         // };
       },
-      Expression {
-        left: None,
-        op: Op::If(condition, true_branch, false_branch),
-        right: None,
-      } => {
+      Expression::If(condition, true_branch, false_branch) => {
         if let Value::Boolean(true) = (*condition).evaluate(env, logger) {
           (*true_branch).evaluate(env, logger)
         } else if let Some(false_branch) = false_branch {
@@ -203,88 +190,88 @@ impl Evaluatable for Expression {
           Value::None
         }
       },
-      Expression {
-        left: None,
-        op: Op::Value(token_pat!(token: Identifier, src: id)),
-        right: None,
-      } => env.get(&id).unwrap_or_default(),
-      Expression {
-        left:
-          Some(box Expression {
-            left: None,
-            op: Op::Value(token_pat!(token: Identifier, src: id)),
-            right: None,
-          }),
-        op: Op::Value(token_pat!(token: Hash)),
-        right: Some(right),
+      Expression::Value(token_pat!(token: Identifier, src: id)) => env.get(&id).unwrap_or_default(),
+      Expression::Infix {
+        left: box Expression::Value(token_pat!(token: Identifier, src: id)),
+        op: box Expression::Value(token_pat!(token: Hash)),
+        right,
       } => {
         match (*right).evaluate(env, logger) {
           Value::Number(n) => env.get_from(n as usize, &id).unwrap_or_default(),
           _ => env.get(&id).unwrap_or_default(),
         }
       },
-      Expression {
-        left: None,
-        op: Op::Value(op),
-        right: None,
-      } => op.value(),
-      Expression {
-        left: Some(left),
-        op: Op::Value(token_pat!(token)),
-        right: None,
+      Expression::Value(op) => op.value(),
+      Expression::Postfix {
+        left,
+        op: box Expression::Value(token_pat!(token)),
       } => {
         match (token, (*left).evaluate(env, logger)) {
           (Token::Bang, Value::Number(num)) => Value::Number(fact(num)),
           _ => Value::None,
         }
       },
-      Expression {
-        left: None,
-        op: Op::Value(token_pat!(token: Identifier, src)),
-        right: Some(right),
+      Expression::Prefix {
+        op: box Expression::Value(token_pat!(token: Identifier, src)),
+        right,
       } if src == "parse" => {
         logger.write(format!("{}", right));
         (*right).evaluate(env, logger)
       },
-      Expression {
-        left: None,
-        op: Op::Value(token_pat!(token, src)),
-        right: Some(right),
+      Expression::Prefix {
+        op: box left,
+        right,
       } => {
-        match (token, (*right).evaluate(env, logger)) {
-          (Token::Sub, Value::Number(num)) => Value::Number(-num),
-          (Token::Bang, Value::Boolean(val)) => Value::Boolean(!val),
-          (Token::Dec, Value::Number(val)) => Value::Number(val - 1.),
-          (Token::Inc, Value::Number(val)) => Value::Number(val + 1.),
-          (Token::Identifier, value) if src == "print" => {
+        match left {
+          Expression::Value(token_pat!(token: Identifier, src)) if src == "print" => {
+            let value = (*right).evaluate(env, logger);
             logger.write(format!("{}", value));
             value
           },
-          _ => Value::None,
+          left @ Expression::Value(token_pat!(token: @token Sub | Bang | Dec | Inc)) => {
+            match (token, (*right).evaluate(env, logger)) {
+              (Token::Sub, Value::Number(num)) => Value::Number(-num),
+              (Token::Bang, Value::Boolean(val)) => Value::Boolean(!val),
+              (Token::Dec, Value::Number(val)) => Value::Number(val - 1.),
+              (Token::Inc, Value::Number(val)) => Value::Number(val + 1.),
+              _ => Value::None,
+            }
+          },
+          left => {
+            let mut left = (*left).clone().evaluate(env, logger);
+
+            if let Value::Function(pat, ref mut fn_env, expr) = left.clone() {
+              scoped!(fn_env, {
+                fn_env.define("self".to_string(), left);
+
+                match_value(1, (*right).evaluate(env, logger), (*pat), fn_env, logger);
+
+                expr.evaluate(fn_env, logger)
+              })
+            } else {
+              Value::None
+            }
+          },
         }
       },
-      Expression {
-        left: Some(left),
-        op: Op::Value(token_pat!(token: Arrow)),
-        right: Some(right),
-      } => {
-        // println!("{:?}", env);
-
-        Value::Function(left.clone(), Box::new(env.clone()), right.clone())
-      },
-      Expression {
-        left: Some(left),
-        op: Op::Value(token_pat!(token: Is)),
-        right: Some(right),
+      Expression::Infix {
+        left,
+        op: box Expression::Value(token_pat!(token: Arrow)),
+        right,
+      } => Value::Function(left.clone(), Box::new(env.clone()), right.clone()),
+      Expression::Infix {
+        left,
+        op: box Expression::Value(token_pat!(token: Is)),
+        right,
       } => {
         let left = (*left).evaluate(env, logger);
 
         Value::Boolean(match_value(0, left, (*right.clone()), env, logger))
       },
-      Expression {
-        left: Some(left),
-        op: Op::Value(token_pat!(token: Apply)),
-        right: Some(right),
+      Expression::Infix {
+        left,
+        op: box Expression::Value(token_pat!(token: Apply)),
+        right,
       } => {
         let mut left = (*left).clone().evaluate(env, logger);
 
@@ -300,24 +287,19 @@ impl Evaluatable for Expression {
           Value::None
         }
       },
-      Expression {
-        left: Some(pat),
-        op: Op::Value(token_pat!(token: Equal)),
-        right: Some(right),
+      Expression::Infix {
+        left: pat,
+        op: box Expression::Value(token_pat!(token: Equal)),
+        right,
       } => {
         let right = (*right).evaluate(env, logger);
         match_value(2, right.clone(), *pat.clone(), env, logger);
         right
       },
-      Expression {
-        left: Some(left),
-        op: Op::Value(op @ token_pat!(token: Period)),
-        right:
-          Some(box Expression {
-            left: None,
-            op: Op::Value(token_pat!(token: Identifier, src)),
-            right: None,
-          }),
+      Expression::Infix {
+        left,
+        op: box Expression::Value(token_pat!(token: Period)),
+        right: box Expression::Value(token_pat!(token: Identifier, src)),
       } => {
         match (*left).evaluate(env, logger) {
           Value::Record(left) => {
@@ -334,10 +316,10 @@ impl Evaluatable for Expression {
           _ => Value::None,
         }
       },
-      Expression {
-        left: Some(left),
-        op: Op::Value(token_pat!(token, src)),
-        right: Some(right),
+      Expression::Infix {
+        left,
+        op: box Expression::Value(token_pat!(token, src)),
+        right,
       } => {
         match (
           (*left).evaluate(env, logger),
@@ -393,11 +375,7 @@ impl Evaluatable for Expression {
           _ => Value::None,
         }
       },
-      Expression {
-        left: _,
-        op: Op::Block(statements),
-        right: _,
-      } => {
+      Expression::Block(statements) => {
         scoped!(env, {
           let mut iter = statements.into_iter().peekable();
 
@@ -414,11 +392,7 @@ impl Evaluatable for Expression {
           }
         })
       },
-      Expression {
-        left: None,
-        op: Op::Record(op),
-        right: None,
-      } => {
+      Expression::Record(op) => {
         let mut x = op
           .into_iter()
           .map(|RecordItem { key, value }| {

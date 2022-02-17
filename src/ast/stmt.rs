@@ -9,6 +9,7 @@ use crate::{
   check_token_end,
   common::{reversable_iterator::ReversableIterator, value::RecordItem, LoggerTrait, Value},
   enviroment::Enviroment,
+  parse_error,
   punct_or_newline,
   scoped,
   skip,
@@ -20,7 +21,7 @@ use itertools::Itertools;
 mod tests;
 
 use super::{
-  expr::{match_value, Expression, Op},
+  expr::{match_value, Expression},
   Evaluatable,
   Parseable,
   ParsingContext,
@@ -77,9 +78,9 @@ impl Display for Statement {
 impl Parseable for Statement {
   fn parse(stream: &mut TokenStream, context: &mut ParsingContext) -> Result<Self, ParsingError> {
     let res = {
-      let TokenExt { token, src, span } = stream.peek().ok_or(ParsingError::Generic(
-        "Unexpected end of statement.".to_string(),
-      ))?;
+      let TokenExt { token, src, span } = stream
+        .peek()
+        .ok_or(parse_error!("Unexpected end of statement."))?;
 
       match token {
         Token::Identifier if src == "let" => {
@@ -94,9 +95,7 @@ impl Parseable for Statement {
               }
             })
             .flatten()
-            .ok_or(ParsingError::Generic(
-              "Expected identifier at let statement.".to_string(),
-            ))?;
+            .ok_or(parse_error!("Expected identifier at let statement."))?;
 
           if check_token!(stream.peek(), Equal) {
             stream.next();
@@ -107,16 +106,16 @@ impl Parseable for Statement {
               id,
               Some(match Expression::parse(stream, context) {
                 Ok(expr) if expr == Expression::default() => {
-                  return Err(ParsingError::Generic(
-                    "Error at expression after '=' in let statement: No expression".to_string(),
+                  return Err(parse_error!(
+                    "Error at expression after '=' in let statement: No expression"
                   ))
                 },
                 Ok(expr) => expr,
                 Err(msg) => {
-                  return Err(ParsingError::Generic(format!(
+                  return Err(parse_error!(
                     "Error at expression after '=' in let statement: {}",
                     msg
-                  )))
+                  ))
                 },
               }),
             )

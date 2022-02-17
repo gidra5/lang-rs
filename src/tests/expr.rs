@@ -1,5 +1,5 @@
 use crate::{
-  ast::{ASTNodeExt, Expression, Op, Parseable, ParsingContext, Statement},
+  ast::{ASTNodeExt, Expression, Parseable, ParsingContext, Statement},
   common::{
     tests::{expr, stmt},
     CharStream,
@@ -249,7 +249,7 @@ fn expr_40() {
 #[test]
 fn expr_41() {
   let s = expr("(x => x + 1) 1").unwrap();
-  assert_eq!(s.to_string(), "(Apply (Arrow x (Add x 1)) 1)");
+  assert_eq!(s.to_string(), "((Arrow x (Add x 1)) 1)");
 }
 
 #[test]
@@ -258,7 +258,7 @@ fn expr_42() {
   assert_eq!(
     s.to_string(),
     format!(
-      "(Apply (Arrow x {}) 5)",
+      "((Arrow x {}) 5)",
       expr("{ print x; if x > 0: self (x - 1); }")
         .unwrap()
         .to_string()
@@ -308,26 +308,26 @@ fn expr_46() {
   let s = expr("(x => y => z => x + y + z) 1 2 3").unwrap();
   assert_eq!(
     s.to_string(),
-    format!("(Apply (Apply (Apply (Arrow x (Arrow y (Arrow z (Add (Add x y) z)))) 1) 2) 3)")
+    format!("((((Arrow x (Arrow y (Arrow z (Add (Add x y) z)))) 1) 2) 3)")
   );
 }
 
 #[test]
 fn expr_47() {
   let s = expr("x 1 2 3").unwrap();
-  assert_eq!(s.to_string(), format!("(Apply (Apply (Apply x 1) 2) 3)"));
+  assert_eq!(s.to_string(), format!("(((x 1) 2) 3)"));
 }
 
 #[test]
 fn expr_48() {
   let s = expr("(x) (1)").unwrap();
-  assert_eq!(s.to_string(), format!("(Apply x 1)"));
+  assert_eq!(s.to_string(), format!("(x 1)"));
 }
 
 #[test]
 fn expr_49() {
   let s = expr("x (1)").unwrap();
-  assert_eq!(s.to_string(), format!("(Apply x 1)"));
+  assert_eq!(s.to_string(), format!("(x 1)"));
 }
 
 #[test]
@@ -346,6 +346,86 @@ fn expr_consumes_just_enough() -> Result<(), String> {
   .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 1);
+
+  Ok(())
+}
+
+#[test]
+fn expr_consumes_just_enough_2() -> Result<(), String> {
+  let mut logger = Logger { logs: vec![] };
+  let input = "(2);";
+  let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
+    .ok_or("Failed to create TokenStream".to_string())?;
+
+  let ASTNodeExt {
+    node: expr_res,
+    span,
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
+    declarations: map![],
+  })
+  .map_err(|err| format!("{}", err.0))?;
+
+  assert_eq!(span.length, 3);
+
+  Ok(())
+}
+
+#[test]
+fn expr_consumes_just_enough_3() -> Result<(), String> {
+  let mut logger = Logger { logs: vec![] };
+  let input = "();";
+  let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
+    .ok_or("Failed to create TokenStream".to_string())?;
+
+  let ASTNodeExt {
+    node: expr_res,
+    span,
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
+    declarations: map![],
+  })
+  .map_err(|err| format!("{}", err.0))?;
+
+  assert_eq!(span.length, 2);
+
+  Ok(())
+}
+
+#[test]
+fn expr_consumes_just_enough_4() -> Result<(), String> {
+  let mut logger = Logger { logs: vec![] };
+  let input = "{};";
+  let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
+    .ok_or("Failed to create TokenStream".to_string())?;
+
+  let ASTNodeExt {
+    node: expr_res,
+    span,
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
+    declarations: map![],
+  })
+  .map_err(|err| format!("{}", err.0))?;
+
+  assert_eq!(span.length, 2);
+
+  Ok(())
+}
+
+#[test]
+fn expr_consumes_just_enough_5() -> Result<(), String> {
+  let mut logger = Logger { logs: vec![] };
+  let input = "{ 5; };";
+  let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
+    .ok_or("Failed to create TokenStream".to_string())?;
+
+  let ASTNodeExt {
+    node: expr_res,
+    span,
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
+    declarations: map![],
+  })
+  .map_err(|err| format!("{}", err.0))?;
+
+  assert_eq!(span.length, 4);
 
   Ok(())
 }
@@ -379,164 +459,151 @@ fn expr_await_apply_async_fn() {
   let s = expr("await async (x => x + 1) 2").unwrap();
   assert_eq!(
     s.to_string(),
-    format!("(Await (Apply (Async (Arrow x (Add x 1))) 2))")
+    format!("(Await ((Async (Arrow x (Add x 1))) 2))")
   );
 }
 
 #[test]
 fn expr_apply_inline_fn() {
   let s = expr("inline (x => x + 1) 2").unwrap();
-  assert_eq!(
-    s.to_string(),
-    format!("(Apply (Inline (Arrow x (Add x 1))) 2)")
-  );
+  assert_eq!(s.to_string(), format!("((Inline (Arrow x (Add x 1))) 2)"));
 }
 
 #[test]
 fn expr_apply_inline_x() {
   let s = expr("inline x 2").unwrap();
-  assert_eq!(s.to_string(), format!("(Apply (Inline x) 2)"));
+  assert_eq!(s.to_string(), format!("((Inline x) 2)"));
 }
 
 #[test]
 fn expr_for_1() {
   let s = expr("for x in y: print x").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::For(
+  assert_eq!(
+    s,
+    Expression::For(
       Box::new(expr("x").unwrap()),
       Box::new(expr("y").unwrap()),
       Box::new(expr("print x").unwrap()),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_for_2() {
   let s = expr("for x in y: { print x; }").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::For(
+  assert_eq!(
+    s,
+    Expression::For(
       Box::new(expr("x").unwrap()),
       Box::new(expr("y").unwrap()),
       Box::new(expr("{ print x; }").unwrap()),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_for_3() {
   let s = expr("for x in range(1, 20)\n print x").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::For(
+  assert_eq!(
+    s,
+    Expression::For(
       Box::new(expr("x").unwrap()),
       Box::new(expr("range(1, 20)").unwrap()),
       Box::new(expr("print x").unwrap()),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_1() {
   let s = expr("if x + 2: print x else print \"fuck you\"").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("print x").unwrap()),
       Some(Box::new(expr("print \"fuck you\"").unwrap())),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_2() {
   let s = expr("if x + 2: { print x; print x; } else { print \"fuck you\"; }").unwrap();
 
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("{ print x; print x; }").unwrap()),
       Some(Box::new(expr("{ print \"fuck you\"; }").unwrap())),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_3() {
   let s = expr("if x + 2: print x else { print \"fuck you\"; }").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("print x").unwrap()),
       Some(Box::new(expr("{ print \"fuck you\"; }").unwrap())),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_4() {
   let s = expr("if x + 2: { print x; } else print \"fuck you\"").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("{ print x; }").unwrap()),
       Some(Box::new(expr("print \"fuck you\"").unwrap())),
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_no_else() {
   let s = expr("if x + 2: print x").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("print x").unwrap()),
       None,
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_no_else_newline() {
   let s = expr("if x + 2\n print x").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("print x").unwrap()),
       None,
-    ),
-  });
+    )
+  );
 }
 
 #[test]
 fn expr_if_block_no_else() {
   let s = expr("if x + 2: { print x; }").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("x + 2").unwrap()),
       Box::new(expr("{ print x; }").unwrap()),
       None,
-    ),
-  });
+    )
+  );
 }
 
 #[test]
@@ -563,102 +630,70 @@ fn expr_if_missing_colon() {
 #[test]
 fn expr_if_nesting() {
   let s = expr("if a\n 1\n else if b\n 2\n else\n 3").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::If(
+  assert_eq!(
+    s,
+    Expression::If(
       Box::new(expr("a").unwrap()),
       Box::new(expr("1").unwrap()),
-      Some(Box::new(Expression {
-        left:  None,
-        right: None,
-        op:    Op::If(
-          Box::new(expr("b").unwrap()),
-          Box::new(expr("2").unwrap()),
-          Some(Box::new(expr("3").unwrap()))
-        ),
-      }))
-    ),
-  });
+      Some(Box::new(Expression::If(
+        Box::new(expr("b").unwrap()),
+        Box::new(expr("2").unwrap()),
+        Some(Box::new(expr("3").unwrap()))
+      )))
+    )
+  );
 }
 
 #[test]
 fn expr_if_block_nesting() {
   let s = expr("{ \nif a\n 1\n else if b\n 2\n else\n 3\n }").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::Block(vec![Statement::Expression(Expression {
-      left:  None,
-      right: None,
-      op:    Op::If(
-        Box::new(expr("a").unwrap()),
-        Box::new(expr("1").unwrap()),
-        Some(Box::new(Expression {
-          left:  None,
-          right: None,
-          op:    Op::If(
-            Box::new(expr("b").unwrap()),
-            Box::new(expr("2").unwrap()),
-            Some(Box::new(expr("3").unwrap()))
-          ),
-        }))
-      ),
-    })]),
-  });
+  assert_eq!(
+    s,
+    Expression::Block(vec![Statement::Expression(Expression::If(
+      Box::new(expr("a").unwrap()),
+      Box::new(expr("1").unwrap()),
+      Some(Box::new(Expression::If(
+        Box::new(expr("b").unwrap()),
+        Box::new(expr("2").unwrap()),
+        Some(Box::new(expr("3").unwrap()))
+      )))
+    ))])
+  );
 }
 
 #[test]
 fn expr_if_block_nesting_equal() {
   let s = expr("{ \nif a\n x = 1\n else if b\n x = 2\n else\n x = 3\n }").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::Block(vec![Statement::Expression(Expression {
-      left:  None,
-      right: None,
-      op:    Op::If(
-        Box::new(expr("a").unwrap()),
-        Box::new(expr("x = 1").unwrap()),
-        Some(Box::new(Expression {
-          left:  None,
-          right: None,
-          op:    Op::If(
-            Box::new(expr("b").unwrap()),
-            Box::new(expr("x = 2").unwrap()),
-            Some(Box::new(expr("x = 3").unwrap()))
-          ),
-        }))
-      ),
-    })]),
-  });
+  assert_eq!(
+    s,
+    Expression::Block(vec![Statement::Expression(Expression::If(
+      Box::new(expr("a").unwrap()),
+      Box::new(expr("x = 1").unwrap()),
+      Some(Box::new(Expression::If(
+        Box::new(expr("b").unwrap()),
+        Box::new(expr("x = 2").unwrap()),
+        Some(Box::new(expr("x = 3").unwrap()))
+      ),))
+    ),)]),
+  );
 }
 
 #[test]
 fn expr_2_ifs() {
   let s = expr("{ if x + 2: print x else print x; if x + 2: print x else print x; }").unwrap();
-  assert_eq!(s, Expression {
-    left:  None,
-    right: None,
-    op:    Op::Block(vec![
-      Statement::Expression(Expression {
-        left:  None,
-        right: None,
-        op:    Op::If(
-          Box::new(expr("x + 2").unwrap()),
-          Box::new(expr("print x").unwrap()),
-          Some(Box::new(expr("print x").unwrap()))
-        ),
-      }),
-      Statement::Expression(Expression {
-        left:  None,
-        right: None,
-        op:    Op::If(
-          Box::new(expr("x + 2").unwrap()),
-          Box::new(expr("print x").unwrap()),
-          Some(Box::new(expr("print x").unwrap()))
-        ),
-      }),
+  assert_eq!(
+    s,
+    Expression::Block(vec![
+      Statement::Expression(Expression::If(
+        Box::new(expr("x + 2").unwrap()),
+        Box::new(expr("print x").unwrap()),
+        Some(Box::new(expr("print x").unwrap()))
+      ),),
+      Statement::Expression(Expression::If(
+        Box::new(expr("x + 2").unwrap()),
+        Box::new(expr("print x").unwrap()),
+        Some(Box::new(expr("print x").unwrap()))
+      ),),
     ]),
-  });
+  );
 }

@@ -6,13 +6,14 @@ use crate::{
   check_token_end,
   common::{ReversableIterator, Span},
   match_token,
+  parse_error,
   punct_or_newline,
   skip,
   token::{Token, TokenExt, TokenStream},
   token_pat,
 };
 
-use super::expr_struct::{Expression, Op, RecordItem, RecordKey};
+use super::expr_struct::{Expression, RecordItem, RecordKey};
 
 // #[derive(Clone, PartialEq, Default, Eq, Debug)]
 // pub enum Fixity {
@@ -36,8 +37,8 @@ pub enum Fixity {
 
 #[derive(PartialEq, Default, Debug, Clone)]
 pub struct Operator {
-  fixity: Fixity,
-  token:  TokenExt,
+  op:         Expression,
+  precedence: Option<(Option<u8>, Option<u8>)>,
 }
 
 
@@ -51,109 +52,82 @@ fn parse_for(
   token_stream: &mut TokenStream,
   context: &mut ParsingContext,
 ) -> Result<Expression, ParsingError> {
-  if !check_token!(token_stream.peek(), For) {
-    Err(ParsingError::Generic("Expected for expression".to_string()))
-  } else {
-    token_stream.next();
+  let pat = Expression::parse(token_stream, context)?;
 
-    let pat = Expression::parse(token_stream, context)?;
-
-    if !check_token!(token_stream.next(), In) {
-      return Err(ParsingError::Generic(
-        "Expected 'in' after identifier".to_string(),
-      ));
-    }
-
-    let iterator = Expression::parse(token_stream, context)?;
-
-    if !punct_or_newline!(token_stream.next(), Colon) {
-      return Err(ParsingError::Generic(
-        "Missing colon after expression in for statement".to_string(),
-      ));
-    }
-
-    let body = Expression::parse(token_stream, context)?;
-
-    return Ok(Expression {
-      left:  None,
-      right: None,
-      op:    Op::For(Box::new(pat), Box::new(iterator), Box::new(body)),
-    });
+  if !check_token!(token_stream.next(), In) {
+    return Err(parse_error!("Expected 'in' after pattern"));
   }
+
+  let iterator = Expression::parse(token_stream, context)?;
+
+  if !punct_or_newline!(token_stream.next(), Colon) {
+    return Err(parse_error!(
+      "Missing colon after expression in for statement"
+    ));
+  }
+
+  let body = Expression::parse(token_stream, context)?;
+
+  return Ok(Expression::For(
+    Box::new(pat),
+    Box::new(iterator),
+    Box::new(body),
+  ));
 }
 
 fn parse_if(
   token_stream: &mut TokenStream,
   context: &mut ParsingContext,
 ) -> Result<Expression, ParsingError> {
-  if !check_token!(token_stream.peek(), If) {
-    Err(ParsingError::Generic("Expected if expression".to_string()))
-  } else {
-    token_stream.next();
-    let expr = Expression::parse(token_stream, context)?;
+  let expr = Expression::parse(token_stream, context)?;
 
-    if !punct_or_newline!(token_stream.next(), Colon) {
-      return Err(ParsingError::Generic(
-        "Missing colon after condition expression in an if expression".to_string(),
-      ));
-    }
-
-    let true_block = Expression::parse(token_stream, context)
-      .map_err(|err| ParsingError::Generic(format!("Can't parse true branch: {}", err)))?;
-
-    if true_block == Expression::default() {
-      return Err(ParsingError::Generic(
-        "Empty true branch in if expression".to_string(),
-      ));
-    }
-    let y = token_stream.peek_ext(2);
-
-    println!("{:?}", y);
-    let false_block = if check_token!(token_stream.peek(), Else)
-      || check_token!(y[0], NewLine) && check_token!(y[1], Else)
-    {
-      skip!(token_stream, NewLine);
-      token_stream.next();
-      skip!(token_stream, NewLine);
-
-      let false_block = Expression::parse(token_stream, context)
-        .map_err(|err| ParsingError::Generic(format!("Can't parse false branch: {}", err)))?;
-
-      if false_block == Expression::default() {
-        return Err(ParsingError::Generic(
-          "Empty false branch in if expression".to_string(),
-        ));
-      }
-
-      Some(Box::new(false_block))
-    } else {
-      None
-    };
-
-    return Ok(Expression {
-      left:  None,
-      right: None,
-      op:    Op::If(Box::new(expr), Box::new(true_block), false_block),
-    });
+  if !punct_or_newline!(token_stream.next(), Colon) {
+    return Err(parse_error!(
+      "Missing colon after condition expression in an if expression"
+    ));
   }
+
+  let true_block = Expression::parse(token_stream, context)
+    .map_err(|err| parse_error!("Can't parse true branch: {}", err))?;
+
+  if true_block == Expression::default() {
+    return Err(parse_error!("Empty true branch in if expression"));
+  }
+  skip!(token_stream, NewLine);
+
+  let false_block = if check_token!(token_stream.peek(), Else) {
+    token_stream.next();
+    skip!(token_stream, NewLine);
+
+    let false_block = Expression::parse(token_stream, context)
+      .map_err(|err| parse_error!("Can't parse false branch: {}", err))?;
+
+    if false_block == Expression::default() {
+      return Err(parse_error!("Empty false branch in if expression"));
+    }
+
+    Some(Box::new(false_block))
+  } else {
+    None
+  };
+
+  return Ok(Expression::If(
+    Box::new(expr),
+    Box::new(true_block),
+    false_block,
+  ));
 }
 
 fn parse_braces(
   token_stream: &mut TokenStream,
   context: &mut ParsingContext,
 ) -> Result<Expression, ParsingError> {
-  if !check_token!(token_stream.peek(), LBrace) {
-    Err(ParsingError::Generic("Expected opening brace".to_string()))
+  let expr = Expression::parse(token_stream, context)?;
+
+  if !check_token!(token_stream.next(), RBrace) {
+    Err(parse_error!("Expected closing brace"))
   } else {
-    token_stream.next();
-
-    let expr = Expression::parse(token_stream, context)?;
-
-    if !check_token!(token_stream.next(), RBrace) {
-      Err(ParsingError::Generic("Expected closing brace".to_string()))
-    } else {
-      Ok(expr)
-    }
+    Ok(expr)
   }
 }
 
@@ -161,37 +135,23 @@ fn parse_block(
   token_stream: &mut TokenStream,
   context: &mut ParsingContext,
 ) -> Result<Expression, ParsingError> {
-  if !check_token!(token_stream.peek(), LBracket) {
-    Err(ParsingError::Generic(
-      "Expected opening bracket".to_string(),
-    ))
-  } else {
-    token_stream.next();
+  let mut res = vec![];
 
-    let mut res = vec![];
-
-    loop {
-      if check_token!(token_stream.peek(), RBracket) {
-        token_stream.next();
-        break Ok(Expression {
-          left:  None,
-          right: None,
-          op:    Op::Block(res),
-        });
-      } else if check_token_end!(token_stream) {
-        break Err(ParsingError::Generic(
-          "Expected closing bracket".to_string(),
-        ));
-      }
-
-      skip!(token_stream, Semicolon | NewLine);
-
-      match Expression::parse(token_stream, context) {
-        Ok(expr) if expr == Expression::default() => (),
-        Ok(expr) => res.push(Statement::Expression(expr)),
-        Err(msg) => return Err(msg),
-      };
+  loop {
+    if check_token!(token_stream.peek(), RBracket) {
+      token_stream.next();
+      break Ok(Expression::Block(res));
+    } else if check_token_end!(token_stream) {
+      break Err(parse_error!("Expected closing bracket"));
     }
+
+    skip!(token_stream, Semicolon | NewLine);
+
+    match Expression::parse(token_stream, context) {
+      Ok(expr) if expr == Expression::default() => (),
+      Ok(expr) => res.push(Statement::Expression(expr)),
+      Err(msg) => return Err(msg),
+    };
   }
 }
 
@@ -199,68 +159,51 @@ fn parse_parens(
   token_stream: &mut TokenStream,
   context: &mut ParsingContext,
 ) -> Result<Expression, ParsingError> {
-  if !check_token!(token_stream.peek(), LParenthesis) {
-    Err(ParsingError::Generic(
-      "Expected opening parenthesis".to_string(),
-    ))
-  } else {
-    token_stream.next();
-    let mut x = vec![];
+  let mut x = vec![];
 
-    if check_token!(token_stream.peek(), RParenthesis) {
-      token_stream.next();
-
-      return Ok(Expression {
-        left:  None,
-        right: None,
-        op:    Op::Record(x),
-      });
-    }
-
-    while !check_token!(token_stream.peek(), RParenthesis) {
-      if check_token!(token_stream.peek(), NewLine) {
-        token_stream.next();
-        continue;
-      }
-      let y = token_stream.peek_ext(2);
-      let mut key = RecordKey::None;
-
-
-      if check_token!(y[0], Identifier) && check_token!(y[1], Colon) {
-        key = RecordKey::Identifier(token_stream.next().unwrap().src);
-        token_stream.next();
-      } else if check_token!(y[0], LBrace) {
-        token_stream.next();
-        key = RecordKey::Value(parse_expr(token_stream, context, true)?);
-        let y = token_stream.peek_ext(2);
-
-        if !(check_token!(y[0], RBrace) && check_token!(y[1], Colon)) {
-          return Err(ParsingError::Generic(
-            "Expected closing brace and colon".to_string(),
-          ));
-        } else {
-          token_stream.next_ext(2);
-        }
-      }
-
-      let expr = parse_expr(token_stream, context, true)?;
-
-      skip!(token_stream, Comma);
-
-      if check_token_end!(token_stream) {
-        return Err(ParsingError::Generic("Unexpected end of input".to_string()));
-      }
-
-      x.push(RecordItem { key, value: expr });
-    }
+  if check_token!(token_stream.peek(), RParenthesis) {
     token_stream.next();
 
-    Ok(Expression {
-      left:  None,
-      right: None,
-      op:    Op::Record(x),
-    })
+    return Ok(Expression::Record(x));
   }
+
+  while !check_token!(token_stream.peek(), RParenthesis) {
+    if check_token!(token_stream.peek(), NewLine) {
+      token_stream.next();
+      continue;
+    }
+    let y = token_stream.peek_ext(2);
+    let mut key = RecordKey::None;
+
+
+    if check_token!(y[0], Identifier) && check_token!(y[1], Colon) {
+      key = RecordKey::Identifier(token_stream.next().unwrap().src);
+      token_stream.next();
+    } else if check_token!(y[0], LBrace) {
+      token_stream.next();
+      key = RecordKey::Value(parse_expr(token_stream, context, true)?);
+      let y = token_stream.peek_ext(2);
+
+      if !(check_token!(y[0], RBrace) && check_token!(y[1], Colon)) {
+        return Err(parse_error!("Expected closing brace and colon"));
+      } else {
+        token_stream.next_ext(2);
+      }
+    }
+
+    let expr = parse_expr(token_stream, context, true)?;
+
+    skip!(token_stream, Comma);
+
+    if check_token_end!(token_stream) {
+      return Err(parse_error!("Unexpected end of input"));
+    }
+
+    x.push(RecordItem { key, value: expr });
+  }
+  token_stream.next();
+
+  Ok(Expression::Record(x))
 }
 
 fn parse_expr(
@@ -275,129 +218,71 @@ fn parse_expr(
   let mut stack = Vec::new();
 
   loop {
-    if check_token!(token_stream.peek(), NewLine) && in_parens {
+    if in_parens {
+      skip!(token_stream, NewLine);
+    } else if let match_token!(RParenthesis) = token_stream.peek() {
+      return Err(parse_error!("Unexpected closing parenthesis"));
+    }
+
+    let token = token_stream.peek();
+
+    if let match_token!(LBrace) = token {
       token_stream.next();
+
+      let operand = match stack.pop() {
+        None => {
+          top
+            .lhs
+            .ok_or(parse_error!("Unexpected indexing position"))?
+        },
+        Some(Frame { lhs, operator }) => {
+          let op = top
+            .operator
+            .ok_or(parse_error!("Unexpected indexing position"))?
+            .op;
+          top.operator = operator;
+
+          Expression::from_options(op, lhs, top.lhs)
+        },
+      };
+      top.lhs = Some(Expression::Infix {
+        left:  Box::new(operand),
+        op:    Box::new(Expression::Value(token.unwrap())),
+        right: Box::new(parse_braces(token_stream, context)?),
+      });
       continue;
     }
 
-    let mut token = token_stream.peek();
+    let mut operator2 = Operator::parse(token_stream, context, top.lhs.is_none());
 
-    match token {
-      match_token!(For) => {
-        if matches!(
-          top.operator,
-          Some(Operator {
-            fixity: Fixity::None,
-            token:  token_pat!(token: Skip),
-          })
-        ) {
-          top = stack.pop().unwrap();
-        }
+    let operator = loop {
+      if matches!(token, match_token!(For | If | LParenthesis | LBracket)) {
+        // println!("{:?} {:?}", operator2, top.operator, );
+        break operator2?;
+      }
 
-        if let Some(lhs) = top.lhs {
-          top.lhs = Some(Expression {
-            op:    Op::Value(TokenExt {
-              token: Token::Apply,
-              src:   "".to_string(),
-              span:  Span::default(),
-            }),
-            left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_for(token_stream, context)?)),
-          });
-        } else {
-          top.lhs = Some(parse_for(token_stream, context)?);
-        }
+      let operator = operator2
+        .as_ref()
+        .ok()
+        .and_then(|x| x.clone().ensure_exists());
 
-        stack.push(top);
-        top = Frame {
-          lhs:      None,
-          operator: Some(Operator {
-            fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   "".to_string(),
-              span:  Span::default(),
-            },
-          }),
-        };
-        continue;
-      },
-      match_token!(If) => {
-        if matches!(
-          top.operator,
-          Some(Operator {
-            fixity: Fixity::None,
-            token:  token_pat!(token: Skip),
-          })
-        ) {
-          top = stack.pop().unwrap();
-        }
-
-        if let Some(lhs) = top.lhs {
-          top.lhs = Some(Expression {
-            op:    Op::Value(TokenExt {
-              token: Token::Apply,
-              src:   "".to_string(),
-              span:  Span::default(),
-            }),
-            left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_if(token_stream, context)?)),
-          });
-        } else {
-          top.lhs = Some(parse_if(token_stream, context)?);
-        }
-
-        stack.push(top);
-        top = Frame {
-          lhs:      None,
-          operator: Some(Operator {
-            fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   "".to_string(),
-              span:  Span::default(),
-            },
-          }),
-        };
-        continue;
-      },
-      match_token!(RParenthesis) if !in_parens => {
-        return Err(ParsingError::Generic(
-          "Unexpected closing parenthesis".to_string(),
-        ));
-      },
-      match_token!(LParenthesis) => {
-        if matches!(
-          top.operator,
-          Some(Operator {
-            fixity: Fixity::None,
-            token:  token_pat!(token: Skip),
-          })
-        ) {
-          top = stack.pop().unwrap();
-        }
-
-        if let Some(lhs) = top.lhs {
-          top.lhs = Some(Expression {
-            op:    Op::Value(TokenExt {
-              token: Token::Apply,
-              src:   "".to_string(),
-              span:  Span::default(),
-            }),
-            left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_parens(token_stream, context)?)),
-          });
-        } else {
-          top.lhs = Some(parse_parens(token_stream, context)?);
-        }
-
-        if let Some(
-          op @ Operator {
-            fixity: Fixity::None,
-            ..
+      if matches!(
+        operator.clone().map(|x| x.precedence),
+        Some(Some((None, None)))
+      ) && matches!(
+        top.operator.clone().map(|x| x.precedence),
+        Some(Some((None, None)))
+      ) {
+        let operator = Some(Operator::new(
+          TokenExt {
+            token: Token::Apply,
+            src:   "apply".to_string(),
+            span:  Span::default(),
           },
-        ) = top.operator.clone()
-        {
+          false,
+        ));
+
+        loop {
           let res = top;
 
           top = match stack.pop() {
@@ -405,176 +290,70 @@ fn parse_expr(
             None => return Ok(res.lhs.unwrap_or_default()),
           };
 
-          top.lhs = Some(Expression {
-            op:    Op::Value(TokenExt {
-              token: Token::Apply,
-              src:   "".to_string(),
-              span:  Span::default(),
-            }),
-            left:  Some(Box::new(Expression {
-              op:    Op::Value(op.token),
-              right: None,
-              left:  None,
-            })),
-            right: res.lhs.map(Box::new),
-          });
-        }
+          let op = res.operator.unwrap().op;
 
-        stack.push(top);
-        top = Frame {
-          lhs:      None,
-          operator: Some(Operator {
-            fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   "".to_string(),
-              span:  Span::default(),
-            },
-          }),
-        };
-        continue;
-      },
-      match_token!(LBracket) => {
-        if matches!(
-          top.operator,
-          Some(Operator {
-            fixity: Fixity::None,
-            token:  token_pat!(token: Skip),
-          })
-        ) {
-          top = stack.pop().unwrap();
-        }
-
-        if let Some(lhs) = top.lhs {
-          top.lhs = Some(Expression {
-            op:    Op::Value(TokenExt {
-              token: Token::Apply,
-              src:   "".to_string(),
-              span:  Span::default(),
-            }),
-            left:  Some(Box::new(lhs)),
-            right: Some(Box::new(parse_block(token_stream, context)?)),
-          });
-        } else {
-          top.lhs = Some(parse_block(token_stream, context)?);
-        }
-
-        stack.push(top);
-        top = Frame {
-          lhs:      None,
-          operator: Some(Operator {
-            fixity: Fixity::None,
-            token:  TokenExt {
-              token: Token::Skip,
-              src:   "".to_string(),
-              span:  Span::default(),
-            },
-          }),
-        };
-        continue;
-      },
-      match_token!(LBrace) => {
-        if matches!(
-          top.operator,
-          Some(Operator {
-            fixity: Fixity::None,
-            token:  token_pat!(token: Skip),
-          })
-        ) {
-          top = stack.pop().unwrap();
-        }
-
-        top.lhs = Some(Expression {
-          op:    Op::Value(token.unwrap()),
-          right: Some(Box::new(parse_braces(token_stream, context)?)),
-          left:  Some(Box::new(match stack.pop() {
-            None => {
-              top.lhs.ok_or(ParsingError::Generic(
-                "Unexpected indexing position".to_string(),
-              ))?
-            },
-            Some(Frame { lhs, operator }) => {
-              let op = Op::Value(
-                top
-                  .operator
-                  .ok_or(ParsingError::Generic(
-                    "Unexpected indexing position".to_string(),
-                  ))?
-                  .token,
-              );
-              top.operator = operator;
-
-
-              Expression {
-                op,
-                left: lhs.map(Box::new),
-                right: top.lhs.map(Box::new),
+          top.lhs = Some(
+            if let Expression::Value(token_pat!(token: Apply)) = op {
+              Expression::Prefix {
+                op:    Box::new(top.lhs.unwrap()),
+                right: Box::new(res.lhs.unwrap()),
               }
+            } else {
+              Expression::from_options(op, top.lhs, res.lhs)
             },
-          })),
-        });
-        continue;
-      },
-      _ => (),
-    };
-    // println!(
-    //   "1 ===\n\n{:?}\n\n{:?}\n\n{:?}\n\n{:?}",
-    //   stack, top, token, in_parens
-    // );
+          );
 
-    let operator = loop {
-      let mut operator = token
-        .clone()
-        .map(|token| Operator::new(token, top.lhs.is_none()))
-        .flatten();
+          if top.operator <= operator {
+            break;
+          }
+        }
+
+        stack.push(top);
+        top = Frame {
+          lhs: None,
+          operator,
+        };
+
+        continue;
+      }
 
       match operator {
-        Some(op) if top.operator <= Some(op.clone()) => break op,
+        Some(op) if top.operator <= Some(op.clone()) => {
+          token_stream.next();
+          break op;
+        },
         x => {
           // println!("2 ===\n\n{:?}\n\n{:?}\n\n{:?}", stack, top, x);
-          if matches!(
-            x,
-            Some(Operator {
-              fixity: Fixity::None,
-              token:  _,
-            })
-          ) && matches!(
-            token.clone().map(|token| Operator::new(token, false)),
-            Some(None)
-          ) {
-            token_stream.backtrack(1);
-            token = token.map(|t| {
-              TokenExt {
-                token: Token::Apply,
-                ..t
+
+          let res = top;
+
+          top = match stack.pop() {
+            Some(it) => it,
+            None => return Ok(res.lhs.unwrap_or_default()),
+          };
+
+          let op = res.operator.unwrap().op;
+
+          top.lhs = Some(
+            if let Expression::Value(token_pat!(token: Apply)) = op {
+              Expression::Prefix {
+                op:    Box::new(top.lhs.unwrap()),
+                right: Box::new(res.lhs.unwrap()),
               }
-            });
-          } else {
-            let res = top;
+            } else {
+              Expression::from_options(op, top.lhs, res.lhs)
+            },
+          );
 
-            top = match stack.pop() {
-              Some(it) => it,
-              None => return Ok(res.lhs.unwrap_or_default()),
-            };
-
-            if !matches!(
-              res.operator,
-              Some(Operator {
-                fixity: Fixity::None,
-                token:  token_pat!(token: Skip),
-              })
-            ) {
-              top.lhs = Some(Expression {
-                op:    Op::Value(res.operator.unwrap().token),
-                left:  top.lhs.map(Box::new),
-                right: res.lhs.map(Box::new),
-              });
-            }
+          if !matches!(
+            operator2.as_ref().map(|x| x.precedence),
+            Ok(Some((Some(_), _)))
+          ) {
+            operator2 = operator2.map(|x| x.convert());
           }
         },
       };
     };
-    token_stream.next();
 
     stack.push(top);
     top = Frame {
@@ -590,99 +369,192 @@ impl Parseable for Expression {
   }
 }
 
+#[macro_export]
+macro_rules! get_number {
+  ($token_stream: ident, $msg:literal) => {
+    $token_stream
+      .next()
+      .and_then(|x| {
+        if let token_pat!(token: Number, src) = x {
+          Some(src.parse::<u8>().unwrap())
+        } else {
+          None
+        }
+      })
+      .ok_or(parse_error!($msg))?
+  };
+}
+
 impl Operator {
-  pub fn new(token: TokenExt, prefix: bool) -> Option<Self> {
-    let op = Operator {
-      token,
-      fixity: if prefix {
+  fn parse(
+    token_stream: &mut TokenStream,
+    context: &mut ParsingContext,
+    prefix: bool,
+  ) -> Result<Self, ParsingError> {
+    let precedence = Some(match token_stream.peek() {
+      match_token!(Infix) => {
+        token_stream.next();
+        (
+          Some(get_number!(
+            token_stream,
+            "Expected two numbers after infix keyword"
+          )),
+          Some(get_number!(
+            token_stream,
+            "Expected two numbers after infix keyword"
+          )),
+        )
+      },
+      match_token!(Prefix) => {
+        token_stream.next();
+
+        (
+          None,
+          Some(get_number!(
+            token_stream,
+            "Expected number after prefix keyword"
+          )),
+        )
+      },
+      match_token!(Postfix) => {
+        token_stream.next();
+        (
+          Some(get_number!(
+            token_stream,
+            "Expected number after postfix keyword"
+          )),
+          None,
+        )
+      },
+      _ => (None, None),
+    });
+
+    if prefix && matches!(precedence, Some((Some(_), Some(_)))) {
+      Err(parse_error!("Can't use infix operator in prefix position"))
+    } else if prefix && matches!(precedence, Some((Some(_), None))) {
+      Err(parse_error!(
+        "Can't use postfix operator in prefix position"
+      ))
+    } else if !prefix && matches!(precedence, Some((None, Some(_)))) {
+      Err(parse_error!(
+        "Can't use prefix operator in non prefix position"
+      ))
+    } else {
+      let op = match token_stream.next() {
+        match_token!(For) => parse_for(token_stream, context)?,
+        match_token!(If) => parse_if(token_stream, context)?,
+        match_token!(LParenthesis) => parse_parens(token_stream, context)?,
+        match_token!(LBracket) => parse_block(token_stream, context)?,
+        Some(token) => {
+          token_stream.backtrack(1);
+          return Ok(Operator::new(token, prefix));
+        },
+        None => return Err(parse_error!("Unexpected end of expression")),
+      };
+
+      Ok(Operator { op, precedence })
+    }
+  }
+
+  fn ensure_exists(self) -> Option<Self> {
+    Some(
+      if self.precedence == None {
+        return None;
+      } else {
+        self
+      },
+    )
+  }
+
+  fn convert(self) -> Self {
+    match self {
+      Self {
+        op: Expression::Value(token),
+        ..
+      } => Self::new(token, false),
+      x => x,
+    }
+  }
+
+  pub fn new(token: TokenExt, prefix: bool) -> Self {
+    let precedence = Self::get_precedence(
+      &token,
+      if prefix {
         Fixity::Prefix
       } else {
         Fixity::Infix
       },
-    };
+    )
+    .or_else(|| {
+      Self::get_precedence(
+        &token,
+        if prefix {
+          Fixity::None
+        } else {
+          Fixity::Postfix
+        },
+      )
+    });
 
-    if op.exists() {
-      return Some(op);
+    Self {
+      precedence,
+      op: Expression::Value(token),
     }
-
-    let op = Operator {
-      fixity: if prefix {
-        Fixity::None
-      } else {
-        Fixity::Postfix
-      },
-      ..op
-    };
-
-    if op.exists() {
-      return Some(op);
-    }
-
-    None
   }
 
-  fn exists(&self) -> bool { self.bp().is_some() }
-
-  fn bp(&self) -> Option<(u8, u8)> {
-    Some(match self {
-      Operator {
-        token: token_pat!(token: Identifier | String | Placeholder | Char | Number | Boolean),
-        fixity: Fixity::None,
-      } => (99, 100),
-      Operator {
-        token: token_pat!(token, src),
-        fixity: Fixity::Prefix,
-      } => {
-        (99, match token {
-          Token::Add | Token::Sub => 9,
-          Token::Inc | Token::Dec => 11,
-          Token::Mult => 13,
-          Token::Identifier if src == "not" => 29,
-          Token::Async => 36,
-          Token::Await => 33,
-          Token::Inline => 36,
-
-          Token::Identifier if src == "print" => 0,
-          Token::Identifier if src == "let" => 98,
-          _ => return None,
-        })
-      },
-      Operator {
-        token: token_pat!(token, src),
-        fixity: Fixity::Postfix,
-      } => {
+  fn get_precedence(token: &TokenExt, fixity: Fixity) -> Option<(Option<u8>, Option<u8>)> {
+    Some(match (&token, &fixity) {
+      (
+        token_pat!(token: Identifier | String | Placeholder | Char | Number | Boolean),
+        Fixity::None,
+      ) => (None, None),
+      (token_pat!(token, src), Fixity::Prefix) => {
         (
-          match token {
-            Token::Bang => 15,
+          None,
+          Some(match token {
+            Token::Add | Token::Sub => 9,
+            Token::Inc | Token::Dec => 11,
+            Token::Mult => 13,
+            Token::Identifier if src == "not" => 29,
+            Token::Async => 36,
+            Token::Await => 33,
+            Token::Inline => 36,
+            Token::Identifier if src == "print" => 0,
+            Token::Identifier if src == "let" => 98,
             _ => return None,
-          },
-          100,
+          }),
         )
       },
-      Operator {
-        token: token_pat!(token, src),
-        fixity: Fixity::Infix,
-      } => {
+      (token_pat!(token, src), Fixity::Postfix) => {
+        (
+          Some(match token {
+            Token::Bang => 15,
+            _ => return None,
+          }),
+          None,
+        )
+      },
+      (token_pat!(token, src), Fixity::Infix) => {
         match token {
-          Token::LBrace => (26, 27),
-          Token::Period => (24, 23),
-          Token::Equal => (97, 1),
-          Token::Mod => (28, 29),
-          Token::Add | Token::Sub => (5, 6),
-          Token::Mult | Token::Div => (7, 8),
-          Token::EqualEqual => (20, 19),
-          Token::LAngleBracket => (20, 19),
-          Token::RAngleBracket => (20, 19),
-          Token::LessEqual => (20, 19),
-          Token::GreaterEqual => (20, 19),
-          Token::Arrow => (37, 0),
-          Token::Apply => (34, 35),
-          Token::Is => (32, 33),
-          Token::Hash => (97, 97),
+          Token::LBrace => (Some(26), Some(27)),
+          Token::Period => (Some(24), Some(23)),
+          Token::Equal => (Some(97), Some(1)),
+          Token::Mod => (Some(28), Some(29)),
+          Token::Add | Token::Sub => (Some(5), Some(6)),
+          Token::Mult | Token::Div => (Some(7), Some(8)),
+          Token::EqualEqual => (Some(20), Some(19)),
+          Token::LAngleBracket => (Some(20), Some(19)),
+          Token::RAngleBracket => (Some(20), Some(19)),
+          Token::LessEqual => (Some(20), Some(19)),
+          Token::GreaterEqual => (Some(20), Some(19)),
+          Token::Arrow => (Some(37), Some(0)),
+          Token::Apply => (Some(34), Some(35)),
+          Token::Is => (Some(32), Some(33)),
+          Token::Hash => (Some(97), Some(97)),
 
-          Token::Identifier if src == "mod" => (22, 21),
-          Token::Identifier if src == "and" => (24, 23),
-          Token::Identifier if src == "or" => (25, 26),
+          Token::Identifier if src == "mod" => (Some(22), Some(21)),
+          Token::Identifier if src == "and" => (Some(24), Some(23)),
+          Token::Identifier if src == "or" => (Some(25), Some(26)),
           _ => return None,
         }
       },
@@ -693,14 +565,24 @@ impl Operator {
 
 impl PartialOrd for Operator {
   fn partial_cmp(&self, other: &Operator) -> Option<Ordering> {
-    let (_, r_bp1) = self.bp()?;
-    let (l_bp2, _) = other.bp()?;
-
-    Some(match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
-      (false, false) => Ordering::Equal,
-      (true, false) => Ordering::Less,
-      (false, true) => Ordering::Greater,
-      _ => return None,
+    // aka r_bp1 < l_bp2
+    Some(match (self.precedence, other.precedence) {
+      (Some((_, r_bp1)), Some((l_bp2, _))) => {
+        match (r_bp1, l_bp2) {
+          (None, None) => Ordering::Greater,
+          (Some(_), None) => Ordering::Less,
+          (None, Some(_)) => Ordering::Less,
+          (Some(r_bp1), Some(l_bp2)) => {
+            match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
+              (false, false) => Ordering::Equal,
+              (true, false) => Ordering::Less,
+              (false, true) => Ordering::Greater,
+              _ => return None,
+            }
+          },
+        }
+      },
+      (x, y) => x.partial_cmp(&y)?,
     })
   }
 }
