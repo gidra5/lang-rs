@@ -340,10 +340,8 @@ fn expr_consumes_just_enough() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
-    declarations: map![],
-  })
-  .map_err(|err| format!("{}", err.0))?;
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
+    .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 1);
 
@@ -360,10 +358,8 @@ fn expr_consumes_just_enough_2() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
-    declarations: map![],
-  })
-  .map_err(|err| format!("{}", err.0))?;
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
+    .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 3);
 
@@ -380,10 +376,8 @@ fn expr_consumes_just_enough_3() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
-    declarations: map![],
-  })
-  .map_err(|err| format!("{}", err.0))?;
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
+    .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 2);
 
@@ -400,10 +394,8 @@ fn expr_consumes_just_enough_4() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
-    declarations: map![],
-  })
-  .map_err(|err| format!("{}", err.0))?;
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
+    .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 2);
 
@@ -420,10 +412,8 @@ fn expr_consumes_just_enough_5() -> Result<(), String> {
   let ASTNodeExt {
     node: expr_res,
     span,
-  } = Expression::parse_ext(&mut stream, &mut ParsingContext {
-    declarations: map![],
-  })
-  .map_err(|err| format!("{}", err.0))?;
+  } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
+    .map_err(|err| format!("{}", err.0))?;
 
   assert_eq!(span.length, 4);
 
@@ -696,4 +686,60 @@ fn expr_2_ifs() {
       ),),
     ]),
   );
+}
+
+#[test]
+fn expr_fixity_1() {
+  let s = expr("prefix a b").unwrap();
+  assert_eq!(s, Expression::Prefix {
+    op:    Box::new(expr("a").unwrap()),
+    right: Box::new(expr("b").unwrap()),
+  },);
+}
+
+#[test]
+fn expr_fixity_2() {
+  let s = expr("b postfix a").unwrap();
+  assert_eq!(s, Expression::Postfix {
+    op:   Box::new(expr("a").unwrap()),
+    left: Box::new(expr("b").unwrap()),
+  },);
+}
+
+#[test]
+fn expr_fixity_3() {
+  let s = expr("b infix a c").unwrap();
+  assert_eq!(s, Expression::Infix {
+    op:    Box::new(expr("a").unwrap()),
+    left:  Box::new(expr("b").unwrap()),
+    right: Box::new(expr("c").unwrap()),
+  },);
+}
+
+#[test]
+fn expr_fixity_4() {
+  let s = expr("b infix ((x, y) => x + y) c").unwrap();
+  assert_eq!(s, Expression::Infix {
+    op:    Box::new(expr("a").unwrap()),
+    left:  Box::new(expr("((x, y) => x + y)").unwrap()),
+    right: Box::new(expr("c").unwrap()),
+  },);
+}
+
+#[test]
+fn expr_fixity_5() {
+  let s = expr("prefix (x => x + 1) b").unwrap();
+  assert_eq!(s, Expression::Prefix {
+    op:    Box::new(expr("(x => x + 1)").unwrap()),
+    right: Box::new(expr("b").unwrap()),
+  },);
+}
+
+#[test]
+fn expr_fixity_6() {
+  let s = expr("b postfix (x => x + 1)").unwrap();
+  assert_eq!(s, Expression::Postfix {
+    op:   Box::new(expr("(x => x + 1)").unwrap()),
+    left: Box::new(expr("b").unwrap()),
+  },);
 }

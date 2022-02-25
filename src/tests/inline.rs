@@ -7,7 +7,8 @@ use crate::{
 fn inline_1() {
   let mut logger = Logger { logs: vec![] };
   assert_eq!(
-    inline_expr!(&mut logger, &mut crate::ast::ParsingContext { declarations: map![] }, "x", x: expr("1").unwrap()).map_err(|x| format!("{}", x)),
+    inline_expr!(&mut logger, &mut crate::ast::ParsingContext::new(), "x", x: expr("1").unwrap())
+      .map_err(|x| format!("{}", x)),
     expr("1")
   )
 }
@@ -16,7 +17,7 @@ fn inline_1() {
 fn inline_2() {
   let mut logger = Logger { logs: vec![] };
   assert_eq!(
-    inline_expr!(&mut logger, &mut crate::ast::ParsingContext { declarations: map![] }, "y + x", x: expr("1").unwrap()).map_err(|x| format!("{}", x)),
+    inline_expr!(&mut logger, &mut crate::ast::ParsingContext::new(), "y + x", x: expr("1").unwrap()).map_err(|x| format!("{}", x)),
     expr("y + 1")
   )
 }
@@ -25,7 +26,7 @@ fn inline_2() {
 fn inline_3() {
   let mut logger = Logger { logs: vec![] };
   assert_eq!(
-    inline_expr!(&mut logger, &mut crate::ast::ParsingContext { declarations: map![] }, "y + x", x: expr("1").unwrap(), y: expr("2").unwrap()).map_err(|x| format!("{}", x)),
+    inline_expr!(&mut logger, &mut crate::ast::ParsingContext::new(), "y + x", x: expr("1").unwrap(), y: expr("2").unwrap()).map_err(|x| format!("{}", x)),
     expr("2 + 1")
   )
 }
@@ -34,7 +35,7 @@ fn inline_3() {
 fn inline_4() {
   let mut logger = Logger { logs: vec![] };
   assert_eq!(
-    inline_expr!(&mut logger, &mut crate::ast::ParsingContext { declarations: map![] }, "(x => x + 1) x", x: expr("1").unwrap()).map_err(|x| format!("{}", x)),
+    inline_expr!(&mut logger, &mut crate::ast::ParsingContext::new(), "(x => x + 1) x", x: expr("1").unwrap()).map_err(|x| format!("{}", x)),
     expr("(x => x + 1) 1")
   )
 }
@@ -43,7 +44,7 @@ fn inline_4() {
 fn inline_5() {
   let mut logger = Logger { logs: vec![] };
   assert_eq!(
-    inline_expr!(&mut logger, &mut crate::ast::ParsingContext { declarations: map![] }, "y x", x: expr("1").unwrap(), y: expr("(x => x + 1)").unwrap()).map_err(|x| format!("{}", x)),
+    inline_expr!(&mut logger, &mut crate::ast::ParsingContext::new(), "y x", x: expr("1").unwrap(), y: expr("(x => x + 1)").unwrap()).map_err(|x| format!("{}", x)),
     expr("(x => x + 1) 1")
   )
 }

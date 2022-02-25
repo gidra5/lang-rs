@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::{common::*, enviroment::*, token::*, *};
+use crate::{common::*, enviroment::*, token::*, types::Namespace, *};
 use std::{
   cell::RefCell,
   cmp::Ordering,
@@ -45,28 +45,14 @@ macro_rules! parse_error {
   };
 }
 
-pub enum Type {
-  String,
-  Number,
-  Char,
-  Boolean,
-  Void,
-  Tuple(Vec<(String, Type)>),
-}
-
-pub enum Declaration {
-  Variable(Type),
-  Namespace(HashMap<String, Declaration>),
-}
-
 pub struct ParsingContext {
-  declarations: HashMap<String, Declaration>,
+  namespace: Namespace,
 }
 
 impl ParsingContext {
   pub fn new() -> ParsingContext {
     ParsingContext {
-      declarations: map![],
+      namespace: Namespace(map![]),
     }
   }
 }

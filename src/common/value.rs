@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
-use crate::{ast::Expression, enviroment::Enviroment};
-use std::{cell::RefCell, fmt::Display, rc::Rc};
+use crate::{ast::Expression, enviroment::Enviroment, types::Type};
+use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
 
 #[derive(Clone, Debug, PartialEq)]
@@ -10,14 +10,6 @@ pub struct RecordItem {
   pub value: Value,
 }
 
-// #[derive(Clone, Debug, PartialEq)]
-// pub enum Record {
-//   Tuple(Vec<Value>),
-//   Record(Vec<RecordItem>),
-//   /* Record(HashMap<String, Value>),
-//    * Map(HashMap<Value, Value>), */
-// }
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   String(String),
@@ -25,9 +17,16 @@ pub enum Value {
   Boolean(bool),
   Char(char),
   Record(Vec<RecordItem>),
+  // Tuple(Vec<Value>),
+  // Record(HashMap<String, Value>),
+  // Map(HashMap<Value, Value>),
   Function(Box<Expression>, Box<Enviroment>, Box<Expression>),
-  Unit,
+  Type(Box<Type>),
   None,
+}
+
+impl std::hash::Hash for Value {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) { core::mem::discriminant(self).hash(state); }
 }
 
 impl Default for Value {
@@ -71,9 +70,12 @@ impl Display for Value {
           write!(f, "()")
         }
       },
+      Type(t) => write!(f, "type {:?}", t),
       Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
       Unit => write!(f, "()"),
       None => write!(f, "None"),
     }
   }
 }
+
+impl Eq for Value {}

@@ -35,10 +35,12 @@ pub enum Fixity {
   None,
 }
 
+pub type Precedence = Option<(Option<u8>, Option<u8>)>;
+
 #[derive(PartialEq, Default, Debug, Clone)]
 pub struct Operator {
   op:         Expression,
-  precedence: Option<(Option<u8>, Option<u8>)>,
+  precedence: Precedence,
 }
 
 
@@ -371,7 +373,7 @@ impl Parseable for Expression {
 
 #[macro_export]
 macro_rules! get_number {
-  ($token_stream: ident, $msg:literal) => {
+  ($token_stream: ident, $def:literal) => {
     $token_stream
       .next()
       .and_then(|x| {
@@ -381,7 +383,7 @@ macro_rules! get_number {
           None
         }
       })
-      .ok_or(parse_error!($msg))?
+      .unwrap_or($def)
   };
 }
 
@@ -395,36 +397,18 @@ impl Operator {
       match_token!(Infix) => {
         token_stream.next();
         (
-          Some(get_number!(
-            token_stream,
-            "Expected two numbers after infix keyword"
-          )),
-          Some(get_number!(
-            token_stream,
-            "Expected two numbers after infix keyword"
-          )),
+          Some(get_number!(token_stream, 127)),
+          Some(get_number!(token_stream, 127)),
         )
       },
       match_token!(Prefix) => {
         token_stream.next();
 
-        (
-          None,
-          Some(get_number!(
-            token_stream,
-            "Expected number after prefix keyword"
-          )),
-        )
+        (None, Some(get_number!(token_stream, 127)))
       },
       match_token!(Postfix) => {
         token_stream.next();
-        (
-          Some(get_number!(
-            token_stream,
-            "Expected number after postfix keyword"
-          )),
-          None,
-        )
+        (Some(get_number!(token_stream, 127)), None)
       },
       _ => (None, None),
     });
@@ -502,7 +486,7 @@ impl Operator {
     }
   }
 
-  fn get_precedence(token: &TokenExt, fixity: Fixity) -> Option<(Option<u8>, Option<u8>)> {
+  fn get_precedence(token: &TokenExt, fixity: Fixity) -> Precedence {
     Some(match (&token, &fixity) {
       (
         token_pat!(token: Identifier | String | Placeholder | Char | Number | Boolean),

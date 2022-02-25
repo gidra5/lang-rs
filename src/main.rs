@@ -11,6 +11,7 @@ extern crate rustyline;
 extern crate clap;
 
 mod ast;
+mod types;
 mod common;
 mod enviroment;
 mod interactive_mode;
