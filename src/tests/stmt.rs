@@ -41,13 +41,25 @@ fn stmt_5() {
 #[test]
 fn stmt_6() {
   let s = stmt("let x").unwrap();
-  assert_eq!(s, Statement::Let("x".to_string(), None));
+  assert_eq!(
+    s,
+    Statement::Expression(Expression::Prefix {
+      op:    Box::new(expr("let").unwrap()),
+      right: Box::new(expr("x").unwrap()),
+    })
+  );
 }
 
 #[test]
 fn stmt_7() {
   let s = stmt("let x;").unwrap();
-  assert_eq!(s, Statement::Let("x".to_string(), None));
+  assert_eq!(
+    s,
+    Statement::Expression(Expression::Prefix {
+      op:    Box::new(expr("let").unwrap()),
+      right: Box::new(expr("x").unwrap()),
+    })
+  );
 }
 
 #[test]
@@ -71,13 +83,27 @@ fn stmt_9() {
 #[test]
 fn stmt_10() {
   let s = stmt("let x = 2").unwrap();
-  assert_eq!(s, Statement::Let("x".to_string(), Some(expr("2").unwrap())));
+  assert_eq!(
+    s,
+    Statement::Expression(Expression::Infix {
+      left:  Box::new(expr("let x").unwrap()),
+      op:    Box::new(expr("=").unwrap()),
+      right: Box::new(expr("2").unwrap()),
+    })
+  );
 }
 
 #[test]
 fn stmt_11() {
   let s = stmt("let x = 2;").unwrap();
-  assert_eq!(s, Statement::Let("x".to_string(), Some(expr("2").unwrap())));
+  assert_eq!(
+    s,
+    Statement::Expression(Expression::Infix {
+      left:  Box::new(expr("let x").unwrap()),
+      op:    Box::new(expr("=").unwrap()),
+      right: Box::new(expr("2").unwrap()),
+    })
+  );
 }
 
 #[test]
@@ -105,6 +131,10 @@ fn stmt_let_fn() {
   let s = stmt("let x = () => 1 + 2").unwrap();
   assert_eq!(
     s,
-    Statement::Let("x".to_string(), Some(expr("() => 1 + 2").unwrap()))
+    Statement::Expression(Expression::Infix {
+      left:  Box::new(expr("let x").unwrap()),
+      op:    Box::new(expr("=").unwrap()),
+      right: Box::new(expr("() => 1 + 2").unwrap()),
+    })
   );
 }

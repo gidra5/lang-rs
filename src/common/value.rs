@@ -16,11 +16,12 @@ pub enum Value {
   Number(f64),
   Boolean(bool),
   Char(char),
-  Record(Vec<RecordItem>),
-  // Tuple(Vec<Value>),
-  // Record(HashMap<String, Value>),
-  // Map(HashMap<Value, Value>),
-  Function(Box<Expression>, Box<Enviroment>, Box<Expression>),
+  // Record(Vec<RecordItem>),
+  Tuple(Vec<Value>),
+  Record(HashMap<String, Value>),
+  Map(HashMap<Value, Value>),
+  EnumValue(String, Box<Value>),
+  Function(Expression, Box<Enviroment>, Expression),
   Type(Box<Type>),
   None,
 }
@@ -44,35 +45,36 @@ impl Display for Value {
       Record(record_items) => {
         let mut x = record_items
           .iter()
-          .map(|RecordItem { key, value }| {
-            (
-              key.as_ref().map(|value| format!("[{}]", value)),
-              format!("{}", value),
-            )
-          })
-          .collect::<Vec<_>>();
-        if x.len() > 1 || (x.len() == 1 && x[0].0 != Option::None) {
-          write!(
-            f,
-            "({})",
-            x.iter()
-              .map(|(name, expr)| {
-                match name {
-                  Some(x) => format!("{}: {}", x, expr),
-                  Option::None => format!("{}", expr),
-                }
-              })
-              .join(", ")
-          )
-        } else if x.len() == 1 {
-          write!(f, "{}", x.pop().unwrap().1)
+          .map(|(key, value)| format!("{}: {}", key, value))
+          .join(", ");
+        if x.len() == 1 {
+          write!(f, "{}", x)
         } else {
-          write!(f, "()")
+          write!(f, "({})", x)
         }
       },
+      Tuple(tuple_items) => {
+        let mut x = tuple_items.iter().join(", ");
+        if x.len() == 1 {
+          write!(f, "{}", x)
+        } else {
+          write!(f, "({})", x)
+        }
+      },
+      Map(map_items) => {
+        let mut x = map_items
+          .iter()
+          .map(|(key, value)| format!("[{}]: {}", key, value))
+          .join(", ");
+        if x.len() == 1 {
+          write!(f, "{}", x)
+        } else {
+          write!(f, "({})", x)
+        }
+      },
+      EnumValue(variant_name, value) => write!(f, "{}({})", variant_name, value),
       Type(t) => write!(f, "type {:?}", t),
       Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
-      Unit => write!(f, "()"),
       None => write!(f, "None"),
     }
   }

@@ -5,14 +5,15 @@ use crate::{
   check_token_end,
   common::{reversable_iterator::ReversableIterator, LoggerTrait, Value},
   enviroment::Enviroment,
-  token::TokenStream,
+  skip,
+  token::{TokenExt, TokenStream},
 };
 
-use super::{stmt::Statement, Evaluatable, Expression, Parseable, ParsingContext, ParsingError};
+use super::{Evaluatable, Expression, Parseable, ParsingContext, ParsingError};
 
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Script(pub Vec<Statement>);
+pub struct Script(pub Vec<Expression>);
 
 impl Parseable for Script {
   fn parse(stream: &mut TokenStream, context: &mut ParsingContext) -> Result<Self, ParsingError> {
@@ -28,19 +29,21 @@ impl Parseable for Script {
         }
       }
 
-      match Statement::parse(stream, context) {
-        Ok(Statement::Expression(expr)) if expr == Expression::default() => (),
+      match Expression::parse(stream, context) {
+        Ok(expr) if expr == Expression::default() => (),
         Ok(expr) => exprs.push(expr),
         Err(err) => errors.push(err),
       };
+
+      skip!(stream, Semicolon | NewLine);
     }
   }
 }
 
 impl Evaluatable for Script {
   fn evaluate<L: LoggerTrait>(&self, env: &mut Enviroment, logger: &mut L) -> Value {
-    for stmt in self.0.iter() {
-      stmt.evaluate(env, logger);
+    for expr in self.0.iter() {
+      expr.evaluate(env, logger);
     }
 
     Value::None

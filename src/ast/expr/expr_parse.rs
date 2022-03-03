@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::{
-  ast::{Parseable, ParsingContext, ParsingError, Statement},
+  ast::{Parseable, ParsingContext, ParsingError},
   check_token,
   check_token_end,
   common::{ReversableIterator, Span},
@@ -151,7 +151,7 @@ fn parse_block(
 
     match Expression::parse(token_stream, context) {
       Ok(expr) if expr == Expression::default() => (),
-      Ok(expr) => res.push(Statement::Expression(expr)),
+      Ok(expr) => res.push(expr),
       Err(msg) => return Err(msg),
     };
   }
@@ -393,33 +393,77 @@ impl Operator {
     context: &mut ParsingContext,
     prefix: bool,
   ) -> Result<Self, ParsingError> {
-    let precedence = Some(match token_stream.peek() {
+    let (parent_expr, precedence) = match token_stream.peek() {
       match_token!(Infix) => {
-        token_stream.next();
+        let t = token_stream.next().unwrap();
+        let mut x = token_stream.peek_ext(2);
+        let x2 = x
+          .pop()
+          .unwrap()
+          .ok_or(parse_error!("Unexpected end of expression"))?;
+        let x1 = x
+          .pop()
+          .unwrap()
+          .ok_or(parse_error!("Unexpected end of expression"))?;
+
         (
-          Some(get_number!(token_stream, 127)),
-          Some(get_number!(token_stream, 127)),
+          Some(Expression::Prefix {
+            op:    Box::new(Expression::Value(t)),
+            right: Box::new(Expression::Record(vec![
+              RecordItem {
+                key:   RecordKey::None,
+                value: Expression::Value(x1),
+              },
+              RecordItem {
+                key:   RecordKey::None,
+                value: Expression::Value(x2),
+              },
+            ])),
+          }),
+          (
+            Some(get_number!(token_stream, 127)),
+            Some(get_number!(token_stream, 127)),
+          ),
         )
       },
       match_token!(Prefix) => {
-        token_stream.next();
+        let t = token_stream.next().unwrap();
+        let x = token_stream
+          .peek()
+          .ok_or(parse_error!("Unexpected end of expression"))?;
 
-        (None, Some(get_number!(token_stream, 127)))
+        (
+          Some(Expression::Prefix {
+            op:    Box::new(Expression::Value(t)),
+            right: Box::new(Expression::Value(x)),
+          }),
+          (None, Some(get_number!(token_stream, 127))),
+        )
       },
       match_token!(Postfix) => {
-        token_stream.next();
-        (Some(get_number!(token_stream, 127)), None)
-      },
-      _ => (None, None),
-    });
+        let t = token_stream.next().unwrap();
+        let x = token_stream
+          .peek()
+          .ok_or(parse_error!("Unexpected end of expression"))?;
 
-    if prefix && matches!(precedence, Some((Some(_), Some(_)))) {
+        (
+          Some(Expression::Prefix {
+            op:    Box::new(Expression::Value(t)),
+            right: Box::new(Expression::Value(x)),
+          }),
+          (Some(get_number!(token_stream, 127)), None),
+        )
+      },
+      _ => (None, (None, None)),
+    };
+
+    if prefix && matches!(precedence, ((Some(_), Some(_)))) {
       Err(parse_error!("Can't use infix operator in prefix position"))
-    } else if prefix && matches!(precedence, Some((Some(_), None))) {
+    } else if prefix && matches!(precedence, ((Some(_), None))) {
       Err(parse_error!(
         "Can't use postfix operator in prefix position"
       ))
-    } else if !prefix && matches!(precedence, Some((None, Some(_)))) {
+    } else if !prefix && matches!(precedence, ((None, Some(_)))) {
       Err(parse_error!(
         "Can't use prefix operator in non prefix position"
       ))
@@ -435,6 +479,13 @@ impl Operator {
         },
         None => return Err(parse_error!("Unexpected end of expression")),
       };
+      let op = parent_expr.map_or(op.clone(), |x| {
+        Expression::Prefix {
+          op:    Box::new(x),
+          right: Box::new(op),
+        }
+      });
+      let precedence = Some(precedence);
 
       Ok(Operator { op, precedence })
     }
@@ -504,7 +555,7 @@ impl Operator {
             Token::Await => 33,
             Token::Inline => 36,
             Token::Identifier if src == "print" => 0,
-            Token::Identifier if src == "let" => 98,
+            Token::Identifier if src == "let" => 254,
             _ => return None,
           }),
         )
@@ -522,7 +573,7 @@ impl Operator {
         match token {
           Token::LBrace => (Some(26), Some(27)),
           Token::Period => (Some(24), Some(23)),
-          Token::Equal => (Some(97), Some(1)),
+          Token::Equal => (Some(255), Some(1)),
           Token::Mod => (Some(28), Some(29)),
           Token::Add | Token::Sub => (Some(5), Some(6)),
           Token::Mult | Token::Div => (Some(7), Some(8)),

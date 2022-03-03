@@ -60,7 +60,7 @@ impl InteractiveMode {
 
           match TokenStream::new(CharStream::from_string(line), &mut self.logger) {
             Some(mut tokens) => {
-              match Statement::parse_ext(&mut tokens, &mut self.context) {
+              match Script::parse_ext(&mut tokens, &mut self.context) {
                 Ok(tree) => {
                   tree.node.evaluate(&mut self.env, &mut self.logger);
                 },

@@ -1,5 +1,5 @@
 use crate::{
-  ast::{Expression, Parseable, ParsingContext, Statement},
+  ast::{Expression, Parseable, ParsingContext},
   common::{value::Value, CharStream, Logger},
   map,
   token::TokenStream,
@@ -13,7 +13,5 @@ pub fn str_parse<T: Parseable>(input: &str) -> Result<T, String> {
 
   T::parse(&mut stream, &mut context).map_err(|err| format!("{}", err))
 }
-
-pub fn stmt(input: &str) -> Result<Statement, String> { str_parse::<Statement>(input) }
 
 pub fn expr(input: &str) -> Result<Expression, String> { str_parse::<Expression>(input) }

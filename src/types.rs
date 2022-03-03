@@ -180,9 +180,13 @@ impl std::hash::Hash for Type {
 }
 
 impl Type {
-  fn of_expr(expr: Expression, context: &ParsingContext) -> Type {
+  fn of_expr(expr: &Expression, context: &ParsingContext) -> Type {
     match expr {
-      Expression::Value(token) => todo!(),
+      Expression::Value(token) => {
+        match token {
+          _ => todo!(),
+        }
+      },
       Expression::Record(r) => todo!(),
       Expression::Block(stmts) => todo!(),
       Expression::If(_, box t_b, f_b) => {
@@ -191,21 +195,45 @@ impl Type {
         )
       },
       Expression::For(_, _, box body) => Type::of_expr(body, context),
-      Expression::Prefix { op, right } => todo!(),
-      Expression::Postfix { left, op } => todo!(),
+      Expression::Prefix { op, right } => {
+        if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
+          if Type::of_expr(right, context) < arg {
+            res
+          } else {
+            Type::Void
+          }
+        } else {
+          Type::Void
+        }
+      },
+      Expression::Postfix { left, op } => {
+        if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
+          if Type::of_expr(left, context) < arg {
+            res
+          } else {
+            Type::Void
+          }
+        } else {
+          Type::Void
+        }
+      },
       Expression::Infix { left, op, right } => todo!(),
+      _ => Type::Void,
     }
   }
-  fn of_value(value: Value) -> Type {
+  fn of_value(value: &Value) -> Type {
     match value {
       val @ (Value::String(_)
       | Value::Type(_)
       | Value::Boolean(_)
       | Value::Char(_)
-      | Value::Number(_)) => Type::Value(val),
-      Value::None => Self::Void,
+      | Value::Number(_)) => Type::Value(val.clone()),
+      Value::EnumValue(x, y) => Type::Enum(map![x.clone() => Type::of_value(y)]),
+      Value::Tuple(_) => todo!(),
+      Value::Map(_) => todo!(),
       Value::Record(r) => todo!(),
       Value::Function(arg, _, expr) => todo!(),
+      _ => Type::Void,
     }
   }
 }

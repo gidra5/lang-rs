@@ -12,9 +12,7 @@ use std::{
 pub mod expr;
 pub use expr::*;
 
-pub mod stmt;
 use itertools::Itertools;
-pub use stmt::*;
 
 pub mod program;
 pub use program::*;

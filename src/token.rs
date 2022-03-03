@@ -149,6 +149,7 @@ pub enum Token {
   LessEqual,
   GreaterEqual,
   Arrow,
+  Spread,
 
   Is,
   In,
@@ -159,6 +160,7 @@ pub enum Token {
   Async,
   Await,
   Inline,
+  Type,
 
   // Literals
   Number,
@@ -273,6 +275,7 @@ impl Tokenizable for Token {
           stream.next();
           String
         },
+        '.' if stream.is_next('.') && stream.is_next('.') => Spread,
         '.' => Period,
         c if c.is_ascii_digit() => {
           while stream.check_next(|c| c.is_ascii_digit()) != None {}

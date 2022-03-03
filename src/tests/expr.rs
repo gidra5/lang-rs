@@ -1,10 +1,6 @@
 use crate::{
-  ast::{ASTNodeExt, Expression, Parseable, ParsingContext, Statement},
-  common::{
-    tests::{expr, stmt},
-    CharStream,
-    Logger,
-  },
+  ast::{ASTNodeExt, Expression, Parseable, ParsingContext},
+  common::{tests::expr, CharStream, Logger},
   map,
   token::TokenStream,
 };
@@ -639,7 +635,7 @@ fn expr_if_block_nesting() {
   let s = expr("{ \nif a\n 1\n else if b\n 2\n else\n 3\n }").unwrap();
   assert_eq!(
     s,
-    Expression::Block(vec![Statement::Expression(Expression::If(
+    Expression::Block(vec![Expression::If(
       Box::new(expr("a").unwrap()),
       Box::new(expr("1").unwrap()),
       Some(Box::new(Expression::If(
@@ -647,7 +643,7 @@ fn expr_if_block_nesting() {
         Box::new(expr("2").unwrap()),
         Some(Box::new(expr("3").unwrap()))
       )))
-    ))])
+    )])
   );
 }
 
@@ -656,15 +652,17 @@ fn expr_if_block_nesting_equal() {
   let s = expr("{ \nif a\n x = 1\n else if b\n x = 2\n else\n x = 3\n }").unwrap();
   assert_eq!(
     s,
-    Expression::Block(vec![Statement::Expression(Expression::If(
-      Box::new(expr("a").unwrap()),
-      Box::new(expr("x = 1").unwrap()),
-      Some(Box::new(Expression::If(
-        Box::new(expr("b").unwrap()),
-        Box::new(expr("x = 2").unwrap()),
-        Some(Box::new(expr("x = 3").unwrap()))
-      ),))
-    ),)]),
+    Expression::Block(vec![
+      (Expression::If(
+        Box::new(expr("a").unwrap()),
+        Box::new(expr("x = 1").unwrap()),
+        Some(Box::new(Expression::If(
+          Box::new(expr("b").unwrap()),
+          Box::new(expr("x = 2").unwrap()),
+          Some(Box::new(expr("x = 3").unwrap()))
+        ),))
+      ))
+    ]),
   );
 }
 
@@ -674,16 +672,16 @@ fn expr_2_ifs() {
   assert_eq!(
     s,
     Expression::Block(vec![
-      Statement::Expression(Expression::If(
+      (Expression::If(
         Box::new(expr("x + 2").unwrap()),
         Box::new(expr("print x").unwrap()),
         Some(Box::new(expr("print x").unwrap()))
-      ),),
-      Statement::Expression(Expression::If(
+      )),
+      (Expression::If(
         Box::new(expr("x + 2").unwrap()),
         Box::new(expr("print x").unwrap()),
         Some(Box::new(expr("print x").unwrap()))
-      ),),
+      )),
     ]),
   );
 }

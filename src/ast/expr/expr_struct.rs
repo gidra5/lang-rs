@@ -1,7 +1,9 @@
 use std::{
   cell::RefCell,
   cmp::Ordering,
+  collections::HashMap,
   fmt::{Display, Formatter},
+  hash::Hash,
   rc::Rc,
 };
 
@@ -10,7 +12,6 @@ use either::Either;
 use itertools::Itertools;
 
 use crate::{
-  ast::Statement,
   check_token,
   check_token_end,
   common::{reversable_iterator::ReversableIterator, value, LoggerTrait, Span, Value},
@@ -42,7 +43,7 @@ pub enum Expression {
   Value(TokenExt),
   Record(Vec<RecordItem>),
 
-  Block(Vec<Statement>),
+  Block(Vec<Expression>),
   If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
   For(Box<Expression>, Box<Expression>, Box<Expression>),
 
@@ -59,6 +60,12 @@ pub enum Expression {
     op:    Box<Expression>,
     right: Box<Expression>,
   },
+}
+
+impl Eq for Expression {}
+
+impl Hash for Expression {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) { core::mem::discriminant(self).hash(state); }
 }
 
 impl Default for Expression {

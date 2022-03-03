@@ -4,7 +4,7 @@ use std::collections::HashMap;
 #[path = "../tests/inline.rs"]
 mod tests;
 
-use super::{expr::Expression, expr_struct, RecordKey, Statement};
+use super::{expr::Expression, expr_struct, RecordKey};
 
 pub fn inline(pat: Expression, args: HashMap<String, Expression>) -> Expression {
   match pat {
@@ -27,18 +27,11 @@ pub fn inline(pat: Expression, args: HashMap<String, Expression>) -> Expression 
           .collect(),
       )
     },
-    Expression::Block(statements) => {
+    Expression::Block(exprs) => {
       Expression::Block(
-        statements
+        exprs
           .into_iter()
-          .map(|stmt| {
-            match stmt {
-              Statement::Expression(expr) => Statement::Expression(inline(expr, args.clone())),
-              Statement::Let(pat, expr) => {
-                Statement::Let(pat, expr.map(|expr| inline(expr, args.clone())))
-              },
-            }
-          })
+          .map(|expr| inline(expr, args.clone()))
           .collect(),
       )
     },
@@ -58,20 +51,25 @@ pub fn inline(pat: Expression, args: HashMap<String, Expression>) -> Expression 
     },
     Expression::Prefix { op, right } => {
       Expression::Prefix {
-        op,
+        op:    Box::new(inline(*op, args.clone())),
         right: Box::new(inline(*right, args)),
       }
     },
     Expression::Postfix { left, op } => {
       Expression::Postfix {
-        left: Box::new(inline(*left, args)),
-        op,
+        left: Box::new(inline(*left, args.clone())),
+        op:   Box::new(inline(*op, args)),
       }
     },
+    Expression::Infix {
+      left,
+      op: op @ box Expression::Value(token_pat!(token: Arrow)),
+      right,
+    } => Expression::Infix { left, op, right },
     Expression::Infix { left, op, right } => {
       Expression::Infix {
-        left: Box::new(inline(*left, args.clone())),
-        op,
+        left:  Box::new(inline(*left, args.clone())),
+        op:    Box::new(inline(*op, args.clone())),
         right: Box::new(inline(*right, args)),
       }
     },

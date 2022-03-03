@@ -8,6 +8,7 @@ use crate::{
     Logger,
   },
   enviroment::Enviroment,
+  map,
 };
 
 use super::InteractiveMode;
@@ -40,6 +41,33 @@ macro_rules! assert_log {
     unsafe { assert!($logs.iter().eq(vec![$($line),*].iter())) }
   };
 }
+
+#[test]
+fn interactive_let() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    context,
+    logger: Logger { logs },
+  } = interpret("let x");
+
+  assert_env!(state, { x: Value::None });
+}
+
+#[test]
+fn interactive_let_2() {
+  let InteractiveMode {
+    rl: _,
+    env: state,
+    context,
+    logger: Logger { logs },
+  } = interpret("let x = 2");
+
+  assert_env!(state, {
+    x: Value::Number(2.)
+  });
+}
+
 
 #[test]
 fn interactive_scope_mutation() {
@@ -78,18 +106,7 @@ fn interactive_indexing_tuple() {
   );
 
   assert_env!(state, {
-    x: Value::Record(
-      vec![
-        RecordItem {
-          key:   None,
-          value: Value::Number(1.),
-        },
-        RecordItem {
-          key:   None,
-          value: Value::Number(2.),
-        },
-      ],
-    )
+    x: Value::Tuple(vec![Value::Number(1.), Value::Number(2.)])
   });
 
   unsafe { assert!(logs.iter().eq(vec!["1"].iter())) }
@@ -112,15 +129,9 @@ fn interactive_accessing_record_item() {
 
   assert_env!(state, {
     x: Value::Record(
-      vec![
-        RecordItem {
-          key:   Some(Value::String("a".to_string())),
-          value: Value::Number(1.),
-        },
-        RecordItem {
-          key:   Some(Value::String("b".to_string())),
-          value: Value::Number(2.),
-        },
+      map![
+        "a".to_string() => Value::Number(1.),
+        "b".to_string() => Value::Number(2.)
       ],
     )
   });
@@ -205,7 +216,7 @@ fn interactive_fn_2() {
   ",
   );
 
-  unsafe { assert!(logs.iter().eq(vec!["5", "4", "3", "2", "1", "0"].iter())) }
+  assert_log!(logs, { "5", "4", "3", "2", "1", "0" })
 }
 
 #[test]
@@ -301,7 +312,7 @@ fn interactive_pattern_matching_7() {
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (2, 2)");
 
-  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+  assert_log!(logs, { "false" });
 }
 
 #[test]
@@ -325,7 +336,7 @@ fn interactive_pattern_matching_9() {
     logger: Logger { logs },
   } = interpret("let x = (1, 2); print x is (1, 3)");
 
-  unsafe { assert!(logs.iter().eq(vec!["false"].iter())) }
+  assert_log!(logs, { "false" });
 }
 
 #[test]

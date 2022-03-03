@@ -1,7 +1,12 @@
+use std::{collections::HashMap, slice::SliceIndex};
+
+use itertools::Itertools;
+
 use crate::{
   ast::Evaluatable,
   common::{value, LoggerTrait, Value},
   enviroment::Enviroment,
+  map,
   scoped,
   token::Token,
   token_pat,
@@ -9,10 +14,10 @@ use crate::{
 
 use super::expr_struct::*;
 
-pub fn match_value<L: LoggerTrait>(
-  bind: usize,
+pub fn match_value<L: LoggerTrait, F: FnMut(String, Value, &mut Enviroment)>(
   val: Value,
   pat: Expression,
+  callback: &mut F,
   env: &mut Enviroment,
   logger: &mut L,
 ) -> bool {
@@ -23,55 +28,251 @@ pub fn match_value<L: LoggerTrait>(
       op: box Expression::Value(token_pat!(token: Equal)),
       right,
     } => {
-      let res = match_value(bind, val, *pat.clone(), env, logger);
-
-      if bind == 1 && !res {
-        match_value(bind, (*right).evaluate(env, logger), *pat, env, logger)
-      } else {
-        res
-      }
+      match_value(val, *pat.clone(), callback, env, logger)
+        && match_value((*right).evaluate(env, logger), *pat, callback, env, logger)
     },
     Expression::Value(token_pat!(token: Placeholder)) => true,
     Expression::Value(token_pat!(token: Identifier, src: ident)) => {
-      if bind == 1 {
-        env.define(ident, val);
-      } else if bind == 2 {
-        env.set(ident, val);
-      }
+      callback(ident, val, env);
       true
     },
     Expression::Value(token) => val == token.value(),
 
     Expression::Record(pat_rec) => {
+      let mut iter = pat_rec.iter().peekable();
       match val {
-        Value::Record(val_rec) => {
-          pat_rec.len() == val_rec.len()
-            && pat_rec.into_iter().zip(val_rec).all(
-              |(
-                RecordItem {
-                  key: pat_key,
-                  value: pat,
-                },
-                value::RecordItem {
-                  key: val_key,
-                  value: val,
-                },
-              )| {
-                (match (pat.clone(), pat_key, val_key) {
-                  (_, RecordKey::None, None) => true,
-                  (
-                    Expression::Value(token_pat!(token: Identifier, src: x)),
-                    RecordKey::None,
-                    Some(Value::String(y)),
-                  ) => x == y,
-                  (_, RecordKey::Identifier(x), Some(Value::String(y))) => *x == y,
-                  (_, RecordKey::Value(x), Some(y)) => x.evaluate(env, logger) == y,
-                  _ => false,
-                }) && match_value(bind, val, pat, env, logger)
-              },
-            )
+        Value::Tuple(values) => {
+          let mut val_iter = values.iter().peekable();
+
+          while let Some(RecordItem { key, value }) = iter.next() {
+            if let Expression::Prefix {
+              op: box Expression::Value(token_pat!(token: Spread)),
+              right,
+            } = value
+            {
+              while let Some(RecordItem { key, value }) = iter.next_back() {
+                match (key, val_iter.next_back()) {
+                  (RecordKey::None, Some(val)) => {
+                    if !match_value(val.clone(), value.clone(), callback, env, logger) {
+                      return false;
+                    }
+                  },
+                  _ => return false,
+                };
+              }
+
+              return match_value(
+                Value::Tuple(val_iter.cloned().collect_vec()),
+                *right.clone(),
+                callback,
+                env,
+                logger,
+              );
+            } else {
+              if let (RecordKey::None, Some(val)) = (key, val_iter.next()) {
+                if !match_value(val.clone(), value.clone(), callback, env, logger) {
+                  return false;
+                }
+              } else {
+                return false;
+              };
+            }
+          }
+
+          true
         },
-        Value::Unit => pat_rec.len() == 0,
+        Value::Record(values) => {
+          let mut val_copy = values.clone();
+
+          while let Some(RecordItem { key, value }) = iter.next() {
+            if let Expression::Prefix {
+              op: box Expression::Value(token_pat!(token: Spread)),
+              right,
+            } = value
+            {
+              while let Some(RecordItem { key, value }) = iter.next_back() {
+                match key {
+                  RecordKey::None => {
+                    if let Expression::Value(token_pat!(token: Identifier, src: field)) = value {
+                      if let Some(v) = val_copy.remove(field) {
+                        if !match_value(v, value.clone(), callback, env, logger) {
+                          return false;
+                        }
+                      } else {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  },
+                  RecordKey::Identifier(field) => {
+                    if let Some(v) = val_copy.remove(field) {
+                      if !match_value(v, value.clone(), callback, env, logger) {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  },
+                  RecordKey::Value(expr) => {
+                    let field = expr.evaluate(env, logger);
+                    if let Value::String(ref field) = field {
+                      if let Some(v) = val_copy.remove(field) {
+                        if !match_value(v, value.clone(), callback, env, logger) {
+                          return false;
+                        }
+                      } else {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  },
+                  _ => return false,
+                };
+              }
+
+              return match_value(
+                Value::Record(val_copy),
+                *right.clone(),
+                callback,
+                env,
+                logger,
+              );
+            } else {
+              match key {
+                RecordKey::None => {
+                  if let Expression::Value(token_pat!(token: Identifier, src: field)) = value {
+                    if let Some(v) = val_copy.remove(field) {
+                      if !match_value(v, value.clone(), callback, env, logger) {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                },
+                RecordKey::Identifier(field) => {
+                  if let Some(v) = val_copy.remove(field) {
+                    if !match_value(v, value.clone(), callback, env, logger) {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                },
+                RecordKey::Value(expr) => {
+                  let field = expr.evaluate(env, logger);
+                  if let Value::String(ref field) = field {
+                    if let Some(v) = val_copy.remove(field) {
+                      if !match_value(v, value.clone(), callback, env, logger) {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                },
+                _ => return false,
+              };
+            }
+          }
+
+          true
+        },
+        Value::Map(values) => {
+          let mut val_copy = values.clone();
+
+          while let Some(RecordItem { key, value }) = iter.next() {
+            if let Expression::Prefix {
+              op: box Expression::Value(token_pat!(token: Spread)),
+              right,
+            } = value
+            {
+              while let Some(RecordItem { key, value }) = iter.next_back() {
+                match key {
+                  RecordKey::None => {
+                    if let Expression::Value(token_pat!(token: Identifier, src: field)) = value {
+                      if let Some(v) = val_copy.remove(&Value::String(field.clone())) {
+                        if !match_value(v, value.clone(), callback, env, logger) {
+                          return false;
+                        }
+                      } else {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  },
+                  RecordKey::Identifier(field) => {
+                    if let Some(v) = val_copy.remove(&Value::String(field.clone())) {
+                      if !match_value(v, value.clone(), callback, env, logger) {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  },
+                  RecordKey::Value(expr) => {
+                    let field = expr.evaluate(env, logger);
+                    if let Some(v) = val_copy.remove(&field) {
+                      if !match_value(v, value.clone(), callback, env, logger) {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  },
+                  _ => return false,
+                };
+              }
+
+              return match_value(Value::Map(val_copy), *right.clone(), callback, env, logger);
+            } else {
+              match key {
+                RecordKey::None => {
+                  if let Expression::Value(token_pat!(token: Identifier, src: field)) = value {
+                    if let Some(v) = val_copy.remove(&Value::String(field.clone())) {
+                      if !match_value(v, value.clone(), callback, env, logger) {
+                        return false;
+                      }
+                    } else {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                },
+                RecordKey::Identifier(field) => {
+                  if let Some(v) = val_copy.remove(&Value::String(field.clone())) {
+                    if !match_value(v, value.clone(), callback, env, logger) {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                },
+                RecordKey::Value(expr) => {
+                  let field = expr.evaluate(env, logger);
+                  if let Some(v) = val_copy.remove(&field) {
+                    if !match_value(v, value.clone(), callback, env, logger) {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                },
+                _ => return false,
+              };
+            }
+          }
+
+          true
+        },
         _ => false,
       }
     },
@@ -92,28 +293,38 @@ impl Evaluatable for Expression {
     match self {
       Expression::For(for_pat, iter, body) => {
         let mut iterator = iter.evaluate(env, logger);
-        let mut accumulator = Value::Unit;
+        let mut accumulator = Value::None;
 
         return loop {
           if let Value::Function(ref fn_pat, ref mut fn_env, ref expr) = iterator {
             let next = scoped!(fn_env, {
-              match_value(1, accumulator, (*fn_pat.clone()), fn_env, logger);
+              match_value(
+                accumulator,
+                fn_pat.clone(),
+                &mut |ident, val, fn_env| fn_env.define(ident, val),
+                fn_env,
+                logger,
+              );
 
               expr.evaluate(fn_env, logger)
             });
 
-            let val = if let Value::Record(vec) = next {
-              let value::RecordItem { value: val, .. } = &vec[0];
-              let value::RecordItem { value: iter, .. } = &vec[1];
-              iterator = iter.clone();
-              val.clone()
+            let val = if let Value::Tuple(vec) = next {
+              iterator = vec[1].clone();
+              vec[0].clone()
             } else {
               iterator = Value::None;
               next
             };
 
             accumulator = scoped!(env, {
-              match_value(1, val.clone(), (*for_pat.clone()), env, logger);
+              match_value(
+                val.clone(),
+                (*for_pat.clone()),
+                &mut |ident, val, env| env.define(ident, val),
+                env,
+                logger,
+              );
 
               body.evaluate(env, logger)
             })
@@ -121,65 +332,6 @@ impl Evaluatable for Expression {
             break accumulator;
           }
         };
-
-        // return loop {
-        //   let mut stmts = body.iter().cloned().peekable();
-
-        //   if let Value::Function(pat, ref mut fn_env, expr) = iterator {
-        //     let next = scoped!(fn_env, {
-        //       match_value(1, accumulator, (*pat), fn_env, logger);
-
-        //       expr.evaluate(fn_env, logger)
-        //     });
-
-        //     if let Value::Record(vec) = next {
-        //       let RecordItem { value: val, .. } = &vec[0];
-        //       let RecordItem { value: iter, .. } = &vec[1];
-
-        //       scoped!(env, {
-        //         env.define(var.clone(), val.clone());
-
-        //         iterator = iter.clone();
-
-        //         accumulator = loop {
-        //           if let Some(stmt) = stmts.next() {
-        //             if let Some(_) = stmts.peek() {
-        //               stmt.evaluate(env, logger);
-        //             } else {
-        //               break stmt.evaluate(env, logger);
-        //             }
-        //           }
-        //         }
-        //       })
-        //     } else {
-        //       env.define(var.clone(), next);
-        //       break scoped!(env, {
-        //         loop {
-        //           if let Some(stmt) = stmts.next() {
-        //             if let Some(_) = stmts.peek() {
-        //               stmt.evaluate(env, logger);
-        //             } else {
-        //               break stmt.evaluate(env, logger);
-        //             }
-        //           }
-        //         }
-        //       });
-        //     }
-        //   } else {
-        //     env.define(var.clone(), iterator);
-        //     break scoped!(env, {
-        //       loop {
-        //         if let Some(stmt) = stmts.next() {
-        //           if let Some(_) = stmts.peek() {
-        //             stmt.evaluate(env, logger);
-        //           } else {
-        //             break stmt.evaluate(env, logger);
-        //           }
-        //         }
-        //       }
-        //     });
-        //   }
-        // };
       },
       Expression::If(condition, true_branch, false_branch) => {
         if let Value::Boolean(true) = (*condition).evaluate(env, logger) {
@@ -212,21 +364,51 @@ impl Evaluatable for Expression {
         }
       },
       Expression::Prefix {
-        op: box Expression::Value(token_pat!(token: Identifier, src)),
-        right,
-      } if src == "parse" => {
-        logger.write(format!("{}", right));
-        (*right).evaluate(env, logger)
-      },
-      Expression::Prefix {
         op: box left,
         right,
       } => {
         match left {
+          Expression::Value(token_pat!(token: Identifier, src)) if src == "parse" => {
+            logger.write(format!("{}", right));
+            (*right).evaluate(env, logger)
+          },
           Expression::Value(token_pat!(token: Identifier, src)) if src == "print" => {
             let value = (*right).evaluate(env, logger);
             logger.write(format!("{}", value));
             value
+          },
+          Expression::Value(token_pat!(token: Identifier, src)) if src == "let" => {
+            if let box Expression::Infix {
+              left: pat,
+              op: box Expression::Value(token_pat!(token: Equal)),
+              right,
+            } = right.clone()
+            {
+              let right = (*right).evaluate(env, logger);
+
+              match_value(
+                right.clone(),
+                *pat.clone(),
+                &mut |ident, val, env| {
+                  env.define(ident, val);
+                },
+                env,
+                logger,
+              );
+
+              right
+            } else {
+              match_value(
+                Value::None,
+                *right.clone(),
+                &mut |ident, val, env| {
+                  env.define(ident, val);
+                },
+                env,
+                logger,
+              );
+              Value::None
+            }
           },
           left @ Expression::Value(token_pat!(token: @token Sub | Bang | Dec | Inc)) => {
             match (token, (*right).evaluate(env, logger)) {
@@ -244,7 +426,13 @@ impl Evaluatable for Expression {
               scoped!(fn_env, {
                 fn_env.define("self".to_string(), left);
 
-                match_value(1, (*right).evaluate(env, logger), (*pat), fn_env, logger);
+                match_value(
+                  (*right).evaluate(env, logger),
+                  pat,
+                  &mut |ident, val, fn_env| fn_env.define(ident, val),
+                  fn_env,
+                  logger,
+                );
 
                 expr.evaluate(fn_env, logger)
               })
@@ -258,7 +446,7 @@ impl Evaluatable for Expression {
         left,
         op: box Expression::Value(token_pat!(token: Arrow)),
         right,
-      } => Value::Function(left.clone(), Box::new(env.clone()), right.clone()),
+      } => Value::Function(*left.clone(), Box::new(env.clone()), *right.clone()),
       Expression::Infix {
         left,
         op: box Expression::Value(token_pat!(token: Is)),
@@ -266,7 +454,13 @@ impl Evaluatable for Expression {
       } => {
         let left = (*left).evaluate(env, logger);
 
-        Value::Boolean(match_value(0, left, (*right.clone()), env, logger))
+        Value::Boolean(match_value(
+          left,
+          (*right.clone()),
+          &mut |_, _, _| (),
+          env,
+          logger,
+        ))
       },
       Expression::Infix {
         left,
@@ -279,7 +473,13 @@ impl Evaluatable for Expression {
           scoped!(fn_env, {
             fn_env.define("self".to_string(), left);
 
-            match_value(1, (*right).evaluate(env, logger), (*pat), fn_env, logger);
+            match_value(
+              (*right).evaluate(env, logger),
+              pat,
+              &mut |ident, val, fn_env| fn_env.define(ident, val),
+              fn_env,
+              logger,
+            );
 
             expr.evaluate(fn_env, logger)
           })
@@ -293,26 +493,26 @@ impl Evaluatable for Expression {
         right,
       } => {
         let right = (*right).evaluate(env, logger);
-        match_value(2, right.clone(), *pat.clone(), env, logger);
+
+        match_value(
+          right.clone(),
+          *pat.clone(),
+          &mut |ident, val, env| {
+            env.set(ident, val);
+          },
+          env,
+          logger,
+        );
+
         right
       },
       Expression::Infix {
         left,
         op: box Expression::Value(token_pat!(token: Period)),
-        right: box Expression::Value(token_pat!(token: Identifier, src)),
+        right: box Expression::Value(token_pat!(token: Identifier | Number, src)),
       } => {
         match (*left).evaluate(env, logger) {
-          Value::Record(left) => {
-            left
-              .iter()
-              .find_map(|value::RecordItem { key, value }| {
-                match key {
-                  Some(Value::String(name)) if name.clone() == src.clone() => Some(value.clone()),
-                  _ => None,
-                }
-              })
-              .unwrap_or_default()
-          },
+          Value::Record(left) => left.get(src).cloned().unwrap_or_default(),
           _ => Value::None,
         }
       },
@@ -348,21 +548,24 @@ impl Evaluatable for Expression {
           (Value::Number(left), Token::RAngleBracket, Value::Number(right)) => {
             Value::Boolean(left > right)
           },
-          (Value::Record(left), Token::LBrace, Value::Number(right))
-            if right == (right as usize) as f64 && left[0].key == None =>
+          (Value::Tuple(left), Token::LBrace, Value::Number(right))
+            if right == (right as usize) as f64 =>
           {
-            left[right as usize].value.clone()
+            left.get(right as usize).cloned().unwrap_or_default()
           },
-          (Value::Record(left), Token::LBrace, right) => {
+          (Value::Record(left), Token::LBrace, Value::Number(right))
+            if right == (right as usize) as f64 =>
+          {
             left
-              .iter()
-              .find_map(|value::RecordItem { key, value }| {
-                match key {
-                  Some(key) if key.clone() == right => Some(value.clone()),
-                  _ => None,
-                }
-              })
+              .get(&format!("{}", right as usize))
+              .cloned()
               .unwrap_or_default()
+          },
+          (Value::Record(left), Token::LBrace, Value::String(ref right)) => {
+            left.get(right).cloned().unwrap_or_default()
+          },
+          (Value::Map(left), Token::LBrace, ref right) => {
+            left.get(right).cloned().unwrap_or_default()
           },
           (left, Token::Identifier, right) => {
             match (left, src.as_str(), right) {
@@ -393,26 +596,120 @@ impl Evaluatable for Expression {
         })
       },
       Expression::Record(op) => {
-        let mut x = op
-          .into_iter()
-          .map(|RecordItem { key, value }| {
-            value::RecordItem {
-              key:   match key {
-                RecordKey::Identifier(name) => Some(Value::String(name.clone())),
-                RecordKey::Value(expr) => Some(expr.evaluate(env, logger)),
-                RecordKey::None => None,
-              },
-              value: value.evaluate(env, logger),
+        let mut tuple_values = vec![];
+        let mut iter = op.iter().peekable();
+
+        loop {
+          if let Some(RecordItem { key, value }) = iter.peek() {
+            if let Expression::Prefix {
+              op: box Expression::Value(token_pat!(token: Spread)),
+              right,
+            } = value
+            {
+              if let Value::Tuple(mut values) = right.evaluate(env, logger) {
+                tuple_values.append(&mut values);
+              } else {
+                break;
+              }
+            } else {
+              let tuple_val = value.evaluate(env, logger);
+              match key {
+                RecordKey::None => tuple_values.push(tuple_val),
+                _ => break,
+              };
             }
-          })
-          .collect::<Vec<_>>();
-        if x.len() > 1 || (x.len() == 1 && x[0].key != None) {
-          Value::Record(x)
-        } else if x.len() == 1 {
-          x.pop().unwrap().value
-        } else {
-          Value::Unit
+            iter.next();
+          } else {
+            return Value::Tuple(tuple_values);
+          }
         }
+
+        let mut record_values = tuple_values
+          .into_iter()
+          .enumerate()
+          .map(|(i, x)| (format!("{}", i), x))
+          .collect::<HashMap<String, Value>>();
+
+        loop {
+          if let Some(RecordItem { key, value }) = iter.peek() {
+            if let Expression::Prefix {
+              op: box Expression::Value(token_pat!(token: Spread)),
+              right,
+            } = value
+            {
+              let spread_val = right.evaluate(env, logger);
+              if let Value::Tuple(values) = spread_val {
+                for x in values {
+                  record_values.insert(format!("{}", record_values.len()), x);
+                }
+              } else if let Value::Record(mut values) = spread_val {
+                for (x, y) in values {
+                  record_values.insert(x, y);
+                }
+              } else {
+                break;
+              }
+            } else {
+              let record_val = value.evaluate(env, logger);
+              match key {
+                RecordKey::None => {
+                  record_values.insert(format!("{}", record_values.len()), record_val)
+                },
+                RecordKey::Identifier(id) => record_values.insert(id.clone(), record_val),
+                _ => break,
+              };
+            }
+            iter.next();
+          } else {
+            return Value::Record(record_values);
+          }
+        }
+
+        let mut map_values = record_values
+          .into_iter()
+          .map(|(i, x)| (Value::String(i), x))
+          .collect::<HashMap<Value, Value>>();
+
+        loop {
+          if let Some(RecordItem { key, value }) = iter.next() {
+            if let Expression::Prefix {
+              op: box Expression::Value(token_pat!(token: Spread)),
+              right,
+            } = value
+            {
+              let spread_val = right.evaluate(env, logger);
+
+              if let Value::Tuple(values) = spread_val {
+                for x in values {
+                  map_values.insert(Value::String(format!("{}", map_values.len())), x);
+                }
+              } else if let Value::Record(mut values) = spread_val {
+                for (x, y) in values {
+                  map_values.insert(Value::String(x), y);
+                }
+              } else if let Value::Map(mut values) = spread_val {
+                for (x, y) in values {
+                  map_values.insert(x, y);
+                }
+              } else {
+                break;
+              }
+            } else {
+              let map_val = value.evaluate(env, logger);
+              match key {
+                RecordKey::None => {
+                  map_values.insert(Value::String(format!("{}", map_values.len())), map_val)
+                },
+                RecordKey::Identifier(id) => map_values.insert(Value::String(id.clone()), map_val),
+                RecordKey::Value(expr) => map_values.insert(expr.evaluate(env, logger), map_val),
+              };
+            }
+          } else {
+            return Value::Map(map_values);
+          }
+        }
+
+        Value::None
       },
       _ => Value::None,
     }
