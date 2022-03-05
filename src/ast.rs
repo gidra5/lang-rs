@@ -9,10 +9,13 @@ use std::{
   rc::Rc,
 };
 
+use itertools::Itertools;
+
 pub mod expr;
 pub use expr::*;
 
-use itertools::Itertools;
+mod pattern;
+pub use expr::*;
 
 pub mod program;
 pub use program::*;
@@ -44,11 +47,16 @@ macro_rules! parse_error {
 }
 
 pub struct ParsingContext {
-  namespace: Namespace,
+  pub namespace: Namespace,
 }
 
 impl ParsingContext {
   pub fn new() -> ParsingContext {
+    ParsingContext {
+      namespace: Namespace(map![]),
+    }
+  }
+  pub fn from_env(env: &Enviroment) -> ParsingContext {
     ParsingContext {
       namespace: Namespace(map![]),
     }

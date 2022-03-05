@@ -3,26 +3,22 @@ use itertools::Itertools;
 use crate::{ast::Expression, enviroment::Enviroment, types::Type};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct RecordItem {
-  pub key:   Option<Value>,
-  pub value: Value,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
   String(String),
   Number(f64),
   Boolean(bool),
   Char(char),
-  // Record(Vec<RecordItem>),
+  Type(Box<Type>),
+
+  Ref(Rc<RefCell<Value>>),
+
   Tuple(Vec<Value>),
   Record(HashMap<String, Value>),
   Map(HashMap<Value, Value>),
+
   EnumValue(String, Box<Value>),
   Function(Expression, Box<Enviroment>, Expression),
-  Type(Box<Type>),
   None,
 }
 
@@ -75,6 +71,7 @@ impl Display for Value {
       EnumValue(variant_name, value) => write!(f, "{}({})", variant_name, value),
       Type(t) => write!(f, "type {:?}", t),
       Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
+      Ref(val_ref) => write!(f, "{}", val_ref.borrow()),
       None => write!(f, "None"),
     }
   }

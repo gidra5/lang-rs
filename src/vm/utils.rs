@@ -42,6 +42,38 @@ macro_rules! write_stack_top {
 }
 
 #[macro_export]
+macro_rules! pop_stack {
+  ($thread:ident) => {{
+    write_reg!($thread, STACK_PTR_REGISTER) = read_reg!($thread, STACK_PTR_REGISTER) - 1;
+    read_stack_top!($thread)
+  }};
+}
+
+#[macro_export]
+macro_rules! push_stack {
+  ($thread:ident, $val: expr) => {
+    write_stack_top!($thread) = $val;
+    write_reg!($thread, STACK_PTR_REGISTER) = read_reg!($thread, STACK_PTR_REGISTER) + 1
+  };
+}
+
+#[macro_export]
+macro_rules! pop_stack_frame {
+  ($thread:ident) => {{
+    write_reg!($thread, STACK_PTR_REGISTER) = read_stack!($thread, STACK_BASE_PTR_REGISTER);
+    write_reg!($thread, STACK_BASE_PTR_REGISTER) = pop_stack!($thread);
+  }};
+}
+
+#[macro_export]
+macro_rules! push_stack_frame {
+  ($thread:ident) => {
+    push_stack!(read_reg!($thread, STACK_BASE_PTR_REGISTER))
+    write_reg!($thread, STACK_BASE_PTR_REGISTER) = read_reg!($thread, STACK_PTR_REGISTER);
+  };
+}
+
+#[macro_export]
 macro_rules! read_mem {
   ($vm:ident, $reg:expr) => {
     *$vm.memory.get_unchecked($reg as usize)

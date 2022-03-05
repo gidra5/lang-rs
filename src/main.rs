@@ -1,4 +1,9 @@
-#![allow(clippy::inconsistent_struct_constructor, dead_code)] //TODO: should remove dead_code when ready
+#![allow(
+  clippy::inconsistent_struct_constructor,
+  dead_code,
+  unused_macros,
+  unused_parens
+)] //TODO: should remove dead_code when ready
 #![feature(box_patterns)]
 #![feature(derive_default_enum)]
 extern crate automata;
@@ -11,11 +16,11 @@ extern crate rustyline;
 extern crate clap;
 
 mod ast;
-mod types;
 mod common;
 mod enviroment;
 mod interactive_mode;
 mod token;
+mod types;
 mod vm;
 
 use crate::common::*;

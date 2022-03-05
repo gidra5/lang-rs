@@ -1,4 +1,4 @@
-use crate::common::*;
+use crate::{common::*, map};
 use std::{cell::RefCell, collections::HashMap, iter::once, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -7,24 +7,26 @@ pub struct Enviroment {
   stack:     Vec<Rc<RefCell<HashMap<String, Value>>>>,
 }
 
-// pub struct Enviroment {
-//   variables: HashMap<String, Value>,
-//   enclosing: Option<Rc<RefCell<Enviroment>>>,
-// }
+pub enum CloseBy {
+  Copy,
+  Ref,
+  Move,
+}
 
 impl Enviroment {
-  pub fn new() -> Enviroment {
+  pub fn new() -> Enviroment { Enviroment::new_with_variables(map![]) }
+
+  pub fn new_with_variables(variables: HashMap<String, Value>) -> Enviroment {
     Enviroment {
-      variables: Rc::new(RefCell::new(HashMap::new())),
+      variables: Rc::new(RefCell::new(variables)),
       stack:     vec![],
     }
   }
 
   pub fn push_stack(&mut self) {
-    self.stack.insert(
-      0,
-      Rc::new(RefCell::new(self.variables.replace(HashMap::new()))),
-    );
+    self
+      .stack
+      .insert(0, Rc::new(RefCell::new(self.variables.replace(map![]))));
   }
 
   pub fn pop_stack(&mut self) { self.variables = self.stack.remove(0); }
@@ -63,6 +65,24 @@ impl Enviroment {
     self.variables.borrow_mut().insert(ident, val);
   }
 
+  pub fn delete(&mut self, ident: &String) -> Option<Value> {
+    let iter = once(&self.variables).chain(self.stack.iter());
+    for variables in iter {
+      if let Some(value) = variables.borrow_mut().remove(ident) {
+        return Some(value);
+      }
+    }
+    None
+  }
+
+  pub fn delete_from(&mut self, index: usize, ident: &String) -> Option<Value> {
+    if index != 0 {
+      self.stack[index - 1].borrow_mut().remove(ident)
+    } else {
+      self.variables.borrow_mut().remove(ident)
+    }
+  }
+
   pub fn set(&mut self, ident: String, val: Value) -> Result<(), String> {
     let iter = once(&mut self.variables).chain(self.stack.iter_mut());
     for variables in iter {
@@ -73,6 +93,43 @@ impl Enviroment {
     }
 
     Err(format!("Variable {} is not declared in this scope", ident))
+  }
+
+  pub fn close_over_env(&mut self, vars: Vec<(CloseBy, String)>) -> Enviroment {
+    let mut variables = map![];
+
+    for (close_by, name) in vars {
+      match close_by {
+        CloseBy::Copy => {
+          match self.get(&name) {
+            Some(val) => {
+              variables.insert(name, val);
+            },
+            _ => (),
+          }
+        },
+        CloseBy::Ref => {
+          match self.delete(&name) {
+            Some(val) => {
+              let val_ref = Rc::new(RefCell::new(val));
+              variables.insert(name.clone(), Value::Ref(val_ref.clone()));
+              self.define(name, Value::Ref(val_ref));
+            },
+            _ => (),
+          }
+        },
+        CloseBy::Move => {
+          match self.delete(&name) {
+            Some(val) => {
+              variables.insert(name, val);
+            },
+            _ => (),
+          }
+        },
+      }
+    }
+
+    Enviroment::new_with_variables(variables)
   }
 }
 
