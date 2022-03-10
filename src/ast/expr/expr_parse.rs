@@ -11,6 +11,7 @@ use crate::{
   skip,
   token::{Token, TokenExt, TokenStream},
   token_pat,
+  types::Declaration,
 };
 
 use super::expr_struct::{Expression, RecordItem, RecordKey};
@@ -35,12 +36,12 @@ pub enum Fixity {
   None,
 }
 
-pub type Precedence = Option<(Option<u8>, Option<u8>)>;
+pub type Precedence = (Option<u8>, Option<u8>);
 
 #[derive(PartialEq, Default, Debug, Clone)]
 pub struct Operator {
   op:         Expression,
-  precedence: Precedence,
+  precedence: Option<Precedence>,
 }
 
 
@@ -90,7 +91,7 @@ fn parse_if(
   }
 
   let true_block = Expression::parse(token_stream, context)
-    .map_err(|err| parse_error!("Can't parse true branch: {}", err))?;
+    .map_err(|err| parse_error!("Can't parse true branch: {err}"))?;
 
   if true_block == Expression::default() {
     return Err(parse_error!("Empty true branch in if expression"));
@@ -102,7 +103,7 @@ fn parse_if(
     skip!(token_stream, NewLine);
 
     let false_block = Expression::parse(token_stream, context)
-      .map_err(|err| parse_error!("Can't parse false branch: {}", err))?;
+      .map_err(|err| parse_error!("Can't parse false branch: {err}"))?;
 
     if false_block == Expression::default() {
       return Err(parse_error!("Empty false branch in if expression"));
@@ -281,6 +282,7 @@ fn parse_expr(
             src:   "apply".to_string(),
             span:  Span::default(),
           },
+          context,
           false,
         ));
 
@@ -351,7 +353,7 @@ fn parse_expr(
             operator2.as_ref().map(|x| x.precedence),
             Ok(Some((Some(_), _)))
           ) {
-            operator2 = operator2.map(|x| x.convert());
+            operator2 = operator2.map(|x| x.convert(context));
           }
         },
       };
@@ -393,7 +395,7 @@ impl Operator {
     context: &mut ParsingContext,
     prefix: bool,
   ) -> Result<Self, ParsingError> {
-    let (parent_expr, precedence) = match token_stream.peek() {
+    let (prefix_expr, precedence) = match token_stream.peek() {
       match_token!(Infix) => {
         let t = token_stream.next().unwrap();
         let mut x = token_stream.peek_ext(2);
@@ -475,11 +477,12 @@ impl Operator {
         match_token!(LBracket) => parse_block(token_stream, context)?,
         Some(token) => {
           token_stream.backtrack(1);
-          return Ok(Operator::new(token, prefix));
+          let op = Operator::new(token, context, prefix);
+          return Ok(op);
         },
         None => return Err(parse_error!("Unexpected end of expression")),
       };
-      let op = parent_expr.map_or(op.clone(), |x| {
+      let op = prefix_expr.map_or(op.clone(), |x| {
         Expression::Prefix {
           op:    Box::new(x),
           right: Box::new(op),
@@ -501,19 +504,20 @@ impl Operator {
     )
   }
 
-  fn convert(self) -> Self {
+  fn convert(self, context: &mut ParsingContext) -> Self {
     match self {
       Self {
         op: Expression::Value(token),
         ..
-      } => Self::new(token, false),
+      } => Self::new(token, context, false),
       x => x,
     }
   }
 
-  pub fn new(token: TokenExt, prefix: bool) -> Self {
+  pub fn new(token: TokenExt, context: &mut ParsingContext, prefix: bool) -> Self {
     let precedence = Self::get_precedence(
       &token,
+      context,
       if prefix {
         Fixity::Prefix
       } else {
@@ -523,6 +527,7 @@ impl Operator {
     .or_else(|| {
       Self::get_precedence(
         &token,
+        context,
         if prefix {
           Fixity::None
         } else {
@@ -537,12 +542,23 @@ impl Operator {
     }
   }
 
-  fn get_precedence(token: &TokenExt, fixity: Fixity) -> Precedence {
+  fn get_precedence(
+    token: &TokenExt,
+    context: &mut ParsingContext,
+    fixity: Fixity,
+  ) -> Option<Precedence> {
     Some(match (&token, &fixity) {
-      (
-        token_pat!(token: Identifier | String | Placeholder | Char | Number | Boolean),
-        Fixity::None,
-      ) => (None, None),
+      (token_pat!(token: Identifier, src), Fixity::None) => {
+        context.namespace.get(src).and_then(|decl| {
+          match decl {
+            Declaration::Variable(t, p) => Some(p),
+            _ => None,
+          }
+        })?
+      },
+      (token_pat!(token: String | Placeholder | Char | Number | Boolean), Fixity::None) => {
+        (None, None)
+      },
       (token_pat!(token, src), Fixity::Prefix) => {
         (
           None,

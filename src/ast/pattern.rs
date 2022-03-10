@@ -25,10 +25,15 @@ pub enum Pattern {
     name:      String,
     mutable:   bool,
     reference: bool,
+    _type:     Option<Type>,
     condition: Option<Expression>,
+    default:   Option<Expression>,
   },
   Value(Value),
-  Ref(Box<Pattern>),
+  Ref {
+    pattern:     Box<Pattern>,
+    mutable_ref: bool,
+  },
   EnumValue(String, Box<Pattern>),
   Record(Vec<RecordPatternItem>),
 }
@@ -40,6 +45,7 @@ impl Parseable for Pattern {
 }
 
 impl Pattern {
+  pub fn from_expr(expr: Expression) -> Pattern { todo!() }
   pub fn is_matching(&self, val: Value, env: &mut Enviroment) -> bool { todo!() }
   pub fn bind(&self, val: Value, env: &mut Enviroment) { todo!() }
   pub fn context_bind(&self, context: &mut ParsingContext, bound_expr: &Expression) { todo!() }

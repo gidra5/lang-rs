@@ -110,3 +110,143 @@ impl Display for ParsingError {
     }
   }
 }
+
+
+mod new {
+  use either::Either;
+  use std::ops::Range;
+
+  type Span = Range<usize>;
+
+  trait Parseable: Sized {
+    type I;
+    type E = Vec<(String, Span)>;
+    fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)>;
+  }
+
+  trait Synchronizable<I> {
+    fn sync(input: I) -> I;
+  }
+
+  trait SyncParse: Parseable + Synchronizable<Self::I> {
+    fn parse_sync(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
+      Ok(match Self::parse(input) {
+        Ok((i, o)) => (i, o),
+        Err((i, e)) => return Err((Self::sync(i), e)),
+      })
+    }
+  }
+
+  impl<T: Parseable + Synchronizable<T::I>> SyncParse for T {}
+
+  impl<T> Parseable for Option<T>
+  where
+    T: Parseable,
+  {
+    type I = T::I;
+    type E = T::E;
+    fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
+      Ok(match T::parse(input) {
+        Ok((i, o)) => (i, Some(o)),
+        Err((i, e)) => (i, None),
+      })
+    }
+  }
+
+  impl<T> Synchronizable<T::I> for Option<T>
+  where
+    T: Parseable,
+  {
+    fn sync(input: T::I) -> T::I {
+      match T::parse(input) {
+        Ok((i, o)) => i,
+        Err((i, e)) => i,
+      }
+    }
+  }
+
+  impl<T> Parseable for Vec<T>
+  where
+    T: Parseable,
+  {
+    type I = T::I;
+    type E = T::E;
+    fn parse(mut input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
+      let mut res = vec![];
+      loop {
+        match T::parse(input) {
+          Ok((i, o)) => {
+            res.push(o);
+            input = i
+          },
+          Err((i, _)) => break Ok((i, res)),
+        }
+      }
+    }
+  }
+
+  impl<T> Synchronizable<T::I> for Vec<T>
+  where
+    T: Parseable,
+  {
+    fn sync(mut input: T::I) -> T::I {
+      loop {
+        match T::parse(input) {
+          Ok((i, _)) => input = i,
+          Err((i, _)) => break i,
+        }
+      }
+    }
+  }
+
+  impl<T, U> Parseable for (T, U)
+  where
+    T: Parseable,
+    U: Parseable<I = T::I>,
+  {
+    type I = T::I;
+    type E = Either<T::E, U::E>;
+    fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
+      match T::parse(input) {
+        Err((i, e)) => Err((i, Either::Left(e))),
+        Ok((i, o1)) => {
+          match U::parse(i) {
+            Err((i, e)) => Err((i, Either::Right(e))),
+            Ok((i, o2)) => Ok((i, (o1, o2))),
+          }
+        },
+      }
+    }
+  }
+
+  impl<T, U, I> Synchronizable<I> for (T, U)
+  where
+    T: Synchronizable<I>,
+    U: Synchronizable<I>,
+  {
+    fn sync(input: I) -> I {
+      let input = T::sync(input);
+      U::sync(input)
+    }
+  }
+
+  impl<T, U> Parseable for Either<T, U>
+  where
+    T: Parseable,
+    U: Parseable<I = T::I>,
+  {
+    type I = T::I;
+    type E = (T::E, U::E);
+    fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
+      match T::parse(input) {
+        Ok((i, o)) => Ok((i, Self::Left(o))),
+        Err((i, e1)) => {
+          match U::parse(i) {
+            Ok((i, o)) => Ok((i, Self::Right(o))),
+            Err((i, e2)) => Err((i, (e1, e2))),
+          }
+        },
+      }
+    }
+  }
+}

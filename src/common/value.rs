@@ -12,6 +12,7 @@ pub enum Value {
   Type(Box<Type>),
 
   Ref(Rc<RefCell<Value>>),
+  RefMut(Rc<RefCell<Value>>),
 
   Tuple(Vec<Value>),
   Record(HashMap<String, Value>),
@@ -71,7 +72,7 @@ impl Display for Value {
       EnumValue(variant_name, value) => write!(f, "{}({})", variant_name, value),
       Type(t) => write!(f, "type {:?}", t),
       Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
-      Ref(val_ref) => write!(f, "{}", val_ref.borrow()),
+      Ref(val_ref) | RefMut(val_ref) => write!(f, "{}", val_ref.borrow()),
       None => write!(f, "None"),
     }
   }

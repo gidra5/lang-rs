@@ -279,15 +279,12 @@ impl Type {
           token_pat!(token: Identifier, src) if src == "char" => Type::Char,
           token_pat!(token: Identifier, src) if src == "boolean" => Type::Boolean,
           token_pat!(token: Identifier, src) => {
-            context
-              .namespace
-              .get(src.clone())
-              .map_or(Type::Void, |decl| {
-                match decl {
-                  Declaration::Variable(t, _) => t,
-                  _ => Type::Void,
-                }
-              })
+            context.namespace.get(src).map_or(Type::Void, |decl| {
+              match decl {
+                Declaration::Variable(t, _) => t,
+                _ => Type::Void,
+              }
+            })
           },
           _ => todo!(),
         }
@@ -413,23 +410,23 @@ pub enum Declaration {
 }
 
 impl Namespace {
-  fn declare(&mut self, name: String, decl_type: Type) {
-    self.declare_with_precedence(name, decl_type, None);
+  pub fn declare(&mut self, name: String, decl_type: Type) {
+    self.declare_with_precedence(name, decl_type, (None, None));
   }
 
-  fn declare_with_precedence(&mut self, name: String, decl_type: Type, precedence: Precedence) {
+  pub fn declare_with_precedence(&mut self, name: String, decl_type: Type, precedence: Precedence) {
     self
       .0
       .insert(name, Declaration::Variable(decl_type, precedence));
   }
 
-  fn declare_namespace(&mut self, name: String, namespace: Rc<Namespace>) {
+  pub fn declare_namespace(&mut self, name: String, namespace: Rc<Namespace>) {
     self.0.insert(name, Declaration::Namespace(namespace));
   }
 
-  fn get(&self, name: String) -> Option<Declaration> { self.0.get(&name).cloned() }
+  pub fn get(&self, name: &String) -> Option<Declaration> { self.0.get(name).cloned() }
 
-  fn get_by_path(&self, path: Vec<String>) -> Option<Declaration> {
+  pub fn get_by_path(&self, path: Vec<String>) -> Option<Declaration> {
     let mut path_iter = path.into_iter();
     let mut item = None;
 
@@ -439,7 +436,7 @@ impl Namespace {
     }
 
     let name = name.unwrap();
-    item = self.get(name);
+    item = self.get(&name);
     let mut namespace = if let Some(Declaration::Namespace(ref n)) = item {
       Rc::clone(n)
     } else if let Some(Declaration::ImportedNamespace(ref item)) = item {
@@ -463,7 +460,7 @@ impl Namespace {
       }
 
       let name = name.unwrap();
-      item = namespace.get(name);
+      item = namespace.get(&name);
 
       if let Some(Declaration::Namespace(ref n)) = item {
         namespace = Rc::clone(n)

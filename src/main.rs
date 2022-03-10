@@ -6,7 +6,7 @@
 )] //TODO: should remove dead_code when ready
 #![feature(box_patterns)]
 #![feature(derive_default_enum)]
-extern crate automata;
+#![feature(associated_type_defaults)]
 extern crate either;
 extern crate fancy_regex;
 extern crate itertools;
