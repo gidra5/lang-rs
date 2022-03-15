@@ -119,3 +119,17 @@ Possible solution is to restrict equivalences only to those which are strictly d
 Declarations are parsed breadth first - before parsing any expressions we must declare everything we may need
 In script file we may separate declarations and statements as following: 
 entities in file are expected to be declaration until we fail to parse declaration, then afterwards everything is expected to be statement.
+
+When declaring a nominal type, one could also assign it additional behaviours like methods or operator implementations. 
+Its accoumplished with combination of other nominal types representing interface 
+and a generic function to implement it that accepts an definition (implementor) and the other nominal type (implementee). 
+Kinda analogous to impl..for.. blocks in rust.
+For an type to require particular interface it just intersects (& operator on types) whatever it wants with that interface.
+
+The language must be able to syntactically support any of design patterns (you know, those from gof and other guys) 
+with a way to customize feature's behaviour according to design patterns.
+Mostly it means that there is an interface (nominal type in language's std library) for that feature, a language's default implementation for it, 
+and possibility to redefine it with user's own implementation by implementing respective interface. 
+
+type invariants can be added as an enum variant with given invariant in a form of composition with void type (so that it doesn't actually alter initial type becatuse variant can't be instantiated) and whenever needed 
+it can be modified by some generic function by generating the same type variant but with mapped invariant. Probably requires compile time evaluation of constant expressions.
