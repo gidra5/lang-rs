@@ -28,48 +28,50 @@ macro_rules! write_stack {
 
 #[macro_export]
 macro_rules! read_stack_top {
-  ($thread:ident) => {{
-    use crate::{read_stack, read_reg};
-    read_stack!($thread, read_reg!($thread, STACK_PTR_REGISTER))
-  }};
+  ($thread:ident) => {
+    crate::read_stack!($thread, crate::read_reg!($thread, STACK_PTR_REGISTER))
+  };
 }
 
 #[macro_export]
 macro_rules! write_stack_top {
   ($thread:ident) => {
-    write_stack!($thread, read_reg!($thread, STACK_PTR_REGISTER))
+    crate::write_stack!($thread, crate::read_reg!($thread, STACK_PTR_REGISTER))
   };
 }
 
 #[macro_export]
 macro_rules! pop_stack {
   ($thread:ident) => {{
-    write_reg!($thread, STACK_PTR_REGISTER) = read_reg!($thread, STACK_PTR_REGISTER) - 1;
-    read_stack_top!($thread)
+    crate::write_reg!($thread, STACK_PTR_REGISTER) =
+      crate::read_reg!($thread, STACK_PTR_REGISTER) - 1;
+    crate::read_stack_top!($thread)
   }};
 }
 
 #[macro_export]
 macro_rules! push_stack {
   ($thread:ident, $val: expr) => {
-    write_stack_top!($thread) = $val;
-    write_reg!($thread, STACK_PTR_REGISTER) = read_reg!($thread, STACK_PTR_REGISTER) + 1
+    crate::write_stack_top!($thread) = $val;
+    crate::write_reg!($thread, STACK_PTR_REGISTER) =
+      crate::read_reg!($thread, STACK_PTR_REGISTER) + 1
   };
 }
 
 #[macro_export]
 macro_rules! pop_stack_frame {
   ($thread:ident) => {{
-    write_reg!($thread, STACK_PTR_REGISTER) = read_stack!($thread, STACK_BASE_PTR_REGISTER);
-    write_reg!($thread, STACK_BASE_PTR_REGISTER) = pop_stack!($thread);
+    crate::write_reg!($thread, STACK_PTR_REGISTER) =
+      crate::read_stack!($thread, STACK_BASE_PTR_REGISTER);
+    crate::write_reg!($thread, STACK_BASE_PTR_REGISTER) = crate::pop_stack!($thread);
   }};
 }
 
 #[macro_export]
 macro_rules! push_stack_frame {
   ($thread:ident) => {
-    push_stack!(read_reg!($thread, STACK_BASE_PTR_REGISTER))
-    write_reg!($thread, STACK_BASE_PTR_REGISTER) = read_reg!($thread, STACK_PTR_REGISTER);
+    crate::push_stack!(crate::read_reg!($thread, STACK_BASE_PTR_REGISTER))
+    crate::write_reg!($thread, STACK_BASE_PTR_REGISTER) = crate::read_reg!($thread, STACK_PTR_REGISTER);
   };
 }
 
@@ -105,21 +107,27 @@ macro_rules! read_const {
 macro_rules! read_next_cmd {
   ($program:ident, $thread:ident) => {{
     use crate::{read_cmd, read_reg};
-    read_cmd!($program, read_reg!($thread, IP_REGISTER))
+    crate::read_cmd!($program, crate::read_reg!($thread, IP_REGISTER))
   }};
 }
 
 #[macro_export]
 macro_rules! unpack_reg {
   ($packed:expr) => {
-    [(($packed >> 4) << 4) as usize, (($packed << 4) >> 4) as usize]
+    [
+      (($packed >> 4) << 4) as usize,
+      (($packed << 4) >> 4) as usize,
+    ]
   };
 }
 
 #[macro_export]
 macro_rules! unpack_reg_val {
   ($thread:ident, $packed:expr) => {
-    [read_reg!($thread, (($packed >> 4) << 4) as usize), read_reg!($thread, (($packed << 4) >> 4) as usize)]
+    [
+      crate::read_reg!($thread, (($packed >> 4) << 4) as usize),
+      crate::read_reg!($thread, (($packed << 4) >> 4) as usize),
+    ]
   };
 }
 
@@ -127,7 +135,7 @@ macro_rules! unpack_reg_val {
 macro_rules! unpack_cmd {
   ($cmd:ident { $($cmd_t:ident $([$reg1:ident $(, $reg2:ident)?])? => $body:tt),* $(,)? }) => {
     match $cmd {
-      $(Command::$cmd_t $(($reg1))? => unpack_cmd!($( $([$reg1, $reg2] =>)?)? $body)),*
+      $(Command::$cmd_t $(($reg1))? => crate::unpack_cmd!($( $([$reg1, $reg2] =>)?)? $body)),*
     }
   };
   ($body:tt) => {
@@ -139,7 +147,7 @@ macro_rules! unpack_cmd {
   ([$reg1:ident, $reg2:ident] => $body:tt) => {
     {
       use crate::unpack_reg;
-      let [$reg1, $reg2] = unpack_reg!($reg1);
+      let [$reg1, $reg2] = crate::unpack_reg!($reg1);
       $body
     }
   };

@@ -1,6 +1,6 @@
 use crate::{common::value::Value, enviroment::Enviroment, token::TokenStream, types::Type};
 
-use super::{Expression, Parseable, ParsingContext, ParsingError};
+use super::{Expression, Parseable, ParsingContext, ParsingError, Precedence};
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum RecordPatternKey {
@@ -22,18 +22,17 @@ pub enum Pattern {
     // probably could replace name with "reversable" expression, such that we can derive
     // expression for all identifiers in it by applying inverse transformation to initial matched
     // expression
-    name:      String,
-    mutable:   bool,
-    reference: bool,
-    _type:     Option<Type>,
-    condition: Option<Expression>,
-    default:   Option<Expression>,
+    name:       String,
+    mutable:    bool,
+    reference:  bool,
+    implicit:   bool,
+    precedence: Precedence,
+    _type:      Option<Type>,
+    condition:  Option<Expression>,
+    default:    Option<Expression>,
   },
   Value(Value),
-  Ref {
-    pattern:     Box<Pattern>,
-    mutable_ref: bool,
-  },
+  Ref(Box<Pattern>),
   EnumValue(String, Box<Pattern>),
   Record(Vec<RecordPatternItem>),
 }

@@ -35,8 +35,9 @@ impl InteractiveMode {
     match TokenStream::new(code, &mut self.logger) {
       Some(mut tokens) => {
         match Script::parse_ext(&mut tokens, &mut self.context) {
-          Ok(tree) => {
-            tree.node.evaluate(&mut self.env, &mut self.logger);
+          Ok(tree) => match tree.node.evaluate(&mut self.env, &mut self.logger) {
+            Ok(_) => (),
+            Err(RuntimeError::Generic(msg)) => self.logger.error(&format!("Runtime error: {msg}")),
           },
           Err(msg) => self.logger.error_parse(msg),
         };
@@ -61,8 +62,11 @@ impl InteractiveMode {
           match TokenStream::new(CharStream::from_string(line), &mut self.logger) {
             Some(mut tokens) => {
               match Script::parse_ext(&mut tokens, &mut self.context) {
-                Ok(tree) => {
-                  tree.node.evaluate(&mut self.env, &mut self.logger);
+                Ok(tree) => match tree.node.evaluate(&mut self.env, &mut self.logger) {
+                  Ok(_) => (),
+                  Err(RuntimeError::Generic(msg)) => {
+                    self.logger.error(&format!("Runtime error: {msg}"))
+                  },
                 },
                 Err(msg) => self.logger.error_parse(msg),
               };

@@ -20,11 +20,9 @@ pub trait LoggerTrait {
   fn error_parse(&mut self, (error, span): (ParsingError, Span<TokenStream>)) {
     match error {
       ParsingError::Generic(msg) => Self::error(self, format!("{}\n\n{}", span, msg).as_str()),
-      ParsingError::Aggregate(errs) => {
-        errs
-          .into_iter()
-          .for_each(|x| self.error_parse((x, span.clone())))
-      },
+      ParsingError::Aggregate(errs) => errs
+        .into_iter()
+        .for_each(|x| self.error_parse((x, span.clone()))),
     }
   }
 }
@@ -60,11 +58,9 @@ impl Span<CharStream> {
     self
       .src()
       .iter()
-      .map(|x| {
-        match x {
-          Some(y) => y.to_string(),
-          None => "".to_string(),
-        }
+      .map(|x| match x {
+        Some(y) => y.to_string(),
+        None => "".to_string(),
       })
       .collect()
   }

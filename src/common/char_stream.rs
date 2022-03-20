@@ -17,13 +17,11 @@ pub struct CharStream {
 impl CharStream {
   pub fn new(filename: &str) -> Result<CharStream, &str> {
     std::fs::read(filename)
-      .map(|file| {
-        CharStream {
-          stream: ReversableStream::<char>::from(
-            String::from_utf8(file).expect("Failed to parse as utf8 text"),
-          ),
-          file:   filename.to_string(),
-        }
+      .map(|file| CharStream {
+        stream: ReversableStream::<char>::from(
+          String::from_utf8(file).expect("Failed to parse as utf8 text"),
+        ),
+        file:   filename.to_string(),
       })
       .map_err(|err| {
         use std::io::ErrorKind::*;

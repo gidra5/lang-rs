@@ -100,31 +100,25 @@ impl Enviroment {
 
     for (close_by, name) in vars {
       match close_by {
-        CloseBy::Copy => {
-          match self.get(&name) {
-            Some(val) => {
-              variables.insert(name, val);
-            },
-            _ => (),
-          }
+        CloseBy::Copy => match self.get(&name) {
+          Some(val) => {
+            variables.insert(name, val);
+          },
+          _ => (),
         },
-        CloseBy::Ref => {
-          match self.delete(&name) {
-            Some(val) => {
-              let val_ref = Rc::new(RefCell::new(val));
-              variables.insert(name.clone(), Value::Ref(val_ref.clone()));
-              self.define(name, Value::Ref(val_ref));
-            },
-            _ => (),
-          }
+        CloseBy::Ref => match self.delete(&name) {
+          Some(val) => {
+            let val_ref = Rc::new(RefCell::new(val));
+            variables.insert(name.clone(), Value::Ref(val_ref.clone()));
+            self.define(name, Value::Ref(val_ref));
+          },
+          _ => (),
         },
-        CloseBy::Move => {
-          match self.delete(&name) {
-            Some(val) => {
-              variables.insert(name, val);
-            },
-            _ => (),
-          }
+        CloseBy::Move => match self.delete(&name) {
+          Some(val) => {
+            variables.insert(name, val);
+          },
+          _ => (),
         },
       }
     }

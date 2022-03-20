@@ -23,14 +23,14 @@ macro_rules! token_pat {
 #[macro_export]
 macro_rules! match_token {
   ($({ $src:ident }, )? $(@$token_ident:ident)? $($pattern:ident)|+) => {
-    Some(token_pat!(token: $(@$token_ident)? $($pattern)|+ $(, $src)?))
+    Some(crate::token_pat!(token: $(@$token_ident)? $($pattern)|+ $(, $src)?))
   };
 }
 
 #[macro_export]
 macro_rules! check_token {
   ($token:expr $(, { $src:ident })?, $($pattern:ident)|+ $(if $cond:expr)?) => {
-    matches!($token, Some(TokenExt {
+    matches!($token, Some(crate::token::TokenExt {
       token: $(crate::token::Token::$pattern)|+,
       $(src: $src,)?
       ..
@@ -41,9 +41,10 @@ macro_rules! check_token {
 #[macro_export]
 macro_rules! skip {
   ($token_stream:ident $(, { $src:ident })?, $($pattern:ident)|+ $(if $cond:expr)?) => {
-    if check_token!($token_stream.peek() $(, { $src })?, $($pattern)|+ $(if $cond)?) {
+    if crate::check_token!($token_stream.peek() $(, { $src })?, $($pattern)|+ $(if $cond)?) {
       $token_stream.next();
-    }
+      true
+    } else { false }
   };
 }
 
@@ -86,12 +87,10 @@ impl TokenExt {
   pub fn value(&self) -> Value {
     match self.token {
       Token::Number => Value::Number(self.src.parse::<f64>().unwrap()),
-      Token::Boolean => {
-        match self.src.as_str() {
-          "true" => Value::Boolean(true),
-          "false" => Value::Boolean(false),
-          _ => unreachable!(),
-        }
+      Token::Boolean => match self.src.as_str() {
+        "true" => Value::Boolean(true),
+        "false" => Value::Boolean(false),
+        _ => unreachable!(),
       },
       Token::String => Value::String(self.src[1..self.span.length - 1].to_string()),
       Token::Char => Value::Char(self.src.chars().nth(1).unwrap()),
@@ -106,6 +105,15 @@ pub enum Token {
   // Keywords
   Return,
   Entry,
+  Import,
+  Module,
+  External,
+  Public,
+  Block,
+  Infer,
+  Infix,
+  Postfix,
+  Prefix,
   Placeholder,
   For,
   If,
@@ -113,13 +121,11 @@ pub enum Token {
 
   // Punct
   LAngleBracket,
-  LBracketParen,
   LParenthesis,
   LBracket,
   LBrace,
   RAngleBracket,
   RParenthesis,
-  RParenBrace,
   RBracket,
   RBrace,
   Semicolon,
@@ -154,9 +160,6 @@ pub enum Token {
   Is,
   In,
   As,
-  Infix,
-  Postfix,
-  Prefix,
   Async,
   Await,
   Inline,
@@ -214,9 +217,7 @@ impl Tokenizable for Token {
         '>' if stream.is_next('=') => GreaterEqual,
         '>' => RAngleBracket,
         '(' => LParenthesis,
-        ')' if stream.is_next('}') => RParenBrace,
         ')' => RParenthesis,
-        '{' if stream.is_next('(') => LBracketParen,
         '{' => LBracket,
         '}' => RBracket,
         '[' => LBrace,
@@ -297,6 +298,12 @@ impl Tokenizable for Token {
           {
             "entry" => Entry,
             "return" => Return,
+            "use" => Import,
+            "mod" => Module,
+            "ext" => External,
+            "pub" => Public,
+            "infer" => Infer,
+            "block" => Block,
             "is" => Is,
             "as" => As,
             "in" => In,
@@ -325,19 +332,15 @@ impl Tokenizable for Token {
     };
 
     match token {
-      Ok(token) => {
-        Ok(TokenExt {
-          token,
-          src: span.string_src(),
-          span,
-        })
-      },
-      Err(msg) => {
-        Err(TokenizationError {
-          span,
-          msg: msg.to_string(),
-        })
-      },
+      Ok(token) => Ok(TokenExt {
+        token,
+        src: span.string_src(),
+        span,
+      }),
+      Err(msg) => Err(TokenizationError {
+        span,
+        msg: msg.to_string(),
+      }),
     }
   }
 }

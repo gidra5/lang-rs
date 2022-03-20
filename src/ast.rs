@@ -15,10 +15,16 @@ pub mod expr;
 pub use expr::*;
 
 mod pattern;
-pub use expr::*;
+pub use pattern::*;
 
-pub mod program;
-pub use program::*;
+pub mod script;
+pub use script::*;
+
+pub mod module;
+pub use module::*;
+
+pub mod items;
+pub use items::*;
 
 pub mod inline;
 pub use inline::*;
@@ -40,7 +46,7 @@ pub enum ParsingError {
 #[macro_export]
 macro_rules! parse_error {
   ($($rest: expr),+) => {
-    ParsingError::Generic(
+    crate::ast::ParsingError::Generic(
       format!($($rest),+)
     )
   };
@@ -98,8 +104,26 @@ pub trait Synchronizable {
   fn sync_point(stream: &mut TokenStream) -> bool { true }
 }
 
+pub enum RuntimeError {
+  Generic(String),
+}
+
+#[macro_export]
+macro_rules! runtime_error {
+  ($($rest: expr),+) => {
+    crate::ast::RuntimeError::Generic(
+      format!($($rest),+)
+    )
+  };
+}
+
 pub trait Evaluatable {
-  fn evaluate<L: LoggerTrait>(&self, env: &mut Enviroment, logger: &mut L) -> Value;
+  type E = RuntimeError;
+  fn evaluate<L: LoggerTrait>(
+    &self,
+    env: &mut Enviroment,
+    logger: &mut L,
+  ) -> Result<Value, Self::E>;
 }
 
 impl Display for ParsingError {
@@ -120,8 +144,11 @@ mod new {
 
   trait Parseable: Sized {
     type I;
+    type O = Self;
     type E = Vec<(String, Span)>;
     fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)>;
+    fn parse2(input: Self::I) -> (Self::I, Option<Self::O>, Vec<Self::E>) { todo!() }
+    fn parse_with_span(input: Self::I) -> (Self::I, Option<Self::O>, Vec<Self::E>, Span) { todo!() }
   }
 
   trait Synchronizable<I> {
@@ -209,11 +236,9 @@ mod new {
     fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
       match T::parse(input) {
         Err((i, e)) => Err((i, Either::Left(e))),
-        Ok((i, o1)) => {
-          match U::parse(i) {
-            Err((i, e)) => Err((i, Either::Right(e))),
-            Ok((i, o2)) => Ok((i, (o1, o2))),
-          }
+        Ok((i, o1)) => match U::parse(i) {
+          Err((i, e)) => Err((i, Either::Right(e))),
+          Ok((i, o2)) => Ok((i, (o1, o2))),
         },
       }
     }
@@ -240,11 +265,9 @@ mod new {
     fn parse(input: Self::I) -> Result<(Self::I, Self), (Self::I, Self::E)> {
       match T::parse(input) {
         Ok((i, o)) => Ok((i, Self::Left(o))),
-        Err((i, e1)) => {
-          match U::parse(i) {
-            Ok((i, o)) => Ok((i, Self::Right(o))),
-            Err((i, e2)) => Err((i, (e1, e2))),
-          }
+        Err((i, e1)) => match U::parse(i) {
+          Ok((i, o)) => Ok((i, Self::Right(o))),
+          Err((i, e2)) => Err((i, (e1, e2))),
         },
       }
     }

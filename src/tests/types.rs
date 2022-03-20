@@ -27,8 +27,8 @@ fn types_type_ref() {
 
 #[test]
 fn types_nominal_1() {
-  let nominal1 = nominal_type!([Type::String]);
-  let nominal2 = nominal_type!([Type::String]);
+  let nominal1 = nominal_type!(Type::String);
+  let nominal2 = nominal_type!(Type::String);
   // nominal types are equal only to themselves
   assert_ne!(nominal1, Type::String);
   assert_ne!(nominal1, nominal2);
@@ -42,20 +42,10 @@ fn types_nominal_1() {
 }
 
 #[test]
-fn types_nominal_invalid_subtyping() {
-  // if underlying type isn't substitutable in place of supertypes, then whole
-  // nominal type is void type
-  assert_eq!(nominal_type!([Type::String] < Type::Void), Type::Void);
-  let nominal1 = nominal_type!([Type::Void]);
-  assert_eq!(nominal_type!([Type::String] < nominal1), Type::Void);
-  assert_ne!(nominal_type!([Type::Void] < nominal1), Type::Void);
-}
-
-#[test]
 fn types_nominal_transitive_subtyping() {
-  let nominal1 = nominal_type!([Type::String]);
-  let nominal2 = nominal_type!([Type::String] < nominal1);
-  let nominal3 = nominal_type!([Type::String] < nominal2);
+  let nominal1 = nominal_type!(Type::String);
+  let nominal2 = nominal_type!(Type::Intersection(set!(Type::Boolean, nominal1.clone())));
+  let nominal3 = nominal_type!(Type::Intersection(set!(Type::Number, nominal2.clone())));
   assert!(nominal2 < nominal1);
   assert!(nominal3 < nominal2);
   assert!(nominal3 < nominal1);
@@ -63,10 +53,13 @@ fn types_nominal_transitive_subtyping() {
 
 #[test]
 fn types_nominal_multiple_subtyping() {
-  let nominal1 = nominal_type!([Type::String]);
-  let nominal2 = nominal_type!([Type::String]);
-  let nominal3 =
-    nominal_type!([Type::String] < Type::Intersection(set![nominal1.clone(), nominal2.clone()]));
+  let nominal1 = nominal_type!(Type::String);
+  let nominal2 = nominal_type!(Type::String);
+  let nominal3 = nominal_type!(Type::Intersection(set![
+    Type::String,
+    nominal1.clone(),
+    nominal2.clone()
+  ]));
   assert!(nominal3 < nominal2);
   assert!(nominal3 < nominal1);
 }

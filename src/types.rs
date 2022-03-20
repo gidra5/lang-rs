@@ -29,25 +29,16 @@ macro_rules! is_unit_type {
 
 #[macro_export]
 macro_rules! type_ref {
-  ($t:expr) => {{
-    use std::rc::Rc;
-    Type::TypeRef(Rc::new($t))
-  }};
+  ($t:expr) => {
+    Type::TypeRef(std::rc::Rc::new($t))
+  };
 }
 
 #[macro_export]
 macro_rules! nominal_type {
-  ([$t:expr]) => {{
-    use std::rc::Rc;
-    Type::NominalType { _type: Rc::new($t), supertype: Rc::new(Type::Void)  }
-  }};
-  ([$t:expr] < $st:expr) => {{
-    use std::rc::Rc;
-
-    if $t <= $st {
-      Type::NominalType { _type: Rc::new($t), supertype: Rc::new($st.clone()) }
-    } else { Type::Void }
-  }};
+  ($t:expr) => {
+    Type::NominalType(std::rc::Rc::new($t))
+  };
 }
 
 pub type TypeRef = Rc<Type>;
@@ -73,10 +64,7 @@ pub enum Type {
   Negated(Box<Type>),
   Function(Box<Type>, Box<Type>),
 
-  NominalType {
-    _type:     TypeRef,
-    supertype: TypeRef,
-  },
+  NominalType(TypeRef),
   TypeRef(TypeRef),
 
   Unknown, // aka any type, universum
@@ -96,9 +84,7 @@ impl PartialEq for Type {
       (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
 
       // Nominal types are considered equal only if they refer to the same type
-      (Self::NominalType { _type: l0, .. }, Self::NominalType { _type: r0, .. }) => {
-        Rc::ptr_eq(l0, r0)
-      },
+      (Self::NominalType(l0), Self::NominalType(r0)) => Rc::ptr_eq(l0, r0),
 
       _ => core::mem::discriminant(self) == core::mem::discriminant(other),
     }
@@ -114,7 +100,8 @@ impl Default for &Type {
 }
 
 /// define subtyping relation as partial order on types,
-/// where A < B means A is subtype of B
+/// where A <= B means A is subtype of B (bc all types are subtypes of
+/// themselves)
 impl PartialOrd for Type {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
     Some(match (self, other) {
@@ -201,30 +188,17 @@ impl PartialOrd for Type {
       // any type is subtype of unknown and unknown isn't subtype of anything exept itself
       (_, Type::Unknown) => Ordering::Less,
 
-      // nominal types can have declared supertypes, and so they can be in relation only with those
-      // and itself
-      (
-        t1 @ Type::NominalType {
-          _type: _,
-          supertype: st1,
-        },
-        t2 @ Type::NominalType {
-          _type: _,
-          supertype: st2,
-        },
-      ) => {
-        if &**st1 < t2 {
-          Ordering::Less
-        } else if &**st2 < t1 {
-          Ordering::Greater
-        } else if t1 == t2 {
+      (t1 @ Type::NominalType(_), t2 @ Type::NominalType(_)) => {
+        if t1 == t2 {
           Ordering::Equal
         } else {
           return None;
         }
       },
-      (Type::NominalType { _type: t1, .. }, t2) => Self::partial_cmp(t1, t2)?,
-      (Type::TypeRef(t1), Type::TypeRef(t2)) => Self::partial_cmp(t1, t2)?,
+      (Type::NominalType(t1), t2) => Self::partial_cmp(t1, t2)?,
+
+      (t1, Type::TypeRef(t2)) => Self::partial_cmp(t1, t2)?,
+
       (t1, Type::Negated(t2)) if !(t1 <= t2) => Ordering::Less,
 
       (t1, t2) if t1 == t2 => Ordering::Equal,
@@ -251,59 +225,52 @@ impl Type {
   }
   pub fn of_expr(expr: &Expression, context: &ParsingContext) -> Type {
     match expr {
-      Expression::Value(token) => {
-        match token {
-          token_pat!(token: Add) => {
-            Type::Union(set![
-              Type::Function(
-                Box::new(Type::Tuple(vec![Type::Number, Type::Number])),
-                Box::new(Type::Number),
-              ),
-              Type::Function(
-                Box::new(Type::Tuple(vec![Type::String, Type::String])),
-                Box::new(Type::String),
-              ),
-              Type::Function(
-                Box::new(Type::Tuple(vec![Type::String, Type::Char])),
-                Box::new(Type::String),
-              ),
-              Type::Function(
-                Box::new(Type::Tuple(vec![Type::Char, Type::String])),
-                Box::new(Type::String),
-              )
-            ])
-          },
-          t @ token_pat!(token: Number | String | Char | Boolean) => Type::Value(t.value()),
-          token_pat!(token: Identifier, src) if src == "string" => Type::String,
-          token_pat!(token: Identifier, src) if src == "number" => Type::Number,
-          token_pat!(token: Identifier, src) if src == "char" => Type::Char,
-          token_pat!(token: Identifier, src) if src == "boolean" => Type::Boolean,
-          token_pat!(token: Identifier, src) => {
-            context.namespace.get(src).map_or(Type::Void, |decl| {
-              match decl {
-                Declaration::Variable(t, _) => t,
-                _ => Type::Void,
-              }
+      Expression::Value(token) => match token {
+        token_pat!(token: Add) => Type::Union(set![
+          Type::Function(
+            Box::new(Type::Tuple(vec![Type::Number, Type::Number])),
+            Box::new(Type::Number),
+          ),
+          Type::Function(
+            Box::new(Type::Tuple(vec![Type::String, Type::String])),
+            Box::new(Type::String),
+          ),
+          Type::Function(
+            Box::new(Type::Tuple(vec![Type::String, Type::Char])),
+            Box::new(Type::String),
+          ),
+          Type::Function(
+            Box::new(Type::Tuple(vec![Type::Char, Type::String])),
+            Box::new(Type::String),
+          )
+        ]),
+        t @ token_pat!(token: Number | String | Char | Boolean) => Type::Value(t.value()),
+        token_pat!(token: Identifier, src) if src == "string" => Type::String,
+        token_pat!(token: Identifier, src) if src == "number" => Type::Number,
+        token_pat!(token: Identifier, src) if src == "char" => Type::Char,
+        token_pat!(token: Identifier, src) if src == "boolean" => Type::Boolean,
+        token_pat!(token: Identifier, src) => {
+          context
+            .namespace
+            .get(src)
+            .map_or(Type::Void, |decl| match decl {
+              Declaration::Variable(t, _) => t,
+              _ => Type::Void,
             })
-          },
-          _ => todo!(),
-        }
+        },
+        _ => todo!(),
       },
       Expression::Record(_) => todo!(),
-      Expression::Block(exprs) => {
-        exprs
-          .last()
-          .map_or(Type::Unknown, |expr| Type::of_expr(expr, context))
-      },
-      Expression::If(_, box t_b, f_b) => {
-        Type::Enum(map![
-          "True".to_string() => Type::of_expr(t_b, context),
-          "False".to_string() => {
-            if let Some(box f_b) = f_b { Type::of_expr(f_b, context) }
-            else { Type::Void }
-          }
-        ])
-      },
+      Expression::Block(exprs) => exprs
+        .last()
+        .map_or(Type::Unknown, |expr| Type::of_expr(expr, context)),
+      Expression::If(_, box t_b, f_b) => Type::Enum(map![
+        "True".to_string() => Type::of_expr(t_b, context),
+        "False".to_string() => {
+          if let Some(box f_b) = f_b { Type::of_expr(f_b, context) }
+          else { Type::Void }
+        }
+      ]),
       Expression::For(_, _, box body) => Type::of_expr(body, context),
       Expression::Prefix { op, right } => {
         if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
@@ -327,27 +294,23 @@ impl Type {
           Type::Void
         }
       },
-      Expression::Infix { left, op, right } => {
-        match op {
-          box Expression::Value(token_pat!(token: Arrow)) => {
-            Type::Function(
-              Box::new(Type::of_pat(left, &context)),
-              Box::new(Type::of_expr(right, &context)),
-            )
-          },
-          op => {
-            if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
-              if Type::Tuple(vec![
-                Type::of_expr(left, context),
-                Type::of_expr(right, context),
-              ]) <= arg
-              {
-                return res;
-              }
+      Expression::Infix { left, op, right } => match op {
+        box Expression::Value(token_pat!(token: Arrow)) => Type::Function(
+          Box::new(Type::of_pat(left, &context)),
+          Box::new(Type::of_expr(right, &context)),
+        ),
+        op => {
+          if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
+            if Type::Tuple(vec![
+              Type::of_expr(left, context),
+              Type::of_expr(right, context),
+            ]) <= arg
+            {
+              return res;
             }
-            Type::Void
-          },
-        }
+          }
+          Type::Void
+        },
       },
     }
   }
@@ -359,35 +322,29 @@ impl Type {
       | Value::Char(_)
       | Value::Number(_)) => Type::Value(val.clone()),
       Value::EnumValue(x, y) => Type::Enum(map![x.clone() => Type::of_value(y)]),
-      Value::Tuple(values) => {
-        Type::Tuple(
-          values
-            .iter()
-            .map(|value| Type::of_value(value))
-            .collect_vec(),
-        )
-      },
-      Value::Map(values) => {
-        Type::Union(
-          values
-            .iter()
-            .map(|(key, value)| {
-              Type::Function(
-                Box::new(Type::of_value(key)),
-                Box::new(Type::of_value(value)),
-              )
-            })
-            .collect(),
-        )
-      },
-      Value::Record(values) => {
-        Type::Record(
-          values
-            .iter()
-            .map(|(key, value)| (key.clone(), Type::of_value(value)))
-            .collect(),
-        )
-      },
+      Value::Tuple(values) => Type::Tuple(
+        values
+          .iter()
+          .map(|value| Type::of_value(value))
+          .collect_vec(),
+      ),
+      Value::Map(values) => Type::Union(
+        values
+          .iter()
+          .map(|(key, value)| {
+            Type::Function(
+              Box::new(Type::of_value(key)),
+              Box::new(Type::of_value(value)),
+            )
+          })
+          .collect(),
+      ),
+      Value::Record(values) => Type::Record(
+        values
+          .iter()
+          .map(|(key, value)| (key.clone(), Type::of_value(value)))
+          .collect(),
+      ),
       Value::Function(arg, env, expr) => {
         let context = ParsingContext::from_env(env);
         Type::Function(

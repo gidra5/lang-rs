@@ -134,24 +134,18 @@ impl Expression {
   ) -> Expression {
     match (left, right) {
       (None, None) => op,
-      (Some(expr), None) => {
-        Expression::Postfix {
-          left: Box::new(expr),
-          op:   Box::new(op),
-        }
+      (Some(expr), None) => Expression::Postfix {
+        left: Box::new(expr),
+        op:   Box::new(op),
       },
-      (Some(left), Some(right)) => {
-        Expression::Infix {
-          left:  Box::new(left),
-          op:    Box::new(op),
-          right: Box::new(right),
-        }
+      (Some(left), Some(right)) => Expression::Infix {
+        left:  Box::new(left),
+        op:    Box::new(op),
+        right: Box::new(right),
       },
-      (None, Some(right)) => {
-        Expression::Prefix {
-          op:    Box::new(op),
-          right: Box::new(right),
-        }
+      (None, Some(right)) => Expression::Prefix {
+        op:    Box::new(op),
+        right: Box::new(right),
       },
     }
   }
