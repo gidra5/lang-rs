@@ -18,7 +18,8 @@ pub enum Value {
   Record(HashMap<String, Value>),
   Map(HashMap<Value, Value>),
 
-  EnumValue(String, Box<Value>),
+  Symbol(u32), // an unique number representing that symbol
+
   Function(Expression, Box<Enviroment>, Expression),
   None,
 }
@@ -69,8 +70,8 @@ impl Display for Value {
           write!(f, "({})", x)
         }
       },
-      EnumValue(variant_name, value) => write!(f, "{}({})", variant_name, value),
       Type(t) => write!(f, "type {:?}", t),
+      Symbol(t) => write!(f, "symbol {:?}", t),
       Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
       Ref(val_ref) | RefMut(val_ref) => write!(f, "{}", val_ref.borrow()),
       None => write!(f, "None"),

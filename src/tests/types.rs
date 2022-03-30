@@ -1,5 +1,5 @@
 use super::Type;
-use crate::{common::value::Value, dict, map, nominal_type, set, type_ref};
+use crate::{common::value::Value, dict, dict_enum_type, map, nominal_type, set, type_ref};
 
 #[test]
 fn types_void() {
@@ -74,12 +74,8 @@ fn types_union() {
 
 #[test]
 fn types_enum() {
-  let enum_t_1 = Type::Enum(dict![
-    bool: Type::Boolean,
-    string: Type::String,
-    char: Type::Char
-  ]);
-  let enum_t_2 = Type::Enum(dict![bool: Type::Boolean, string: Type::String]);
+  let enum_t_1 = dict_enum_type![bool: Type::Boolean, string: Type::String, char: Type::Char];
+  let enum_t_2 = dict_enum_type![bool: Type::Boolean, string: Type::String];
   assert!(!(Type::Boolean < enum_t_1));
   assert!(!(Type::String < enum_t_1));
   assert!(!(Type::Char < enum_t_1));

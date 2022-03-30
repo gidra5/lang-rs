@@ -9,7 +9,6 @@ use itertools::Itertools;
 use crate::{
   ast::{Expression, ParsingContext, Precedence},
   common::value::Value,
-  map,
   set,
   token_pat,
 };
@@ -41,6 +40,27 @@ macro_rules! nominal_type {
   };
 }
 
+#[macro_export]
+macro_rules! enum_type {
+  ($($key: expr => $_type:expr), *) => {
+    Type::Union(set![$(Type::Tuple(vec![$key, $_type])),*])
+  };
+}
+
+#[macro_export]
+macro_rules! dict_enum_type {
+  ($($key:ident: $_type:expr), *) => {
+    Type::Union(set![$(
+      Type::Tuple(vec![
+        Type::Value(Value::String(
+          stringify!($key).to_string()
+        )),
+        $_type
+      ])
+    ),*])
+  };
+}
+
 pub type TypeRef = Rc<Type>;
 
 /// A type of any variable in program
@@ -55,15 +75,15 @@ pub enum Type {
   Number,
   Char,
   Boolean,
+  Type,
 
   Tuple(Vec<Type>),
   Record(HashMap<String, Type>),
   Union(HashSet<Type>),
-  Enum(HashMap<String, Type>),
   Intersection(HashSet<Type>),
   Negated(Box<Type>),
-  Function(Box<Type>, Box<Type>),
-
+  Function(String, Box<Type>, Box<Type>), // dependent function type?
+  // Function(Box<Type>, Box<Type>),
   NominalType(TypeRef),
   TypeRef(TypeRef),
 
@@ -78,10 +98,9 @@ impl PartialEq for Type {
       (Self::Record(l0), Self::Record(r0)) => l0 == r0,
       (Self::Union(l0), Self::Union(r0)) => l0.is_subset(r0) && r0.is_subset(l0),
       (Self::Intersection(l0), Self::Intersection(r0)) => l0.is_subset(r0) && r0.is_subset(l0),
-      (Self::Enum(l0), Self::Enum(r0)) => l0 == r0,
       (Self::TypeRef(l0), Self::TypeRef(r0)) => l0 == r0,
       (Self::Negated(l0), Self::Negated(r0)) => l0 == r0,
-      (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
+      (Self::Function(_, l0, l1), Self::Function(_, r0, r1)) => l0 == r0 && l1 == r1,
 
       // Nominal types are considered equal only if they refer to the same type
       (Self::NominalType(l0), Self::NominalType(r0)) => Rc::ptr_eq(l0, r0),
@@ -109,6 +128,8 @@ impl PartialOrd for Type {
       (Type::Value(Value::Number(_)), Type::Number) => Ordering::Less,
       (Type::Value(Value::Char(_)), Type::Char) => Ordering::Less,
       (Type::Value(Value::Boolean(_)), Type::Boolean) => Ordering::Less,
+      (Type::Value(Value::Type(_)), Type::Type) => Ordering::Less,
+      (Type::Value(Value::Type(box t1)), t2) if t1 < t2 => Ordering::Less,
 
       (Type::Void, _) => Ordering::Less,
 
@@ -153,18 +174,6 @@ impl PartialOrd for Type {
       },
       (t, Type::Union(vars)) if vars.iter().any(|var2| t <= var2) => Ordering::Less,
 
-      // enum1 is subtype of enum2 if for all var2 from enum2 there is var1 in enum1 with the same
-      // name such that var1 < var2
-      (Type::Enum(vars1), Type::Enum(vars2))
-        if vars2.len() >= vars1.len()
-          && vars1
-            .iter()
-            .all(|(var, var_type)| vars2.get(var).map_or(false, |var| var_type <= var)) =>
-      {
-        Ordering::Less
-      },
-      (Type::Enum(_), Type::Enum(_)) => return None,
-
       // intersect1 is subtype of intersect2 if for all item2 in intersect2 there is item1 in
       // intersect1 such that item1 is subtype of item2
       (Type::Intersection(items1), Type::Intersection(items2))
@@ -178,12 +187,12 @@ impl PartialOrd for Type {
       (t, Type::Intersection(items)) if items.iter().all(|item| t <= item) => Ordering::Less,
 
       // function1 is subtype of function2 if arg2 is subtype of arg1 and res1 is subtype of res2
-      (Type::Function(box arg1, box res1), Type::Function(box arg2, box res2))
+      (Type::Function(_, box arg1, box res1), Type::Function(_, box arg2, box res2))
         if arg2 < arg1 && res1 < res2 =>
       {
         Ordering::Less
       },
-      (Type::Function(_, _), Type::Function(_, _)) => return None,
+      (Type::Function(_, _, _), Type::Function(_, _, _)) => return None,
 
       // any type is subtype of unknown and unknown isn't subtype of anything exept itself
       (_, Type::Unknown) => Ordering::Less,
@@ -228,18 +237,22 @@ impl Type {
       Expression::Value(token) => match token {
         token_pat!(token: Add) => Type::Union(set![
           Type::Function(
+            "".to_string(),
             Box::new(Type::Tuple(vec![Type::Number, Type::Number])),
             Box::new(Type::Number),
           ),
           Type::Function(
+            "".to_string(),
             Box::new(Type::Tuple(vec![Type::String, Type::String])),
             Box::new(Type::String),
           ),
           Type::Function(
+            "".to_string(),
             Box::new(Type::Tuple(vec![Type::String, Type::Char])),
             Box::new(Type::String),
           ),
           Type::Function(
+            "".to_string(),
             Box::new(Type::Tuple(vec![Type::Char, Type::String])),
             Box::new(Type::String),
           )
@@ -264,16 +277,18 @@ impl Type {
       Expression::Block(exprs) => exprs
         .last()
         .map_or(Type::Unknown, |expr| Type::of_expr(expr, context)),
-      Expression::If(_, box t_b, f_b) => Type::Enum(map![
-        "True".to_string() => Type::of_expr(t_b, context),
-        "False".to_string() => {
-          if let Some(box f_b) = f_b { Type::of_expr(f_b, context) }
-          else { Type::Void }
-        }
-      ]),
+      Expression::If(_, box t_b, f_b) => {
+        enum_type!(
+          Type::of_value(&Value::Boolean(true)) => Type::of_expr(t_b, context),
+          Type::of_value(&Value::Boolean(false)) => {
+            if let Some(box f_b) = f_b { Type::of_expr(f_b, context) }
+            else { Type::Void }
+          }
+        )
+      },
       Expression::For(_, _, box body) => Type::of_expr(body, context),
       Expression::Prefix { op, right } => {
-        if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
+        if let Type::Function(_, box arg, box res) = Type::of_expr(op, context) {
           if Type::of_expr(right, context) <= arg {
             res
           } else {
@@ -284,7 +299,7 @@ impl Type {
         }
       },
       Expression::Postfix { left, op } => {
-        if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
+        if let Type::Function(_, box arg, box res) = Type::of_expr(op, context) {
           if Type::of_expr(left, context) <= arg {
             res
           } else {
@@ -296,11 +311,12 @@ impl Type {
       },
       Expression::Infix { left, op, right } => match op {
         box Expression::Value(token_pat!(token: Arrow)) => Type::Function(
+          "".to_string(),
           Box::new(Type::of_pat(left, &context)),
           Box::new(Type::of_expr(right, &context)),
         ),
         op => {
-          if let Type::Function(box arg, box res) = Type::of_expr(op, context) {
+          if let Type::Function(_, box arg, box res) = Type::of_expr(op, context) {
             if Type::Tuple(vec![
               Type::of_expr(left, context),
               Type::of_expr(right, context),
@@ -321,7 +337,6 @@ impl Type {
       | Value::Boolean(_)
       | Value::Char(_)
       | Value::Number(_)) => Type::Value(val.clone()),
-      Value::EnumValue(x, y) => Type::Enum(map![x.clone() => Type::of_value(y)]),
       Value::Tuple(values) => Type::Tuple(
         values
           .iter()
@@ -333,6 +348,7 @@ impl Type {
           .iter()
           .map(|(key, value)| {
             Type::Function(
+              "".to_string(),
               Box::new(Type::of_value(key)),
               Box::new(Type::of_value(value)),
             )
@@ -348,6 +364,7 @@ impl Type {
       Value::Function(arg, env, expr) => {
         let context = ParsingContext::from_env(env);
         Type::Function(
+          "".to_string(),
           Box::new(Type::of_pat(arg, &context)),
           Box::new(Type::of_expr(expr, &context)),
         )
