@@ -118,6 +118,7 @@ pub enum Token {
   For,
   If,
   Else,
+  Match,
 
   // Punct
   LAngleBracket,
@@ -156,6 +157,7 @@ pub enum Token {
   GreaterEqual,
   Arrow,
   Spread,
+  Enum,
 
   Is,
   In,
@@ -304,6 +306,8 @@ impl Tokenizable for Token {
             "pub" => Public,
             "infer" => Infer,
             "block" => Block,
+            "match" => Match,
+            "enum" => Enum,
             "is" => Is,
             "as" => As,
             "in" => In,

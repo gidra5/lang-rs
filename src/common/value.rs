@@ -5,23 +5,24 @@ use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
+  // primitives
   String(String),
   Number(f64),
   Boolean(bool),
   Char(char),
-  Type(Box<Type>),
+  Symbol(u32), // an unique number identifying that symbol
 
-  Ref(Rc<RefCell<Value>>),
+  Type(Box<Type>),                                   // types are first class
+  Function(Expression, Box<Enviroment>, Expression), // functions are first class
+  None,
+
+  Ref(Rc<RefCell<Value>>), // should somehow simplify type probably to accomodate non mutability
   RefMut(Rc<RefCell<Value>>),
 
+  // 3 levels of composition (the most useful)
   Tuple(Vec<Value>),
   Record(HashMap<String, Value>),
   Map(HashMap<Value, Value>),
-
-  Symbol(u32), // an unique number representing that symbol
-
-  Function(Expression, Box<Enviroment>, Expression),
-  None,
 }
 
 impl std::hash::Hash for Value {

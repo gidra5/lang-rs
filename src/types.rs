@@ -71,21 +71,25 @@ pub enum Type {
   Void, // aka empty set
 
   Value(Value),
+
+  // a type for every variant of Value
   String,
   Number,
   Char,
   Boolean,
+  Symbol,
   Type,
+  Tuple(Vec<Type>),              // replace with pair and syntax sugar?
+  Record(HashMap<String, Type>), // maybe just use tuple of pairs?
 
-  Tuple(Vec<Type>),
-  Record(HashMap<String, Type>),
   Union(HashSet<Type>),
   Intersection(HashSet<Type>),
   Negated(Box<Type>),
-  Function(String, Box<Type>, Box<Type>), // dependent function type?
-  // Function(Box<Type>, Box<Type>),
-  NominalType(TypeRef),
+  Function(String, Box<Type>, Box<Type>), // dependent function type
+
   TypeRef(TypeRef),
+  NominalType(TypeRef), // maybe somehow replace with combination of value::symbol and type?
+  TypeOf(String),       // type of some variable in scope
 
   Unknown, // aka any type, universum
 }
@@ -94,6 +98,7 @@ impl PartialEq for Type {
   fn eq(&self, other: &Self) -> bool {
     match (self, other) {
       (Self::Value(l0), Self::Value(r0)) => l0 == r0,
+      (Self::TypeOf(l0), Self::TypeOf(r0)) => l0 == r0,
       (Self::Tuple(l0), Self::Tuple(r0)) => l0 == r0,
       (Self::Record(l0), Self::Record(r0)) => l0 == r0,
       (Self::Union(l0), Self::Union(r0)) => l0.is_subset(r0) && r0.is_subset(l0),
@@ -129,6 +134,7 @@ impl PartialOrd for Type {
       (Type::Value(Value::Char(_)), Type::Char) => Ordering::Less,
       (Type::Value(Value::Boolean(_)), Type::Boolean) => Ordering::Less,
       (Type::Value(Value::Type(_)), Type::Type) => Ordering::Less,
+      (Type::Value(Value::Symbol(_)), Type::Symbol) => Ordering::Less,
       (Type::Value(Value::Type(box t1)), t2) if t1 < t2 => Ordering::Less,
 
       (Type::Void, _) => Ordering::Less,
@@ -137,10 +143,10 @@ impl PartialOrd for Type {
       // same position such that item1 is subtype of item2
       (Type::Tuple(items1), Type::Tuple(items2))
         if items1.len() >= items2.len()
-          && items2
+          && !items1
             .iter()
             .enumerate()
-            .all(|(var, var_type)| var_type < items1.get(var).unwrap_or_default()) =>
+            .any(|(var, var_type)| items2.get(var).unwrap_or_default() < var_type) =>
       {
         Ordering::Less
       },
@@ -163,16 +169,16 @@ impl PartialOrd for Type {
         Self::partial_cmp(t1, items.values().next().unwrap())?
       },
 
-      // union1 is subtype of union2 if for every var1 in union1 there is a var2 in union2 such that
-      // var1 is subtype of var2
+      // union1 is strict subtype of union2 if there is no var1 in vars1 such that there is no var2
+      // in vars2 such that var1 is strict subtype of var2
       (Type::Union(vars1), Type::Union(vars2))
-        if vars1
+        if !vars1
           .iter()
-          .all(|var1| vars2.iter().any(|var2| var1 <= var2)) =>
+          .any(|var1| !vars2.iter().any(|var2| var1 < var2)) =>
       {
         Ordering::Less
       },
-      (t, Type::Union(vars)) if vars.iter().any(|var2| t <= var2) => Ordering::Less,
+      (t, Type::Union(vars)) if !vars.iter().all(|var2| !(t < var2)) => Ordering::Less,
 
       // intersect1 is subtype of intersect2 if for all item2 in intersect2 there is item1 in
       // intersect1 such that item1 is subtype of item2
@@ -188,11 +194,16 @@ impl PartialOrd for Type {
 
       // function1 is subtype of function2 if arg2 is subtype of arg1 and res1 is subtype of res2
       (Type::Function(_, box arg1, box res1), Type::Function(_, box arg2, box res2))
-        if arg2 < arg1 && res1 < res2 =>
+        if arg2 == arg1 && res1 == res2 =>
+      {
+        Ordering::Equal
+      },
+      (Type::Function(_, box arg1, box res1), Type::Function(_, box arg2, box res2))
+        if arg2 <= arg1 && res1 <= res2 =>
       {
         Ordering::Less
       },
-      (Type::Function(_, _, _), Type::Function(_, _, _)) => return None,
+      (_, Type::Function(_, _, _)) => return None,
 
       // any type is subtype of unknown and unknown isn't subtype of anything exept itself
       (_, Type::Unknown) => Ordering::Less,
@@ -211,6 +222,7 @@ impl PartialOrd for Type {
       (t1, Type::Negated(t2)) if !(t1 <= t2) => Ordering::Less,
 
       (t1, t2) if t1 == t2 => Ordering::Equal,
+      (Type::Value(v1), Type::Value(v2)) if v1 == v2 => Ordering::Equal,
       (_, Type::String | Type::Number | Type::Char | Type::Boolean | Type::Value(_)) => {
         return None
       },
