@@ -1,0 +1,6 @@
+use "./module.m.lang" as module with (z: 2)
+
+print module.x
+print module.y
+print module.inner
+print module

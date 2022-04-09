@@ -1,0 +1,6 @@
+pub use "./module2.m.lang" as (b)
+
+ext z as number
+
+pub let x = b
+pub let y = () => z

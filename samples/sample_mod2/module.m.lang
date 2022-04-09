@@ -1,0 +1,4 @@
+ext z as number
+
+pub let x = 1
+pub let y = () => z

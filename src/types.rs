@@ -7,7 +7,7 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
-  ast::{Expression, ParsingContext, Precedence},
+  ast::{Expression, ParsingContext, ParsingError, Pattern, PatternWithDefault, Precedence},
   common::value::Value,
   set,
   token_pat,
@@ -238,14 +238,14 @@ impl std::hash::Hash for Type {
 
 impl Type {
   pub fn to_ref_type(self) -> Type { Type::TypeRef(Rc::new(self)) }
-  pub fn of_pat(pat: &Expression, _context: &ParsingContext) -> Type {
-    match pat {
-      Expression::Record(_) => todo!(),
+  pub fn of_pat(pat: &PatternWithDefault, _context: &ParsingContext) -> Type {
+    match pat.pattern {
+      Pattern::Record(_) => todo!(),
       _ => Type::Void,
     }
   }
-  pub fn of_expr(expr: &Expression, context: &ParsingContext) -> Type {
-    match expr {
+  pub fn of_expr(expr: &Expression, context: &ParsingContext) -> Result<Self, ParsingError> {
+    Ok(match expr {
       Expression::Value(token) => match token {
         token_pat!(token: Add) => Type::Union(set![
           Type::Function(
@@ -288,20 +288,20 @@ impl Type {
       Expression::Record(_) => todo!(),
       Expression::Block(exprs) => exprs
         .last()
-        .map_or(Type::Unknown, |expr| Type::of_expr(expr, context)),
+        .map_or(Ok(Type::Void), |expr| Type::of_expr(expr, context))?,
       Expression::If(_, box t_b, f_b) => {
         enum_type!(
-          Type::of_value(&Value::Boolean(true)) => Type::of_expr(t_b, context),
+          Type::of_value(&Value::Boolean(true)) => Type::of_expr(t_b, context)?,
           Type::of_value(&Value::Boolean(false)) => {
-            if let Some(box f_b) = f_b { Type::of_expr(f_b, context) }
+            if let Some(box f_b) = f_b { Type::of_expr(f_b, context)? }
             else { Type::Void }
           }
         )
       },
-      Expression::For(_, _, box body) => Type::of_expr(body, context),
+      Expression::For(_, _, box body) => Type::of_expr(body, context)?,
       Expression::Prefix { op, right } => {
-        if let Type::Function(_, box arg, box res) = Type::of_expr(op, context) {
-          if Type::of_expr(right, context) <= arg {
+        if let Type::Function(_, box arg, box res) = Type::of_expr(op, context)? {
+          if Type::of_expr(right, context)? <= arg {
             res
           } else {
             Type::Void
@@ -311,8 +311,8 @@ impl Type {
         }
       },
       Expression::Postfix { left, op } => {
-        if let Type::Function(_, box arg, box res) = Type::of_expr(op, context) {
-          if Type::of_expr(left, context) <= arg {
+        if let Type::Function(_, box arg, box res) = Type::of_expr(op, context)? {
+          if Type::of_expr(left, context)? <= arg {
             res
           } else {
             Type::Void
@@ -324,23 +324,26 @@ impl Type {
       Expression::Infix { left, op, right } => match op {
         box Expression::Value(token_pat!(token: Arrow)) => Type::Function(
           "".to_string(),
-          Box::new(Type::of_pat(left, &context)),
-          Box::new(Type::of_expr(right, &context)),
+          Box::new(Type::of_pat(
+            &PatternWithDefault::from_expr(left)?,
+            &context,
+          )),
+          Box::new(Type::of_expr(right, &context)?),
         ),
         op => {
-          if let Type::Function(_, box arg, box res) = Type::of_expr(op, context) {
+          if let Type::Function(_, box arg, box res) = Type::of_expr(op, context)? {
             if Type::Tuple(vec![
-              Type::of_expr(left, context),
-              Type::of_expr(right, context),
+              Type::of_expr(left, context)?,
+              Type::of_expr(right, context)?,
             ]) <= arg
             {
-              return res;
+              return Ok(res);
             }
           }
           Type::Void
         },
       },
-    }
+    })
   }
   pub fn of_value(value: &Value) -> Type {
     match value {
@@ -377,8 +380,11 @@ impl Type {
         let context = ParsingContext::from_env(env);
         Type::Function(
           "".to_string(),
-          Box::new(Type::of_pat(arg, &context)),
-          Box::new(Type::of_expr(expr, &context)),
+          Box::new(Type::of_pat(
+            &PatternWithDefault::from_expr(arg).unwrap(),
+            &context,
+          )),
+          Box::new(Type::of_expr(expr, &context).unwrap()),
         )
       },
       _ => Type::Void,

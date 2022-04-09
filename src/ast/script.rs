@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-  pattern::Pattern,
+  pattern::PatternWithDefault,
   Evaluatable,
   Expression,
   ExternalDependency,

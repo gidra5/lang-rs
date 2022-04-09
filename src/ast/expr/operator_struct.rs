@@ -21,6 +21,12 @@ pub enum Fixity {
 pub type Precedence = (Option<u8>, Option<u8>);
 
 #[derive(PartialEq, Default, Debug, Clone)]
+pub struct OperatorParser {
+  pub tokens:     Vec<String>,
+  pub precedence: Option<Precedence>,
+}
+
+#[derive(PartialEq, Default, Debug, Clone)]
 pub struct Operator {
   pub op:         Expression,
   pub precedence: Option<Precedence>,

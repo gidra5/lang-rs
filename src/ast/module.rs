@@ -18,6 +18,8 @@ use super::{
   ParsingError,
 };
 
+#[path = "../tests/module.rs"]
+mod tests;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ModuleItem {
@@ -44,9 +46,9 @@ impl Parseable for ModuleItem {
         }
       },
       Some(token_pat!(token: Identifier, src)) if src == "let" => {
-        Self::Import(Import::parse(stream, context)?)
+        Self::Declaration(Declaration::parse(stream, context)?)
       },
-      _ => return Err(parse_error!("")),
+      _ => return Err(parse_error!("Unrecognized module item")),
     })
   }
 }
@@ -79,6 +81,12 @@ impl Parseable for Module {
       }
 
       match stream.peek() {
+        Some(token_pat!(token: Identifier, src)) if src == "let" => {
+          match ModuleItem::parse(stream, context) {
+            Ok(item) => private.push(item),
+            Err(err) => errors.push(err),
+          };
+        },
         match_token!(Import | External) => {
           match ModuleItem::parse(stream, context) {
             Ok(item) => private.push(item),
@@ -86,6 +94,7 @@ impl Parseable for Module {
           };
         },
         match_token!(Public) => {
+          stream.next();
           match ModuleItem::parse(stream, context) {
             Ok(item) => _pub.push(item),
             Err(err) => errors.push(err),

@@ -1,6 +1,10 @@
 use itertools::Itertools;
 
-use crate::{ast::Expression, enviroment::Enviroment, types::Type};
+use crate::{
+  ast::{Expression, PatternWithDefault},
+  enviroment::Enviroment,
+  types::Type,
+};
 use std::{cell::RefCell, collections::HashMap, fmt::Display, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq)]

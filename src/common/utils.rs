@@ -55,7 +55,7 @@ macro_rules! unwrap_enum {
 
 #[macro_export]
 macro_rules! unwrap_enum_safe {
-  ($item:ident, $variant:tt) => {
+  ($item:expr, $variant:path) => {
     match $item {
       $variant(x) => Some(x),
       _ => None,
