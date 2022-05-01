@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::{enviroment::Enviroment, errors::RuntimeError};
+use crate::{enviroment::Enviroment, errors::RuntimeError, types::Type};
 use std::{collections::HashMap, fmt::Display};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -22,7 +22,7 @@ pub enum Value {
   // RefMut(Rc<RefCell<Value>>),
 
   // first class entities
-  // Type(Box<Type>),
+  Type(Box<Type>),
   // functions are first class
   // Function(Expression, Box<Enviroment>, Expression),
 }
@@ -72,7 +72,7 @@ impl Display for Value {
           write!(f, "({x})")
         }
       },
-      // Type(t) => write!(f, "type {:?}", t),
+      Type(t) => write!(f, "type {:?}", t),
       Symbol(t) => write!(f, "symbol {:?}", t),
       // Function(pat, _, expr) => write!(f, "({} => {})", pat, expr),
       // None => write!(f, "None"),

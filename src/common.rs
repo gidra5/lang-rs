@@ -3,7 +3,7 @@ use std::{mem, str::Chars};
 
 pub use crate::either::Either;
 use crate::{
-  parseable::{Par, Parseable, ParsingContext},
+  parseable::{Parseable, ParseableIterator, ParsingContext},
   token::Token,
 };
 pub use fancy_regex::Regex;
@@ -14,8 +14,8 @@ pub use fancy_regex::Regex;
 // pub mod logger;
 // pub use logger::*;
 
-pub mod reversable_iterator;
-pub use reversable_iterator::*;
+pub mod buffered_iterator;
+pub use buffered_iterator::*;
 
 pub mod utils;
 pub use utils::*;

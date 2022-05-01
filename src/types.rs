@@ -213,17 +213,34 @@ impl Type {
   pub fn of_expr(expr: &Expression, context: &ParsingContext) -> Result<Self, ParsingError> {
     Ok(match expr {
       Expression::Value(token) => match token {
-        Token::Add => Type::Union(set![Type::Function(
-          Box::new(Type::Tuple(vec![Type::String, Type::String])),
-          Box::new(Type::String),
-        ),]),
+        Token::Add => Type::Union(set![
+          Type::Function(
+            Box::new(Type::Tuple(vec![Type::String, Type::String])),
+            Box::new(Type::String),
+          ),
+          // Type::Function(
+          //   Box::new(Type::Tuple(vec![Type::String, Type::String])),
+          //   Box::new(Type::String),
+          // ),
+          // Type::Function(
+          //   Box::new(Type::Tuple(vec![Type::String, Type::Char])),
+          //   Box::new(Type::String),
+          // ),
+          // Type::Function(
+          //   Box::new(Type::Tuple(vec![Type::Char, Type::String])),
+          //   Box::new(Type::String),
+          // )
+        ]),
         t @ (Token::Number(_) | Token::String(_) | Token::Char(_) | Token::Boolean(_)) => {
           match t.value() {
             Ok(v) => Type::Value(v),
-            Err(RuntimeError::Generic(msg)) => return Err(parse_error!("{msg}")),
+            Err(RuntimeError { msg }) => return Err(parse_error!("{msg}")),
           }
         },
         Token::Identifier(src) if src == "string" => Type::String,
+        // Token::Identifier(src)  if src == "number" => Type::Number,
+        // Token::Identifier(src)  if src == "char" => Type::Char,
+        // Token::Identifier(src)  if src == "boolean" => Type::Boolean,
         Token::Identifier(src) => {
           context
             .namespace
@@ -236,6 +253,17 @@ impl Type {
         _ => todo!(),
       },
       Expression::Record(_) => todo!(),
+      Expression::If(_, box _t_b, _f_b) => {
+        todo!()
+        // enum_type!(
+        //   Type::of_value(&Value::Boolean(true)) => Type::of_expr(t_b,
+        // context)?,   Type::of_value(&Value::Boolean(false)) => {
+        //     if let Some(box f_b) = f_b { Type::of_expr(f_b, context)? }
+        //     else { Type::Void }
+        //   }
+        // )
+      },
+      Expression::For(_, _, box body) => Type::of_expr(body, context)?,
       Expression::Block(exprs) => exprs
         .last()
         .map_or(Ok(Type::Void), |expr| Type::of_expr(expr, context))?,

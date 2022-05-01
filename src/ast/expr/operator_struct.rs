@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::{ast::Expression, parseable::ParsingContext, token::Token};
+use crate::{ast::Expression, namespace::Declaration, parseable::ParsingContext, token::Token};
 
 #[derive(Clone, PartialEq, Default, Eq, Debug)]
 pub enum Fixity {
@@ -101,17 +101,14 @@ impl Operator {
     fixity: Fixity,
   ) -> Option<Precedence> {
     Some(match (&token, &fixity) {
-      // (token_pat!(token: Identifier, src), Fixity::None) => {
-      //   context.namespace.get(src).and_then(|decl| {
-      //     match decl {
-      //       Declaration::Variable(t, p) => Some(p),
-      //       _ => None,
-      //     }
-      //   })?
-      // },
+      (Token::Identifier(src), Fixity::None) => {
+        context.namespace.get(src).and_then(|decl| match decl {
+          Declaration::Variable(_, p) => Some(p),
+          _ => None,
+        })?
+      },
       (
-        Token::Identifier(_)
-        | Token::String(_)
+        Token::String(_)
         | Token::Char(_)
         | Token::Number(_)
         | Token::Boolean(_)

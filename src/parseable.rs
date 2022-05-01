@@ -154,30 +154,39 @@ where
   }
 }
 
+#[derive(Clone)]
 pub struct Parsed<I, T: Parseable<I>> {
-  source:    I,
-  item_type: PhantomData<T>,
+  pub source: I,
+  item_type:  PhantomData<T>,
 }
 
-impl<I: Sized, T: Parseable<I, I = I>> Iterator for Parsed<I, T> {
+impl<I: Sized + Iterator + Clone, T: Parseable<I, I = I>> Iterator for Parsed<I, T> {
   type Item = T::O;
   fn next(&mut self) -> Option<Self::Item> {
-    let input = unsafe { std::mem::replace(&mut self.source, MaybeUninit::zeroed().assume_init()) };
-    let (rest, parsed) = T::parse(input);
-    self.source = rest;
-    parsed
+    loop {
+      let input =
+        unsafe { std::mem::replace(&mut self.source, MaybeUninit::zeroed().assume_init()) };
+      let (mut rest, parsed) = T::parse(input);
+      self.source = rest.clone();
+      if parsed.is_some() {
+        break parsed;
+      } else if rest.next().is_none() {
+        break None;
+      }
+    }
   }
 }
 
-pub trait Par<I, T: Parseable<I>> {
-  fn parsed(self) -> Parsed<I, T>;
-}
-
-impl<I: Iterator, T: Parseable<I>> Par<I, T> for I {
-  fn parsed(self) -> Parsed<I, T> {
-    Parsed::<I, T> {
+pub trait ParseableIterator<T: Parseable<Self>>
+where
+  Self: Sized,
+{
+  fn parsed(self) -> Parsed<Self, T> {
+    Parsed::<Self, T> {
       source:    self,
       item_type: PhantomData,
     }
   }
 }
+
+impl<I: Iterator, T: Parseable<I>> ParseableIterator<T> for I {}

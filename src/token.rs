@@ -1,8 +1,9 @@
 use crate::{
-  common::reversable_iterator::Buffered,
+  common::buffered_iterator::Buffered,
   enviroment::Enviroment,
-  errors::RuntimeError,
+  errors::{ParsingError, RuntimeError},
   is_next,
+  parse_error,
   parseable::Parseable,
   runtime_error,
   value::{Evaluatable, Value},
@@ -12,8 +13,40 @@ use std::{
   hash::Hash,
 };
 
-#[path = "tests/token.rs"]
-mod tests;
+// #[path = "tests/token.rs"]
+// mod tests;
+
+#[derive(Clone)]
+pub struct TokenizationInput<T>
+where
+  T: Iterator + Clone,
+  T::Item: Clone,
+{
+  pub iter:   Buffered<T>,
+  pub errors: Vec<ParsingError>,
+}
+
+impl<T> Iterator for TokenizationInput<T>
+where
+  T: Iterator + Clone,
+  T::Item: Clone,
+{
+  type Item = T::Item;
+  fn next(&mut self) -> Option<Self::Item> { self.iter.next() }
+}
+
+impl<T> TokenizationInput<T>
+where
+  T: Iterator + Clone,
+  T::Item: Clone,
+{
+  pub fn new(iter: Buffered<T>) -> Self {
+    Self {
+      iter,
+      errors: vec![],
+    }
+  }
+}
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Token {
@@ -124,24 +157,28 @@ impl Evaluatable for Token {
   }
 }
 
-impl<T: Iterator<Item = char>> Parseable<Buffered<T>> for Token {
-  fn parse(mut stream: Self::I) -> (Self::I, Option<Self::O>) {
+impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token {
+  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+    let TokenizationInput {
+      mut iter,
+      mut errors,
+    } = input;
     use Token::*;
 
-    let character = stream.next();
+    let character = iter.next();
 
     if let None = character {
-      return (stream, None);
+      return (TokenizationInput { iter, errors }, None);
     }
     let res = match character.unwrap() {
       ' ' | '\t' | '\r' => Skip,
       '\n' => {
-        while is_next!([skip] stream, (' ' | '\t' | '\r' | '\n')) {}
+        while is_next!([skip] iter, (' ' | '\t' | '\r' | '\n')) {}
         NewLine
       },
-      '<' if is_next!([skip] stream, '=') => LessEqual,
+      '<' if is_next!([skip] iter, '=') => LessEqual,
       '<' => LAngleBracket,
-      '>' if is_next!([skip] stream, '=') => GreaterEqual,
+      '>' if is_next!([skip] iter, '=') => GreaterEqual,
       '>' => RAngleBracket,
       '(' => LParenthesis,
       ')' => RParenthesis,
@@ -159,50 +196,52 @@ impl<T: Iterator<Item = char>> Parseable<Buffered<T>> for Token {
       '#' => Hash,
       '$' => Dollar,
       '@' => At,
-      '+' if is_next!([skip] stream, '+') => Inc,
+      '+' if is_next!([skip] iter, '+') => Inc,
       '+' => Add,
-      '-' if is_next!([skip] stream, '-') => Dec,
+      '-' if is_next!([skip] iter, '-') => Dec,
       '-' => Sub,
       '*' => Mult,
-      '/' if is_next!([skip] stream, '/') => {
-        while stream.peek().is_some() && is_next!([skip not] stream, '\n') {}
+      '/' if is_next!([skip] iter, '/') => {
+        while iter.peek().is_some() && is_next!([skip not] iter, '\n') {}
         Skip
       },
-      '/' if is_next!([skip] stream, '*') => {
-        while is_next!([skip not] stream[2], '*', '/') {}
+      '/' if is_next!([skip] iter, '*') => {
+        while is_next!([skip not] iter[2], '*', '/') {}
         Skip
       },
       '/' => Div,
       '^' => Pow,
       '%' => Mod,
-      '=' if is_next!([skip] stream, '>') => Arrow,
-      '=' if is_next!([skip] stream, '=') => EqualEqual,
+      '=' if is_next!([skip] iter, '>') => Arrow,
+      '=' if is_next!([skip] iter, '=') => EqualEqual,
       '=' => Equal,
       '\'' => loop {
-        if let [Some(c), Some('\'')] = stream.next_ext(2)[..] {
+        if let [Some(c), Some('\'')] = iter.next_ext(2)[..] {
           break Char(c);
         }
-        return (stream, None);
+        errors.push(parse_error!("Unterminated char literal"));
+        return (TokenizationInput { iter, errors }, None);
       },
       '"' => {
         let mut src = "".to_string();
-        while !is_next!(stream, '"') {
-          if let Some(c) = stream.next() {
+        while !is_next!(iter, '"') {
+          if let Some(c) = iter.next() {
             src += &c.to_string()
           } else {
-            return (stream, None);
+            errors.push(parse_error!("Unterminated string literal"));
+            return (TokenizationInput { iter, errors }, None);
           }
         }
         String(src)
       },
-      '.' if is_next!([skip] stream[2], '.', '.') => Spread,
+      '.' if is_next!([skip] iter[2], '.', '.') => Spread,
       '.' => Period,
       c if c.is_ascii_digit() => {
         let mut num = c.to_string().parse::<i64>().unwrap();
-        while let Some(c) = stream.peek() {
+        while let Some(c) = iter.peek() {
           if let Ok(d) = c.to_string().parse::<i64>() {
             num = 10 * num + d;
-            stream.next();
+            iter.next();
           } else {
             break;
           }
@@ -212,14 +251,14 @@ impl<T: Iterator<Item = char>> Parseable<Buffered<T>> for Token {
       },
       c if c.is_ascii_alphabetic() || c == '_' => {
         let mut src = c.to_string();
-        if let Some(c) = stream.peek() {
+        if let Some(c) = iter.peek() {
           if (c.is_ascii_alphanumeric() || c == '_') {
-            while let Some(c) = stream.peek() {
+            while let Some(c) = iter.peek() {
               if !(c.is_ascii_alphanumeric() || c == '_') {
                 break;
               }
               src += &c.to_string();
-              stream.next();
+              iter.next();
             }
           }
         }
@@ -239,7 +278,8 @@ impl<T: Iterator<Item = char>> Parseable<Buffered<T>> for Token {
           "is" => Is,
           "as" => As,
           "in" => In,
-          // "true" | "false" => Boolean,
+          "true" => Boolean(true),
+          "false" => Boolean(false),
           "infix" => Infix,
           "postfix" => Postfix,
           "prefix" => Prefix,
@@ -254,10 +294,11 @@ impl<T: Iterator<Item = char>> Parseable<Buffered<T>> for Token {
         }
       },
       _ => {
-        return (stream, None);
+        errors.push(parse_error!("Unrecognized input"));
+        return (TokenizationInput { iter, errors }, None);
       },
     };
 
-    (stream, Some(res))
+    (TokenizationInput { iter, errors }, Some(res))
   }
 }

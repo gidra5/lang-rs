@@ -1,8 +1,8 @@
 use crate::{
   common::Buf,
   enviroment::*,
-  parseable::{Par, Parsed, ParsingContext},
-  token::Token,
+  parseable::{ParseableIterator, Parsed, ParsingContext},
+  token::{Token, TokenizationInput},
 };
 use rustyline::{error::*, *};
 use rustyline_derive::*;
@@ -35,8 +35,12 @@ impl InteractiveMode {
 
   /// executes given code in interpreter
   pub fn exec(&mut self, code: String) {
-    let tokens: Parsed<_, Token> = code.chars().buffered().parsed();
-    tokens.for_each(|token| println!("{token}"))
+    let mut tokens: Parsed<_, Token> = TokenizationInput::new(code.chars().buffered()).parsed();
+    {
+      (&mut tokens).for_each(|token| println!("{token}"));
+    }
+    let errors = tokens.source.errors;
+    errors.iter().for_each(|err| println!("{err}"))
     // match Script::parse(tokens) {
     //   Ok(tree) => match tree.node.evaluate(&mut self.env) {
     //     Ok(_) => (),
@@ -59,8 +63,13 @@ impl InteractiveMode {
 
           self.rl.add_history_entry(line.as_str());
 
-          let tokens: Parsed<_, Token> = line.chars().buffered().parsed();
-          tokens.for_each(|token| println!("{token}"))
+          let mut tokens: Parsed<_, Token> =
+            TokenizationInput::new(line.chars().buffered()).parsed();
+          {
+            (&mut tokens).for_each(|token| println!("{token}"));
+          }
+          let errors = tokens.source.errors;
+          errors.iter().for_each(|err| println!("{err}"))
           // match Script::parse(tokens) {
           //   Ok(tree) => match tree.node.evaluate(&mut self.env) {
           //     Ok(_) => (),

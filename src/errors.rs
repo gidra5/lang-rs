@@ -1,51 +1,30 @@
-use std::fmt::{Display, Formatter};
-
-use itertools::Itertools;
+use derive_more::Display;
 
 /// matches error productions
-#[derive(Debug)]
-pub enum ParsingError {
-  Generic(String),
-
-  Aggregate(Vec<ParsingError>),
+#[derive(Debug, Clone, Display)]
+pub struct ParsingError {
+  pub msg: String,
 }
 
 #[macro_export]
 macro_rules! parse_error {
   ($($rest: expr),+) => {
-    crate::errors::ParsingError::Generic(
-      format!($($rest),+)
-    )
+    crate::errors::ParsingError {
+      msg: format!($($rest),+)
+    }
   };
 }
 
-impl Display for ParsingError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self::Generic(msg) => write!(f, "{}", msg),
-      Self::Aggregate(errs) => write!(f, "{}", errs.into_iter().join("\n")),
-    }
-  }
-}
-
-pub enum RuntimeError {
-  Generic(String),
+#[derive(Debug, Clone, Display)]
+pub struct RuntimeError {
+  pub msg: String,
 }
 
 #[macro_export]
 macro_rules! runtime_error {
-  ($($rest: expr),+) => {
-    crate::errors::RuntimeError::Generic(
-      format!($($rest),+)
-    )
-  };
-}
-
-
-impl Display for RuntimeError {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self::Generic(msg) => write!(f, "{}", msg),
+  ($($rest: tt),*) => {
+    crate::errors::RuntimeError {
+      msg: format!($($rest),*)
     }
-  }
+  };
 }
