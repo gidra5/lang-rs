@@ -231,7 +231,7 @@ impl Type {
           //   Box::new(Type::String),
           // )
         ]),
-        t @ (Token::Number(_) | Token::String(_) | Token::Char(_) | Token::Boolean(_)) => {
+        t @ (Token::Number(..) | Token::String(_) | Token::Char(_) | Token::Boolean(_)) => {
           match t.value() {
             Ok(v) => Type::Value(v),
             Err(RuntimeError { msg }) => return Err(parse_error!("{msg}")),

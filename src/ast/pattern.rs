@@ -1,10 +1,13 @@
-use std::{default, fmt::Display};
+use crate::{
+  enviroment::Enviroment,
+  errors::ParsingError,
+  parse_error,
+  parseable::{Parseable, ParsingContext},
+  token::Token,
+  value::Value,
+};
 
-use itertools::Itertools;
-
-use crate::token::Token;
-
-use super::Expression;
+use super::{Expression, ParsingInput};
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum RecordPatternKey {
@@ -27,29 +30,63 @@ pub enum Pattern {
   Record(Vec<RecordPatternItem>),
 }
 
-impl Parseable for Pattern {
-  fn parse(stream: &mut TokenStream, context: &mut ParsingContext) -> Result<Self, ParsingError> {
-    Ok(match stream.peek() {
-      match_token!(Identifier) => {
-        let name = if let match_token!({ src }, Identifier) = stream.peek() {
-          stream.next();
+impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Pattern {
+  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+    let mut tokens = input.tokens;
+    let mut errors = input.errors;
+    let context = input.context;
+    match tokens.peek() {
+      Some(Token::Identifier(_)) => {
+        let name = if let Some(Token::Identifier(src)) = tokens.peek() {
+          tokens.next();
           src
         } else {
-          return parse_error!("");
+          errors.push(parse_error!("Expected name in pattern"));
+          return (
+            ParsingInput::<T> {
+              tokens,
+              errors,
+              context,
+            },
+            None,
+          );
         };
 
-        Pattern::Bind { name }
+        (
+          ParsingInput::<T> {
+            tokens,
+            errors,
+            context,
+          },
+          Some(Pattern::Bind { name }),
+        )
       },
-      _ => Self::from_expr(&Expression::parse(stream, context)?)?,
-    })
+      // _ => match Expression::parse(ParsingInput::<T> {
+      //   tokens,
+      //   errors,
+      //   context,
+      // }) {
+      // (mut i, Some(expr)) => match Self::from_expr(&expr) {
+      //   Ok(pat) => (i, Some(pat)),
+      //   Err(e) => {
+      //     i.errors.push(e);
+      //     (i, None)
+      //   },
+      // },
+      _ => Pattern::parse(ParsingInput::<T> {
+        tokens,
+        errors,
+        context,
+      }),
+    }
   }
 }
 
 impl Pattern {
-  pub fn from_expr(expr: &Expression) -> Result<Self, ParsingError> { todo!() }
-  pub fn _match(&self, val: Value, env: &mut Enviroment) -> bool { todo!() }
-  pub fn bind(&self, val: Value, env: &mut Enviroment) { todo!() }
-  pub fn context_bind(&self, context: &mut ParsingContext, bound_expr: &Expression) { todo!() }
+  pub fn from_expr(_expr: &Expression) -> Result<Self, ParsingError> { todo!() }
+  pub fn _match(&self, _val: Value, _env: &mut Enviroment) -> bool { todo!() }
+  pub fn bind(&self, _val: Value, _env: &mut Enviroment) { todo!() }
+  pub fn context_bind(&self, _context: &mut ParsingContext, _bound_expr: &Expression) { todo!() }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -59,27 +96,58 @@ pub struct PatternBinder {
   pub alias:   Option<String>,
 }
 
-impl Parseable for PatternBinder {
-  fn parse(stream: &mut TokenStream, context: &mut ParsingContext) -> Result<Self, ParsingError> {
-    let pattern = Pattern::parse(stream, context)?;
+impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for PatternBinder {
+  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+    (input, None)
+    // let (input, pattern) = Pattern::parse(input);
+    // let mut tokens = input.tokens;
+    // let mut errors = input.errors;
+    // let mut context = input.context;
 
-    let alias = if let [Some(Token::At), Some(Token::Identifier(src))] = stream.peek_ext(2)[..] {
-      stream.next_ext(2);
-      Some(src)
-    } else {
-      None
-    };
-    let default = if let Some(Equal) = stream.peek() {
-      stream.next();
-      Some(Expression::parse(stream, context)?)
-    } else {
-      None
-    };
+    // let alias = if let [Some(Token::At), Some(Token::Identifier(src))] =
+    // tokens.peek_ext(2)[..] {   tokens.next_ext(2);
+    //   Some(src)
+    // } else {
+    //   None
+    // };
+    // let default = if let Some(Equal) = tokens.peek() {
+    //   tokens.next();
+    //   // Some(Expression::parse(ParsingInput::<T> {
+    //   //   tokens,
+    //   //   errors,
+    //   //   context,
+    //   // }))
+    // } else {
+    //   None
+    // };
 
-    Ok(PatternBinder {
-      pattern,
-      default,
-      alias,
-    })
+    // PatternBinder {
+    //   pattern,
+    //   default,
+    //   alias,
+    // }
   }
+  // fn parse(stream: &mut TokenStream, context: &mut ParsingContext) ->
+  // Result<Self, ParsingError> {   let pattern = Pattern::parse(stream,
+  // context)?;
+
+  //   let alias = if let [Some(Token::At), Some(Token::Identifier(src))] =
+  // stream.peek_ext(2)[..] {     stream.next_ext(2);
+  //     Some(src)
+  //   } else {
+  //     None
+  //   };
+  //   let default = if let Some(Equal) = stream.peek() {
+  //     stream.next();
+  //     Some(Expression::parse(stream, context)?)
+  //   } else {
+  //     None
+  //   };
+
+  //   Ok(PatternBinder {
+  //     pattern,
+  //     default,
+  //     alias,
+  //   })
+  // }
 }

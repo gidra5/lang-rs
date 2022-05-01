@@ -2,7 +2,7 @@ use crate::{common::Buffered, errors::ParsingError, parseable::ParsingContext, t
 
 
 pub struct ParsingInput<T: Iterator<Item = Token> + Clone> {
-  tokens:  Buffered<T>,
-  context: ParsingContext,
-  errors:  Vec<ParsingError>,
+  pub tokens:  Buffered<T>,
+  pub context: ParsingContext,
+  pub errors:  Vec<ParsingError>,
 }

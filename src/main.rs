@@ -28,7 +28,6 @@ mod types;
 mod value;
 mod vm;
 
-// use crate::common::*;
 use interactive_mode::*;
 
 fn main() {

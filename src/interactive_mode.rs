@@ -36,9 +36,7 @@ impl InteractiveMode {
   /// executes given code in interpreter
   pub fn exec(&mut self, code: String) {
     let mut tokens: Parsed<_, Token> = TokenizationInput::new(code.chars().buffered()).parsed();
-    {
-      (&mut tokens).for_each(|token| println!("{token}"));
-    }
+    (&mut tokens).for_each(|token| println!("{token}"));
     let errors = tokens.source.errors;
     errors.iter().for_each(|err| println!("{err}"))
     // match Script::parse(tokens) {
@@ -65,9 +63,7 @@ impl InteractiveMode {
 
           let mut tokens: Parsed<_, Token> =
             TokenizationInput::new(line.chars().buffered()).parsed();
-          {
-            (&mut tokens).for_each(|token| println!("{token}"));
-          }
+          (&mut tokens).for_each(|token| println!("{token}"));
           let errors = tokens.source.errors;
           errors.iter().for_each(|err| println!("{err}"))
           // match Script::parse(tokens) {

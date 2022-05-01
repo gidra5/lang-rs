@@ -110,7 +110,7 @@ impl Operator {
       (
         Token::String(_)
         | Token::Char(_)
-        | Token::Number(_)
+        | Token::Number(..)
         | Token::Boolean(_)
         | Token::Placeholder,
         Fixity::None,

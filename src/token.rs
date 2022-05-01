@@ -117,7 +117,7 @@ pub enum Token {
   Type,
 
   // Literals
-  Number(i64),
+  Number(i64, u64),
   Boolean(bool),
   Char(char),
   String(String),
@@ -224,7 +224,7 @@ impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token
       },
       '"' => {
         let mut src = "".to_string();
-        while !is_next!(iter, '"') {
+        while is_next!([not skip] iter, '"') {
           if let Some(c) = iter.next() {
             src += &c.to_string()
           } else {
@@ -238,6 +238,7 @@ impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token
       '.' => Period,
       c if c.is_ascii_digit() => {
         let mut num = c.to_string().parse::<i64>().unwrap();
+        let mut fract = 0_u64;
         while let Some(c) = iter.peek() {
           if let Ok(d) = c.to_string().parse::<i64>() {
             num = 10 * num + d;
@@ -247,7 +248,18 @@ impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token
           }
         }
 
-        Number(num)
+        if is_next!([skip] iter, '.') {
+          while let Some(c) = iter.peek() {
+            if let Ok(d) = c.to_string().parse::<u64>() {
+              fract = 10 * fract + d;
+              iter.next();
+            } else {
+              break;
+            }
+          }
+        }
+
+        Number(num, fract)
       },
       c if c.is_ascii_alphabetic() || c == '_' => {
         let mut src = c.to_string();
