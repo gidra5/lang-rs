@@ -1,4 +1,9 @@
-use crate::{ast::*, common::*, enviroment::*, token::*};
+use crate::{
+  common::Buf,
+  enviroment::*,
+  parseable::{Par, Parsed, ParsingContext},
+  token::Token,
+};
 use rustyline::{error::*, *};
 use rustyline_derive::*;
 
@@ -9,10 +14,9 @@ mod tests;
 pub struct InteractiveModeHelper {}
 
 pub struct InteractiveMode {
-  rl:         Editor<InteractiveModeHelper>,
-  env:        Enviroment,
-  context:    ParsingContext,
-  pub logger: Logger,
+  rl:      Editor<InteractiveModeHelper>,
+  env:     Option<Enviroment>,
+  context: ParsingContext,
 }
 
 impl InteractiveMode {
@@ -25,25 +29,21 @@ impl InteractiveMode {
     Self {
       rl,
       context: ParsingContext::new(),
-      env: Enviroment::new(),
-      logger: Logger { logs: vec![] },
+      env: None,
     }
   }
 
   /// executes given code in interpreter
-  pub fn exec(&mut self, code: CharStream) {
-    match TokenStream::new(code, &mut self.logger) {
-      Some(mut tokens) => {
-        match Script::parse_ext(&mut tokens, &mut self.context) {
-          Ok(tree) => match tree.node.evaluate(&mut self.env, &mut self.logger) {
-            Ok(_) => (),
-            Err(RuntimeError::Generic(msg)) => self.logger.error(&format!("Runtime error: {msg}")),
-          },
-          Err(msg) => self.logger.error_parse(msg),
-        };
-      },
-      None => self.logger.error("Tokenization failed"),
-    };
+  pub fn exec(&mut self, code: String) {
+    let tokens: Parsed<_, Token> = code.chars().buffered().parsed();
+    tokens.for_each(|token| println!("{token}"))
+    // match Script::parse(tokens) {
+    //   Ok(tree) => match tree.node.evaluate(&mut self.env) {
+    //     Ok(_) => (),
+    //     Err(RuntimeError::Generic(msg)) => println!("Runtime error: {msg}"),
+    //   },
+    //   Err(msg) => println!("Parsing error: {msg}"),
+    // };
   }
 
   /// runs interpreter in interactive mode
@@ -59,23 +59,18 @@ impl InteractiveMode {
 
           self.rl.add_history_entry(line.as_str());
 
-          match TokenStream::new(CharStream::from_string(line), &mut self.logger) {
-            Some(mut tokens) => {
-              match Script::parse_ext(&mut tokens, &mut self.context) {
-                Ok(tree) => match tree.node.evaluate(&mut self.env, &mut self.logger) {
-                  Ok(_) => (),
-                  Err(RuntimeError::Generic(msg)) => {
-                    self.logger.error(&format!("Runtime error: {msg}"))
-                  },
-                },
-                Err(msg) => self.logger.error_parse(msg),
-              };
-            },
-            None => self.logger.error("Tokenization failed"),
-          };
+          let tokens: Parsed<_, Token> = line.chars().buffered().parsed();
+          tokens.for_each(|token| println!("{token}"))
+          // match Script::parse(tokens) {
+          //   Ok(tree) => match tree.node.evaluate(&mut self.env) {
+          //     Ok(_) => (),
+          //     Err(RuntimeError::Generic(msg)) => println!("Runtime error:
+          // {msg}"),   },
+          //   Err(msg) => println!("Parsing error: {msg}"),
+          // };
         },
         Err(ReadlineError::Interrupted) => break,
-        Err(_) => self.logger.log("No input"),
+        Err(_) => println!("No input"),
       }
     }
   }

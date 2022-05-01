@@ -21,7 +21,7 @@ use crate::{
   punct_or_newline,
   scoped,
   skip,
-  token::{self, TokenExt},
+  token::{self, Token, TokenExt},
   token_pat,
 };
 
@@ -40,13 +40,12 @@ pub struct RecordItem {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Expression {
-  Value(TokenExt),
+  Value(Token),
   Record(Vec<RecordItem>),
 
   Block(Vec<Expression>),
-  If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-  For(Box<Expression>, Box<Expression>, Box<Expression>),
-
+  // If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+  // For(Box<Expression>, Box<Expression>, Box<Expression>),
   Prefix {
     op:    Box<Expression>,
     right: Box<Expression>,
@@ -109,9 +108,6 @@ impl Display for Expression {
           write!(f, "()")
         }
       },
-      Expression::If(cond, t_b, Some(f_b)) => write!(f, "(if {}: {} else {})", cond, t_b, f_b),
-      Expression::If(cond, t_b, None) => write!(f, "(if {}: {} else None)", cond, t_b),
-      Expression::For(pat, iter, body) => write!(f, "(for {} in {}: {})", pat, iter, body),
       Expression::Block(stmts) => {
         write!(
           f,
@@ -150,76 +146,3 @@ impl Expression {
     }
   }
 }
-
-
-// #[macro_export]
-// macro_rules! record_key_pat {
-//   ([$expr:tt]) => {
-//     RecordKey::Value(expr_pat!($expr:tt))
-//   };
-//   ($name:ident) => {
-//     RecordKey::Identifier(stringify!($name))
-//   };
-//   () => {
-//     RecordKey::None
-//   };
-// }
-
-// #[macro_export]
-// macro_rules! expr_node_pat {
-//   ({ $($inner:tt);* }) => {
-//     Op::Block(vec![$($inner:tt),*])
-//   };
-//   (( $($($name:tt:)? $expr:tt);* )) => {
-//     Op::Record([$(RecordItem { key: record_key_pat!($($name)?), value:
-// $expr}),*])   };
-//   (( $([$key:tt]: $expr:tt);* )) => {
-//     Op::Record([$(RecordItem { key: record_key_pat!($key), value: $expr}),*])
-//   };
-// }
-
-// #[macro_export]
-// macro_rules! expr_pat {
-//   ($node:tt $(, left $(: ident $left:ident)?)? $(, right $(: ident
-// $right:ident)?)?) => {     Expression {
-//       op: expr_node_pat!($node),
-//       left $(: expr_pat!(sub ident $($left)?))?,
-//       right $(: expr_pat!(sub ident $($right)?))?,
-//     }
-//   };
-//   (value $($token_ident:ident $(: $($token_pat:ident)|+)? $(, src
-// $src_ident:ident$(: $($src_pat:pat)|+)? )?)? $(, left $(: ident
-// $left:ident)?)? $(, right $(: ident $right:ident)?)?) => {     Expression {
-//       op: Op::Value(token_pat!($($token_ident $(: $($token_pat)|+)? $(,
-// $src_ident $(: $($src_pat)|+)? )?)?)),       left $(: expr_pat!(sub $(ident
-// $left)?))?,       right $(: expr_pat!(sub $(ident $right)?))?,
-//     }
-//   };
-//   ($node:tt $(, left $(: $left:tt)?)? $(, right $(: $right:tt)?)?) => {
-//     Expression {
-//       op: expr_node_pat!($node),
-//       left $(: expr_pat!(sub $($left)?))?,
-//       right $(: expr_pat!(sub $($right)?))?,
-//     }
-//   };
-//   (value $($token_ident:ident $(: $($token_pat:ident)|+)? $(, src
-// $src_ident:ident$(: $($src_pat:pat)|+)? )?)? $(, left $(: $left:tt)?)? $(,
-// right $(: $right:tt)?)?) => {     Expression {
-//       op: Op::Value(token_pat!($($token_ident $(: $($token_pat)|+)? $(,
-// $src_ident $(: $($src_pat)|+)? )?)?)),       left $(: expr_pat!(sub
-// $($left)?))?,       right $(: expr_pat!(sub $($right)?))?,
-//     }
-//   };
-//   (sub ident $ident:ident) => {
-//     $ident
-//   };
-//   (sub _) => {
-//     _
-//   };
-//   (sub) => {
-//     None
-//   };
-//   (sub $node:tt) => {
-//     Some(box expr_pat!($node))
-//   };
-// }

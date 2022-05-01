@@ -7,6 +7,7 @@
 #![feature(box_patterns)]
 #![feature(derive_default_enum)]
 #![feature(associated_type_defaults)]
+#![feature(type_alias_impl_trait)]
 extern crate either;
 extern crate fancy_regex;
 extern crate itertools;
@@ -15,15 +16,19 @@ extern crate rustyline;
 #[macro_use]
 extern crate clap;
 
-mod ast;
+// mod ast;
 mod common;
 mod enviroment;
 mod interactive_mode;
+// mod namespace;
+mod errors;
+mod parseable;
 mod token;
-mod types;
+// mod types;
+mod value;
 mod vm;
 
-use crate::common::*;
+// use crate::common::*;
 use interactive_mode::*;
 
 fn main() {
@@ -34,10 +39,22 @@ fn main() {
 
   let code = {
     if let Some(filename) = matches.value_of("SRC_FILE") {
-      match CharStream::new(filename) {
-        Ok(s) => Some(s),
-        Err(e) => {
-          im.logger.error(e);
+      let file = std::fs::read(filename)
+        .map(|file| String::from_utf8(file).expect("Failed to parse as utf8 text"))
+        .map_err(|err| {
+          use std::io::ErrorKind::*;
+          match err.kind() {
+            NotFound => "No such file",
+            PermissionDenied => {
+              "Permission denied, maybe try running as administrator/sudo or add 'executable' flag"
+            },
+            _ => "Unexpected IO error",
+          }
+        });
+      match file {
+        Ok(src) => Some(src),
+        Err(err) => {
+          println!("{err}");
           None
         },
       }

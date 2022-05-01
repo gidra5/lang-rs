@@ -1,10 +1,11 @@
-use crate::{common::*, map};
-use std::{cell::RefCell, collections::HashMap, iter::once, rc::Rc};
+use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Enviroment {
-  variables: Rc<RefCell<HashMap<String, Value>>>,
-  stack:     Vec<Rc<RefCell<HashMap<String, Value>>>>,
+  name:      String,
+  value:     Value,
+  enclosing: Option<Box<Enviroment>>,
 }
 
 pub enum CloseBy {
@@ -14,125 +15,110 @@ pub enum CloseBy {
 }
 
 impl Enviroment {
-  pub fn new() -> Enviroment { Enviroment::new_with_variables(map![]) }
-
-  pub fn new_with_variables(variables: HashMap<String, Value>) -> Enviroment {
+  pub fn new(name: String, value: Value) -> Enviroment {
     Enviroment {
-      variables: Rc::new(RefCell::new(variables)),
-      stack:     vec![],
+      name,
+      value,
+      enclosing: None,
     }
   }
 
-  pub fn push_stack(&mut self) {
-    self
-      .stack
-      .insert(0, Rc::new(RefCell::new(self.variables.replace(map![]))));
+  pub fn new_with_variables(variables: HashMap<String, Value>) -> Option<Enviroment> {
+    variables
+      .into_iter()
+      .fold(None, |enclosing, (name, value)| {
+        Some(match enclosing {
+          Some(e) => Enviroment::define(e, name, value),
+          None => Enviroment::new(name, value),
+        })
+      })
   }
 
-  pub fn pop_stack(&mut self) { self.variables = self.stack.remove(0); }
-
-  pub fn has(&self, ident: &String) -> bool { self.variables.borrow().contains_key(ident) }
-
-  pub fn get_from(&self, index: usize, ident: &String) -> Option<Value> {
-    if index != 0 {
-      self.stack[index - 1].borrow().get(ident).map(|x| x.clone())
+  pub fn get_immediate(&self, ident: String) -> Option<Value> {
+    if self.name == ident {
+      Some(self.value.clone())
     } else {
-      self.variables.borrow().get(ident).map(|x| x.clone())
+      None
     }
   }
 
-  fn resolve(&self, ident: &String) -> Option<usize> {
-    let iter = once(&self.variables).chain(self.stack.iter()).enumerate();
-    for (i, variables) in iter {
-      if variables.borrow().contains_key(ident) {
-        return Some(i);
-      }
-    }
-    None
-  }
+  fn resolve(self, ident: String) -> Option<Enviroment> { self.resolve_enclosed(ident).1 }
 
-  pub fn get(&self, ident: &String) -> Option<Value> {
-    let iter = once(&self.variables).chain(self.stack.iter());
-    for variables in iter {
-      if let Some(value) = variables.borrow().get(ident) {
-        return Some(value.clone());
-      }
-    }
-    None
-  }
-
-  pub fn define(&mut self, ident: String, val: Value) {
-    self.variables.borrow_mut().insert(ident, val);
-  }
-
-  pub fn delete(&mut self, ident: &String) -> Option<Value> {
-    let iter = once(&self.variables).chain(self.stack.iter());
-    for variables in iter {
-      if let Some(value) = variables.borrow_mut().remove(ident) {
-        return Some(value);
-      }
-    }
-    None
-  }
-
-  pub fn delete_from(&mut self, index: usize, ident: &String) -> Option<Value> {
-    if index != 0 {
-      self.stack[index - 1].borrow_mut().remove(ident)
+  /// traverses enviroment and when finds requested binding returns env with it
+  /// and part of env without it
+  fn resolve_enclosed(self, ident: String) -> (Option<Enviroment>, Option<Enviroment>) {
+    if self.name == ident {
+      (None, Some(self))
     } else {
-      self.variables.borrow_mut().remove(ident)
-    }
-  }
+      match self.enclosing {
+        None => (Some(self), None),
+        Some(e) => {
+          let (enclosing, rest) = e.resolve_enclosed(ident);
 
-  pub fn set(&mut self, ident: String, val: Value) -> Result<(), String> {
-    let iter = once(&mut self.variables).chain(self.stack.iter_mut());
-    for variables in iter {
-      if let Some(value) = variables.borrow_mut().get_mut(&ident) {
-        *value = val;
-        return Ok(());
-      }
-    }
-
-    Err(format!("Variable {} is not declared in this scope", ident))
-  }
-
-  pub fn close_over_env(&mut self, vars: Vec<(CloseBy, String)>) -> Enviroment {
-    let mut variables = map![];
-
-    for (close_by, name) in vars {
-      match close_by {
-        CloseBy::Copy => match self.get(&name) {
-          Some(val) => {
-            variables.insert(name, val);
-          },
-          _ => (),
-        },
-        CloseBy::Ref => match self.delete(&name) {
-          Some(val) => {
-            let val_ref = Rc::new(RefCell::new(val));
-            variables.insert(name.clone(), Value::Ref(val_ref.clone()));
-            self.define(name, Value::Ref(val_ref));
-          },
-          _ => (),
-        },
-        CloseBy::Move => match self.delete(&name) {
-          Some(val) => {
-            variables.insert(name, val);
-          },
-          _ => (),
+          (
+            Some(Enviroment {
+              enclosing: enclosing.map(Box::new),
+              ..self
+            }),
+            rest,
+          )
         },
       }
     }
-
-    Enviroment::new_with_variables(variables)
   }
-}
 
-#[macro_export]
-macro_rules! scoped {
-  ($env: ident, $expr: expr) => {{
-    $env.push_stack();
-    let res = $expr;
-    $env.pop_stack();
-    res
-  }};
+  /// `resolve_enclosed` and `close_over` are inverses:
+  /// ```
+  /// let (rest, resolved) = env.resolve_enclosed(name);
+  /// assert!(resolved.close_over(rest) == env)
+  /// ```
+  pub fn close_over(self, env: Enviroment) -> Enviroment {
+    Enviroment {
+      enclosing: Some(Box::new(
+        env
+          .enclosing
+          .map_or(self.clone(), |box e| self.close_over(e)),
+      )),
+      ..env
+    }
+  }
+
+  pub fn get(&self, ident: String) -> Option<Value> { self.clone().resolve(ident).map(|e| e.value) }
+
+  pub fn define(self, name: String, value: Value) -> Enviroment {
+    Enviroment {
+      name,
+      value,
+      enclosing: Some(Box::new(self)),
+    }
+  }
+
+  pub fn remove(self, ident: String) -> (Option<Value>, Option<Enviroment>) {
+    let (left, resolved) = self.resolve_enclosed(ident);
+
+    match resolved {
+      Some(env) => {
+        let (value, enclosing) = (env.value, env.enclosing);
+        let env = left.map(|e| Enviroment { enclosing, ..e });
+        (Some(value), env)
+      },
+      None => (None, left),
+    }
+  }
+
+  pub fn set(self, ident: String, value: Value) -> (Enviroment, Option<String>) {
+    let (left, resolved) = self.clone().resolve_enclosed(ident.clone());
+
+    match resolved {
+      Some(e) => {
+        let enclosing = Enviroment { value, ..e };
+        let env = left.map(|env| enclosing.clone().close_over(env));
+        (env.unwrap_or(enclosing), None)
+      },
+      None => (
+        self,
+        Some(format!("Variable {} is not declared in this scope", ident)),
+      ),
+    }
+  }
 }
