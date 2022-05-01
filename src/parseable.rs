@@ -1,23 +1,23 @@
 use either::Either;
 use std::{marker::PhantomData, mem::MaybeUninit, ops::Range};
 
-use crate::enviroment::Enviroment;
+use crate::{enviroment::Enviroment, map, namespace::Namespace};
 
 type Span = Range<usize>;
 
 pub struct ParsingContext {
-  // pub namespace: Namespace,
+  pub namespace: Namespace,
 }
 
 impl ParsingContext {
   pub fn new() -> ParsingContext {
     ParsingContext {
-      // namespace: Namespace(map![]),
+      namespace: Namespace(map![]),
     }
   }
   pub fn from_env(_env: Enviroment) -> ParsingContext {
     ParsingContext {
-      // namespace: Namespace(map![]),
+      namespace: Namespace(map![]),
     }
   }
 }

@@ -1,3 +1,6 @@
+use std::fmt::{Display, Formatter};
+
+use itertools::Itertools;
 
 /// matches error productions
 #[derive(Debug)]
@@ -16,6 +19,15 @@ macro_rules! parse_error {
   };
 }
 
+impl Display for ParsingError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Generic(msg) => write!(f, "{}", msg),
+      Self::Aggregate(errs) => write!(f, "{}", errs.into_iter().join("\n")),
+    }
+  }
+}
+
 pub enum RuntimeError {
   Generic(String),
 }
@@ -27,4 +39,13 @@ macro_rules! runtime_error {
       format!($($rest),+)
     )
   };
+}
+
+
+impl Display for RuntimeError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Generic(msg) => write!(f, "{}", msg),
+    }
+  }
 }

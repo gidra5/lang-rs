@@ -1,12 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::{
-  ast::{Expression, ParsingContext},
-  token::{Token, TokenExt},
-  token_pat,
-};
-
-
+use crate::{ast::Expression, parseable::ParsingContext, token::Token};
 
 #[derive(Clone, PartialEq, Default, Eq, Debug)]
 pub enum Fixity {
@@ -73,7 +67,7 @@ impl Operator {
     }
   }
 
-  pub fn new(token: TokenExt, context: &mut ParsingContext, prefix: bool) -> Self {
+  pub fn new(token: Token, context: &mut ParsingContext, prefix: bool) -> Self {
     let precedence = Self::get_precedence(
       &token,
       context,
@@ -102,7 +96,7 @@ impl Operator {
   }
 
   fn get_precedence(
-    token: &TokenExt,
+    token: &Token,
     context: &mut ParsingContext,
     fixity: Fixity,
   ) -> Option<Precedence> {
@@ -116,32 +110,37 @@ impl Operator {
       //   })?
       // },
       (
-        token_pat!(token: Identifier | String | Placeholder | Char | Number | Boolean),
+        Token::Identifier(_)
+        | Token::String(_)
+        | Token::Char(_)
+        | Token::Number(_)
+        | Token::Boolean(_)
+        | Token::Placeholder,
         Fixity::None,
       ) => (None, None),
-      (token_pat!(token, src), Fixity::Prefix) => (
+      (token, Fixity::Prefix) => (
         None,
         Some(match token {
           Token::Add | Token::Sub => 9,
           Token::Inc | Token::Dec => 11,
           Token::Mult => 13,
-          Token::Identifier if src == "not" => 29,
+          Token::Identifier(src) if src == "not" => 29,
           Token::Async => 36,
           Token::Await => 33,
           Token::Inline => 36,
-          Token::Identifier if src == "print" => 0,
-          Token::Identifier if src == "let" => 254,
+          Token::Identifier(src) if src == "print" => 0,
+          Token::Identifier(src) if src == "let" => 254,
           _ => return None,
         }),
       ),
-      (token_pat!(token, src), Fixity::Postfix) => (
+      (token, Fixity::Postfix) => (
         Some(match token {
           Token::Bang => 15,
           _ => return None,
         }),
         None,
       ),
-      (token_pat!(token, src), Fixity::Infix) => match token {
+      (token, Fixity::Infix) => match token {
         Token::LBrace => (Some(26), Some(27)),
         Token::Period => (Some(24), Some(23)),
         Token::Equal => (Some(255), Some(1)),
@@ -158,9 +157,9 @@ impl Operator {
         Token::Is => (Some(32), Some(33)),
         Token::Hash => (Some(97), Some(97)),
 
-        Token::Identifier if src == "mod" => (Some(22), Some(21)),
-        Token::Identifier if src == "and" => (Some(24), Some(23)),
-        Token::Identifier if src == "or" => (Some(25), Some(26)),
+        Token::Identifier(src) if src == "mod" => (Some(22), Some(21)),
+        Token::Identifier(src) if src == "and" => (Some(24), Some(23)),
+        Token::Identifier(src) if src == "or" => (Some(25), Some(26)),
         _ => return None,
       },
       _ => return None,

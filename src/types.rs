@@ -7,15 +7,18 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
-  ast::{Expression, ParsingError, Pattern, PatternBinder},
+  ast::Expression,
+  errors::{ParsingError, RuntimeError},
   namespace::Declaration,
+  parse_error,
   parseable::ParsingContext,
   set,
+  token::Token,
   value::Value,
 };
 
-#[path = "tests/types.rs"]
-mod tests;
+// #[path = "tests/types.rs"]
+// mod tests;
 
 #[macro_export]
 macro_rules! is_unit_type {
@@ -111,10 +114,9 @@ impl PartialOrd for Type {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
     Some(match (self, other) {
       (Type::Value(Value::String(_)), Type::String) => Ordering::Less,
-      (Type::Value(Value::Type(_)), Type::Type) => Ordering::Less,
+      // (Type::Value(Value::Type(_)), Type::Type) => Ordering::Less,
       (Type::Value(Value::Symbol(_)), Type::Symbol) => Ordering::Less,
-      (Type::Value(Value::Type(box t1)), t2) if t1 < t2 => Ordering::Less,
-
+      // (Type::Value(Value::Type(box t1)), t2) if t1 < t2 => Ordering::Less,
       (Type::Void, _) => Ordering::Less,
 
       // tuple1 is subtype of tuple2 if for every item1 in tuple2 there is an item2 in tuple1 in the
@@ -202,22 +204,27 @@ impl std::hash::Hash for Type {
 }
 
 impl Type {
-  pub fn of_pat(pat: &PatternBinder, _context: &ParsingContext) -> Type {
-    match pat.pattern {
-      Pattern::Record(_) => todo!(),
-      _ => Type::Void,
-    }
-  }
+  // pub fn of_pat(pat: &PatternBinder, _context: &ParsingContext) -> Type {
+  //   match pat.pattern {
+  //     Pattern::Record(_) => todo!(),
+  //     _ => Type::Void,
+  //   }
+  // }
   pub fn of_expr(expr: &Expression, context: &ParsingContext) -> Result<Self, ParsingError> {
     Ok(match expr {
       Expression::Value(token) => match token {
-        token_pat!(token: Add) => Type::Union(set![Type::Function(
+        Token::Add => Type::Union(set![Type::Function(
           Box::new(Type::Tuple(vec![Type::String, Type::String])),
           Box::new(Type::String),
         ),]),
-        t @ token_pat!(token: Number | String | Char | Boolean) => Type::Value(t.value()),
-        token_pat!(token: Identifier, src) if src == "string" => Type::String,
-        token_pat!(token: Identifier, src) => {
+        t @ (Token::Number(_) | Token::String(_) | Token::Char(_) | Token::Boolean(_)) => {
+          match t.value() {
+            Ok(v) => Type::Value(v),
+            Err(RuntimeError::Generic(msg)) => return Err(parse_error!("{msg}")),
+          }
+        },
+        Token::Identifier(src) if src == "string" => Type::String,
+        Token::Identifier(src) => {
           context
             .namespace
             .get(src)
@@ -255,13 +262,13 @@ impl Type {
         }
       },
       Expression::Infix { left, op, right } => match op {
-        box Expression::Value(token_pat!(token: Arrow)) => Type::Function(
-          Box::new(Type::of_pat(
-            &PatternWithDefault::from_expr(left)?,
-            &context,
-          )),
-          Box::new(Type::of_expr(right, &context)?),
-        ),
+        // box Expression::Value(Arrow) => Type::Function(
+        //   Box::new(Type::of_pat(
+        //     &PatternWithDefault::from_expr(left)?,
+        //     &context,
+        //   )),
+        //   Box::new(Type::of_expr(right, &context)?),
+        // ),
         op => {
           if let Type::Function(box arg, box res) = Type::of_expr(op, context)? {
             if Type::Tuple(vec![
@@ -279,7 +286,8 @@ impl Type {
   }
   pub fn of_value(value: &Value) -> Type {
     match value {
-      val @ (Value::String(_) | Value::Type(_)) => Type::Value(val.clone()),
+      // val @ (Value::String(_) | Value::Type(_)) => Type::Value(val.clone()),
+      val @ Value::String(_) => Type::Value(val.clone()),
       Value::Tuple(values) => Type::Tuple(
         values
           .iter()
@@ -303,16 +311,16 @@ impl Type {
           .map(|(key, value)| (key.clone(), Type::of_value(value)))
           .collect(),
       ),
-      Value::Function(arg, env, expr) => {
-        let context = ParsingContext::from_env(env);
-        Type::Function(
-          Box::new(Type::of_pat(
-            &PatternWithDefault::from_expr(arg).unwrap(),
-            &context,
-          )),
-          Box::new(Type::of_expr(expr, &context).unwrap()),
-        )
-      },
+      // Value::Function(arg, env, expr) => {
+      //   let context = ParsingContext::from_env(env);
+      //   Type::Function(
+      //     Box::new(Type::of_pat(
+      //       &PatternWithDefault::from_expr(arg).unwrap(),
+      //       &context,
+      //     )),
+      //     Box::new(Type::of_expr(expr, &context).unwrap()),
+      //   )
+      // },
       _ => Type::Void,
     }
   }

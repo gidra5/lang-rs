@@ -7,23 +7,12 @@ use std::{
   rc::Rc,
 };
 
-use super::expr_eval::*;
 use either::Either;
 use itertools::Itertools;
 
-use crate::{
-  check_token,
-  check_token_end,
-  common::{reversable_iterator::ReversableIterator, value, LoggerTrait, Span, Value},
-  enviroment::Enviroment,
-  map,
-  match_token,
-  punct_or_newline,
-  scoped,
-  skip,
-  token::{self, Token, TokenExt},
-  token_pat,
-};
+use crate::token::Token;
+
+
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum RecordKey {
@@ -68,7 +57,7 @@ impl Hash for Expression {
 }
 
 impl Default for Expression {
-  fn default() -> Expression { Expression::Value(TokenExt::default()) }
+  fn default() -> Expression { Expression::Value(Token::default()) }
 }
 
 impl Display for Expression {

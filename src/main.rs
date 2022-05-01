@@ -16,15 +16,15 @@ extern crate rustyline;
 #[macro_use]
 extern crate clap;
 
-// mod ast;
+mod ast;
 mod common;
 mod enviroment;
-mod interactive_mode;
-// mod namespace;
 mod errors;
+mod interactive_mode;
+mod namespace;
 mod parseable;
 mod token;
-// mod types;
+mod types;
 mod value;
 mod vm;
 

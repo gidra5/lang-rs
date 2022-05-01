@@ -1,5 +1,7 @@
 use crate::{
   common::reversable_iterator::Buffered,
+  enviroment::Enviroment,
+  errors::RuntimeError,
   is_next,
   parseable::Parseable,
   runtime_error,
@@ -96,6 +98,10 @@ pub enum Token {
   Apply,
 }
 
+impl Token {
+  pub fn value(&self) -> Result<Value, RuntimeError> { self.evaluate(None).0 }
+}
+
 impl Display for Token {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -106,13 +112,7 @@ impl Display for Token {
 }
 
 impl Evaluatable for Token {
-  fn evaluate(
-    &self,
-    env: crate::enviroment::Enviroment,
-  ) -> (
-    Result<crate::value::Value, Self::E>,
-    crate::enviroment::Enviroment,
-  ) {
+  fn evaluate(&self, env: Option<Enviroment>) -> (Result<Value, Self::E>, Option<Enviroment>) {
     (
       match self {
         // TODO: interpolation

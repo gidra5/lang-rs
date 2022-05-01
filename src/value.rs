@@ -84,5 +84,5 @@ impl Eq for Value {}
 
 pub trait Evaluatable {
   type E = RuntimeError;
-  fn evaluate(&self, env: Enviroment) -> (Result<Value, Self::E>, Enviroment);
+  fn evaluate(&self, env: Option<Enviroment>) -> (Result<Value, Self::E>, Option<Enviroment>);
 }
