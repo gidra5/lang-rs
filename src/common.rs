@@ -18,12 +18,12 @@ pub mod buffered_iterator;
 pub use buffered_iterator::*;
 
 pub mod utils;
+use owned_chars::OwnedChars;
 pub use utils::*;
 
-pub fn str_parse_file<'a, T, I>(path: &'a str) -> Result<T::O, String>
+pub fn str_parse_file<T>(path: &str) -> Result<T::O, String>
 where
-  T: Parseable<I, I = Chars<'a>>,
-  I: Iterator<Item = char>,
+  T: Parseable<OwnedChars>,
 {
   std::fs::read(path)
     .map_err(|err| {
@@ -37,16 +37,14 @@ where
       })
       .to_owned()
     })
-    .and_then(|file| {
-      str_parse::<T, I>(String::from_utf8(file).expect("Failed to parse as utf8 text"))
-    })
+    .and_then(|file| str_parse::<T>(String::from_utf8(file).expect("Failed to parse as utf8 text")))
 }
 
-pub fn str_parse<'a, T, I>(input: String) -> Result<T::O, String>
+pub fn str_parse<T>(input: String) -> Result<T::O, String>
 where
-  T: Parseable<I, I = Chars<'a>>,
-  I: Iterator<Item = char>,
+  T: Parseable<OwnedChars>,
 {
-  let chars = unsafe { mem::transmute(input.chars()) };
-  T::parse(chars).1.ok_or("Failed to parse".to_string())
+  T::parse(OwnedChars::from_string(input))
+    .1
+    .ok_or("Failed to parse".to_string())
 }

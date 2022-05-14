@@ -31,7 +31,7 @@ pub enum Pattern {
 }
 
 impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Pattern {
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
     let mut tokens = input.tokens;
     let mut errors = input.errors;
     let context = input.context;
@@ -97,7 +97,7 @@ pub struct PatternBinder {
 }
 
 impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for PatternBinder {
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
     (input, None)
     // let (input, pattern) = Pattern::parse(input);
     // let mut tokens = input.tokens;

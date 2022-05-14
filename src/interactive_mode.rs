@@ -1,7 +1,8 @@
 use crate::{
-  common::Buf,
+  ast::{Expression, ParsingInput},
+  common::{Buf, Buffered},
   enviroment::*,
-  parseable::{ParseableIterator, Parsed, ParsingContext},
+  parseable::{Parseable, ParseableIterator, Parsed, ParsingContext},
   token::{Token, TokenizationInput},
 };
 use rustyline::{error::*, *};
@@ -61,18 +62,18 @@ impl InteractiveMode {
 
           self.rl.add_history_entry(line.as_str());
 
-          let mut tokens: Parsed<_, Token> =
-            TokenizationInput::new(line.chars().buffered()).parsed();
-          (&mut tokens).for_each(|token| println!("{token}"));
-          let errors = tokens.source.errors;
-          errors.iter().for_each(|err| println!("{err}"))
-          // match Script::parse(tokens) {
-          //   Ok(tree) => match tree.node.evaluate(&mut self.env) {
-          //     Ok(_) => (),
-          //     Err(RuntimeError::Generic(msg)) => println!("Runtime error:
-          // {msg}"),   },
-          //   Err(msg) => println!("Parsing error: {msg}"),
-          // };
+          let tokens: Buffered<Parsed<_, Token>> = TokenizationInput::new(line.chars().buffered())
+            .parsed()
+            .buffered();
+          let res = <Expression as Parseable<_>>::parse(ParsingInput {
+            tokens,
+            context: self.context.clone(),
+            errors: vec![],
+          });
+          match res {
+            (_, Some(o)) => println!("{:?}", o),
+            (i, None) => println!("{:?}", i.errors),
+          };
         },
         Err(ReadlineError::Interrupted) => break,
         Err(_) => println!("No input"),

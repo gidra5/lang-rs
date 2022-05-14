@@ -1,8 +1,4 @@
-use std::{
-  cmp::Ordering,
-  collections::{HashMap, HashSet},
-  rc::Rc,
-};
+use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 
 use itertools::Itertools;
 
@@ -12,7 +8,6 @@ use crate::{
   namespace::Declaration,
   parse_error,
   parseable::ParsingContext,
-  set,
   token::Token,
   value::Value,
 };
@@ -64,23 +59,15 @@ pub enum Type {
 
   // a type for every variant of Value
   String,
-  Symbol,
-  Type,             // think of type universes hierarcy
-  Tuple(Vec<Type>), // replace with pair and syntax sugar?
+  Type, // think of type universes hierarcy
+  Tuple(Vec<Type>),
   Record(HashMap<String, Type>),
   Map(HashMap<Type, Type>),       // map from key types to value types
   Function(Box<Type>, Box<Type>), // function type
 
   // type expressions
-  Union(HashSet<Type>),
-  Intersection(HashSet<Type>),
   Negated(Box<Type>),
 
-  // TODO: add these
-  // Ref(/* mutable */ bool, Box<Type>),
-  // TypeRef(TypeRef),
-  // NominalType(TypeRef), // maybe somehow replace with combination of value::symbol and type?
-  // TypeOf(String),       // type of some variable in scope
   Unknown, // aka any type, universum
 }
 
@@ -90,8 +77,6 @@ impl PartialEq for Type {
       (Self::Value(l0), Self::Value(r0)) => l0 == r0,
       (Self::Tuple(l0), Self::Tuple(r0)) => l0 == r0,
       (Self::Record(l0), Self::Record(r0)) => l0 == r0,
-      (Self::Union(l0), Self::Union(r0)) => l0.is_subset(r0) && r0.is_subset(l0),
-      (Self::Intersection(l0), Self::Intersection(r0)) => l0.is_subset(r0) && r0.is_subset(l0),
       (Self::Negated(l0), Self::Negated(r0)) => l0 == r0,
       (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
 
@@ -114,9 +99,6 @@ impl PartialOrd for Type {
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
     Some(match (self, other) {
       (Type::Value(Value::String(_)), Type::String) => Ordering::Less,
-      // (Type::Value(Value::Type(_)), Type::Type) => Ordering::Less,
-      (Type::Value(Value::Symbol(_)), Type::Symbol) => Ordering::Less,
-      // (Type::Value(Value::Type(box t1)), t2) if t1 < t2 => Ordering::Less,
       (Type::Void, _) => Ordering::Less,
 
       // tuple1 is subtype of tuple2 if for every item1 in tuple2 there is an item2 in tuple1 in the
@@ -148,29 +130,6 @@ impl PartialOrd for Type {
       (t1, Type::Record(items)) if items.len() == 1 => {
         Self::partial_cmp(t1, items.values().next().unwrap())?
       },
-
-      // union1 is strict subtype of union2 if there is no var1 in vars1 such that there is no var2
-      // in vars2 such that var1 is strict subtype of var2
-      (Type::Union(vars1), Type::Union(vars2))
-        if !vars1
-          .iter()
-          .any(|var1| !vars2.iter().any(|var2| var1 < var2)) =>
-      {
-        Ordering::Less
-      },
-      (t, Type::Union(vars)) if !vars.iter().all(|var2| !(t < var2)) => Ordering::Less,
-
-      // intersect1 is subtype of intersect2 if for all item2 in intersect2 there is item1 in
-      // intersect1 such that item1 is subtype of item2
-      (Type::Intersection(items1), Type::Intersection(items2))
-        if items2
-          .iter()
-          .all(|item2| items1.iter().any(|item1| item1 <= item2)) =>
-      {
-        Ordering::Less
-      },
-      // type is subtype of intersection if type is subtype of every item in intersection
-      (t, Type::Intersection(items)) if items.iter().all(|item| t <= item) => Ordering::Less,
 
       // function1 is subtype of function2 if arg2 is subtype of arg1 and res1 is subtype of res2
       (Type::Function(box arg1, box res1), Type::Function(box arg2, box res2))
@@ -213,24 +172,6 @@ impl Type {
   pub fn of_expr(expr: &Expression, context: &ParsingContext) -> Result<Self, ParsingError> {
     Ok(match expr {
       Expression::Value(token) => match token {
-        Token::Add => Type::Union(set![
-          Type::Function(
-            Box::new(Type::Tuple(vec![Type::String, Type::String])),
-            Box::new(Type::String),
-          ),
-          // Type::Function(
-          //   Box::new(Type::Tuple(vec![Type::String, Type::String])),
-          //   Box::new(Type::String),
-          // ),
-          // Type::Function(
-          //   Box::new(Type::Tuple(vec![Type::String, Type::Char])),
-          //   Box::new(Type::String),
-          // ),
-          // Type::Function(
-          //   Box::new(Type::Tuple(vec![Type::Char, Type::String])),
-          //   Box::new(Type::String),
-          // )
-        ]),
         t @ (Token::Number(..) | Token::String(_) | Token::Char(_) | Token::Boolean(_)) => {
           match t.value() {
             Ok(v) => Type::Value(v),
@@ -238,9 +179,6 @@ impl Type {
           }
         },
         Token::Identifier(src) if src == "string" => Type::String,
-        // Token::Identifier(src)  if src == "number" => Type::Number,
-        // Token::Identifier(src)  if src == "char" => Type::Char,
-        // Token::Identifier(src)  if src == "boolean" => Type::Boolean,
         Token::Identifier(src) => {
           context
             .namespace
@@ -255,13 +193,6 @@ impl Type {
       Expression::Record(_) => todo!(),
       Expression::If(_, box _t_b, _f_b) => {
         todo!()
-        // enum_type!(
-        //   Type::of_value(&Value::Boolean(true)) => Type::of_expr(t_b,
-        // context)?,   Type::of_value(&Value::Boolean(false)) => {
-        //     if let Some(box f_b) = f_b { Type::of_expr(f_b, context)? }
-        //     else { Type::Void }
-        //   }
-        // )
       },
       Expression::For(_, _, box body) => Type::of_expr(body, context)?,
       Expression::Block(exprs) => exprs
@@ -290,13 +221,6 @@ impl Type {
         }
       },
       Expression::Infix { left, op, right } => match op {
-        // box Expression::Value(Arrow) => Type::Function(
-        //   Box::new(Type::of_pat(
-        //     &PatternWithDefault::from_expr(left)?,
-        //     &context,
-        //   )),
-        //   Box::new(Type::of_expr(right, &context)?),
-        // ),
         op => {
           if let Type::Function(box arg, box res) = Type::of_expr(op, context)? {
             if Type::Tuple(vec![
@@ -314,7 +238,6 @@ impl Type {
   }
   pub fn of_value(value: &Value) -> Type {
     match value {
-      // val @ (Value::String(_) | Value::Type(_)) => Type::Value(val.clone()),
       val @ Value::String(_) => Type::Value(val.clone()),
       Value::Tuple(values) => Type::Tuple(
         values
@@ -322,33 +245,13 @@ impl Type {
           .map(|value| Type::of_value(value))
           .collect_vec(),
       ),
-      Value::Map(values) => Type::Union(
-        values
-          .iter()
-          .map(|(key, value)| {
-            Type::Function(
-              Box::new(Type::of_value(key)),
-              Box::new(Type::of_value(value)),
-            )
-          })
-          .collect(),
-      ),
+      Value::Map(_) => todo!(),
       Value::Record(values) => Type::Record(
         values
           .iter()
           .map(|(key, value)| (key.clone(), Type::of_value(value)))
           .collect(),
       ),
-      // Value::Function(arg, env, expr) => {
-      //   let context = ParsingContext::from_env(env);
-      //   Type::Function(
-      //     Box::new(Type::of_pat(
-      //       &PatternWithDefault::from_expr(arg).unwrap(),
-      //       &context,
-      //     )),
-      //     Box::new(Type::of_expr(expr, &context).unwrap()),
-      //   )
-      // },
       _ => Type::Void,
     }
   }

@@ -1,201 +1,179 @@
-use std::cmp::Ordering;
-
 use crate::{
-  ast::{Operator, Parseable, ParsingContext, ParsingError},
-  check_token,
-  check_token_end,
-  common::{ReversableIterator, Span},
-  match_token,
-  parse_error,
-  punct_or_newline,
-  skip,
-  token::{Token, TokenExt, TokenStream},
-  token_pat,
-  types::Declaration,
+  ast::ParsingInput,
+  common::{Buf, Buffered},
+  errors::ParsingError,
+  parseable::{Parseable, ParseableIterator, ParsingContext},
+  token::Token,
 };
 
-use super::expr_struct::{Expression, RecordItem, RecordKey};
+use super::{Expression, Operator, Precedence};
 
-
+#[derive(Debug, Clone, PartialEq)]
+struct FrameOperator {
+  operator:   Operator,
+  precedence: Precedence,
+}
 
 #[derive(Debug, Clone)]
 struct Frame {
-  operator: Option<Operator>,
+  operator: Option<FrameOperator>,
   lhs:      Option<Expression>,
 }
 
-
-pub fn parse_braces(
-  token_stream: &mut TokenStream,
-  context: &mut ParsingContext,
-) -> Result<Expression, ParsingError> {
-  let expr = Expression::parse(token_stream, context)?;
-
-  if !check_token!(token_stream.next(), RBrace) {
-    Err(parse_error!("Expected closing brace"))
-  } else {
-    Ok(expr)
-  }
+pub struct ExpressionParsingInput<T: Iterator<Item = Operator> + Clone> {
+  pub operands: Buffered<T>,
+  pub context:  ParsingContext,
+  pub errors:   Vec<ParsingError>,
 }
 
-pub fn parse_expr(
-  token_stream: &mut TokenStream,
-  context: &mut ParsingContext,
-  in_parens: bool,
-) -> Result<Expression, ParsingError> {
-  let mut top = Frame {
-    lhs:      None,
-    operator: None,
-  };
-  let mut stack = Vec::new();
+impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> for Expression {
+  fn parse(input: ExpressionParsingInput<T>) -> (ExpressionParsingInput<T>, Option<Self::O>) {
+    let ExpressionParsingInput {
+      mut operands,
+      mut context,
+      errors,
+    } = input;
+    let mut top = Frame {
+      lhs:      None,
+      operator: None,
+    };
+    let mut stack = Vec::new();
+    let top_operator_precedence = top.operator.clone().map(|x| x.precedence);
 
-  loop {
-    if in_parens {
-      skip!(token_stream, NewLine);
-    } else if let match_token!(RParenthesis) = token_stream.peek() {
-      return Err(parse_error!("Unexpected closing parenthesis"));
-    }
+    loop {
+      let operand = operands.peek();
 
-    let token = token_stream.peek();
+      let operator = loop {
+        let precedence = operand
+          .clone()
+          .and_then(|operand| operand.get_precedence(&mut context, top.lhs.is_none()));
 
-    if let match_token!(LBrace) = token {
-      token_stream.next();
-
-      let operand = match stack.pop() {
-        None => top
-          .lhs
-          .ok_or(parse_error!("Unexpected indexing position"))?,
-        Some(Frame { lhs, operator }) => {
-          let op = top
-            .operator
-            .ok_or(parse_error!("Unexpected indexing position"))?
-            .op;
-          top.operator = operator;
-
-          Expression::from_options(op, lhs, top.lhs)
-        },
-      };
-      top.lhs = Some(Expression::Infix {
-        left:  Box::new(operand),
-        op:    Box::new(Expression::Value(token.unwrap())),
-        right: Box::new(parse_braces(token_stream, context)?),
-      });
-      continue;
-    }
-
-    let mut operator2 = Operator::parse(token_stream, context, top.lhs.is_none());
-
-    let operator = loop {
-      if matches!(token, match_token!(For | If | LParenthesis | LBracket)) {
-        // println!("{:?} {:?}", operator2, top.operator, );
-        break operator2?;
-      }
-
-      let operator = operator2
-        .as_ref()
-        .ok()
-        .and_then(|x| x.clone().ensure_exists());
-
-      if matches!(
-        operator.clone().map(|x| x.precedence),
-        Some(Some((None, None)))
-      ) && matches!(
-        top.operator.clone().map(|x| x.precedence),
-        Some(Some((None, None)))
-      ) {
-        let operator = Some(Operator::new(
-          TokenExt {
-            token: Token::Apply,
-            src:   "apply".to_string(),
-            span:  Span::default(),
-          },
-          context,
-          false,
-        ));
-
-        loop {
-          let res = top;
-
-          top = match stack.pop() {
-            Some(it) => it,
-            None => return Ok(res.lhs.unwrap_or_default()),
+        if matches!(precedence, Some(Precedence(None, None)))
+          && matches!(top_operator_precedence, Some(Precedence(None, None)))
+        {
+          let operator = Operator::Token(Token::Apply);
+          let precedence = operator.get_precedence(&mut context, false);
+          let operator = FrameOperator {
+            operator,
+            precedence: precedence.clone().unwrap(),
           };
 
-          let op = res.operator.unwrap().op;
+          loop {
+            let res = top;
 
-          top.lhs = Some(
-            if let Expression::Value(token_pat!(token: Apply)) = op {
-              Expression::Prefix {
+            top = match stack.pop() {
+              Some(it) => it,
+              None => {
+                return (
+                  ExpressionParsingInput {
+                    operands,
+                    context,
+                    errors,
+                  },
+                  res.lhs,
+                )
+              },
+            };
+
+            top.lhs = Some(match operand.clone().unwrap() {
+              Operator::Operand { .. } => {
+                todo!()
+              },
+              Operator::Token(Token::Apply) => Expression::Prefix {
                 op:    Box::new(top.lhs.unwrap()),
                 right: Box::new(res.lhs.unwrap()),
-              }
-            } else {
-              Expression::from_options(op, top.lhs, res.lhs)
-            },
-          );
+              },
+              Operator::Token(token) => {
+                Expression::from_options(Expression::Value(token), top.lhs, res.lhs)
+              },
+            });
 
-          if top.operator <= operator {
-            break;
+            if top_operator_precedence <= precedence {
+              break;
+            }
           }
+
+          stack.push(top);
+          top = Frame {
+            lhs:      None,
+            operator: Some(operator),
+          };
+
+          continue;
         }
 
-        stack.push(top);
-        top = Frame {
-          lhs: None,
-          operator,
-        };
+        match precedence {
+          precedence @ Some(_) if top_operator_precedence <= precedence => {
+            break FrameOperator {
+              operator:   operands.next().unwrap(),
+              precedence: precedence.unwrap(),
+            };
+          },
+          _ => {
+            let res = top;
 
-        continue;
-      }
+            top = match stack.pop() {
+              Some(it) => it,
+              None => {
+                return (
+                  ExpressionParsingInput {
+                    operands,
+                    context,
+                    errors,
+                  },
+                  res.lhs,
+                )
+              },
+            };
 
-      match operator {
-        Some(op) if top.operator <= Some(op.clone()) => {
-          token_stream.next();
-          break op;
-        },
-        x => {
-          // println!("2 ===\n\n{:?}\n\n{:?}\n\n{:?}", stack, top, x);
-
-          let res = top;
-
-          top = match stack.pop() {
-            Some(it) => it,
-            None => return Ok(res.lhs.unwrap_or_default()),
-          };
-
-          let op = res.operator.unwrap().op;
-
-          top.lhs = Some(
-            if let Expression::Value(token_pat!(token: Apply)) = op {
-              Expression::Prefix {
+            top.lhs = Some(match operand.clone().unwrap() {
+              Operator::Operand { .. } => {
+                todo!()
+              },
+              Operator::Token(Token::Apply) => Expression::Prefix {
                 op:    Box::new(top.lhs.unwrap()),
                 right: Box::new(res.lhs.unwrap()),
-              }
-            } else {
-              Expression::from_options(op, top.lhs, res.lhs)
-            },
-          );
-
-          if !matches!(
-            operator2.as_ref().map(|x| x.precedence),
-            Ok(Some((Some(_), _)))
-          ) {
-            operator2 = operator2.map(|x| x.convert(context));
-          }
-        },
+              },
+              Operator::Token(token) => {
+                Expression::from_options(Expression::Value(token), top.lhs, res.lhs)
+              },
+            });
+          },
+        };
       };
-    };
 
-    stack.push(top);
-    top = Frame {
-      lhs:      None,
-      operator: Some(operator),
-    };
+      stack.push(top);
+      top = Frame {
+        lhs:      None,
+        operator: Some(operator),
+      };
+    }
   }
 }
 
-impl Parseable for Expression {
-  fn parse(stream: &mut TokenStream, context: &mut ParsingContext) -> Result<Self, ParsingError> {
-    parse_expr(stream, context, false)
+impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Expression {
+  fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
+    let context = input.context.clone();
+    let (
+      ExpressionParsingInput {
+        operands,
+        context,
+        errors,
+      },
+      o,
+    ) = <Expression as Parseable<ExpressionParsingInput<_>>>::parse(ExpressionParsingInput {
+      operands: <ParsingInput<T> as ParseableIterator<Operator>>::parsed(input).buffered(),
+      context,
+      errors: vec![],
+    });
+
+    (
+      ParsingInput {
+        tokens: operands.iterator.source.tokens,
+        context,
+        errors,
+      },
+      o,
+    )
   }
 }

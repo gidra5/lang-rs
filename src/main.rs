@@ -5,9 +5,11 @@
   unused_parens
 )] //TODO: should remove dead_code when ready
 #![feature(box_patterns)]
+#![feature(is_some_with)]
 #![feature(derive_default_enum)]
 #![feature(associated_type_defaults)]
 #![feature(type_alias_impl_trait)]
+extern crate derivative;
 extern crate either;
 extern crate fancy_regex;
 extern crate itertools;

@@ -5,6 +5,7 @@ use crate::{enviroment::Enviroment, map, namespace::Namespace};
 
 type Span = Range<usize>;
 
+#[derive(Clone)]
 pub struct ParsingContext {
   pub namespace: Namespace,
 }
@@ -23,12 +24,11 @@ impl ParsingContext {
 }
 
 pub trait Parseable<T>: Sized {
-  type I = T;
   type O = Self;
 
-  /// parses Self from Self::I, returning rest of unprocessed input and result
-  /// of parsing, if it succeeded
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>);
+  /// parses `Self` from `T`, returning rest of unprocessed input and
+  /// result of parsing, if it succeeded
+  fn parse(input: T) -> (T, Option<Self::O>);
 }
 
 // if parses did not succeed - we must get input stream on track again by
@@ -38,8 +38,8 @@ pub trait Synchronizable<I> {
   fn sync(input: I) -> I;
 }
 
-pub trait SyncParse<T>: Parseable<T, I = T> + Synchronizable<T> {
-  fn parse_sync(input: Self::I) -> (Self::I, Option<Self::O>) {
+pub trait SyncParse<T>: Parseable<T> + Synchronizable<T> {
+  fn parse_sync(input: T) -> (T, Option<Self::O>) {
     let (i, o) = Self::parse(input);
     match o {
       Some(_) => (i, o),
@@ -48,15 +48,15 @@ pub trait SyncParse<T>: Parseable<T, I = T> + Synchronizable<T> {
   }
 }
 
-impl<I, T: Parseable<I, I = I> + Synchronizable<I>> SyncParse<I> for T {}
+impl<I, T: Parseable<I> + Synchronizable<I>> SyncParse<I> for T {}
 
 impl<T, I> Parseable<I> for Option<T>
 where
-  T: Parseable<I, I = I>,
+  T: Parseable<I>,
 {
   type O = Option<T::O>;
 
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(input: I) -> (I, Option<Self::O>) {
     let (i, o) = T::parse(input);
     if let Some(_) = o {
       (i, Some(o))
@@ -77,10 +77,9 @@ impl<T, I> Parseable<I> for Vec<T>
 where
   T: Parseable<I>,
 {
-  type I = T::I;
   type O = Vec<T::O>;
 
-  fn parse(mut input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(mut input: I) -> (I, Option<Self::O>) {
     let mut res = vec![];
     loop {
       match T::parse(input) {
@@ -103,12 +102,12 @@ where
 
 impl<T, U, I> Parseable<I> for (T, U)
 where
-  T: Parseable<I, I = I>,
-  U: Parseable<I, I = I>, // they must parse same inputs
+  T: Parseable<I>,
+  U: Parseable<I>, // they must parse same inputs
 {
   type O = (T::O, U::O);
 
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(input: I) -> (I, Option<Self::O>) {
     let (input, t_parsed) = T::parse(input);
     if let None = t_parsed {
       return (input, None);
@@ -138,11 +137,11 @@ where
 
 impl<I, T, U> Parseable<I> for Either<T, U>
 where
-  T: Parseable<I, I = I>,
-  U: Parseable<I, I = I>,
+  T: Parseable<I>,
+  U: Parseable<I>,
 {
   type O = Either<T::O, U::O>;
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(input: I) -> (I, Option<Self::O>) {
     let (input, o) = T::parse(input);
     if let Some(o) = o {
       return (input, Some(Either::Left(o)));
@@ -160,7 +159,7 @@ pub struct Parsed<I, T: Parseable<I>> {
   item_type:  PhantomData<T>,
 }
 
-impl<I: Sized + Iterator + Clone, T: Parseable<I, I = I>> Iterator for Parsed<I, T> {
+impl<I: Sized + Iterator + Clone, T: Parseable<I>> Iterator for Parsed<I, T> {
   type Item = T::O;
   fn next(&mut self) -> Option<Self::Item> {
     loop {

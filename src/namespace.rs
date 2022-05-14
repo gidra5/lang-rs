@@ -5,6 +5,7 @@ use std::{
 
 use crate::{ast::Precedence, types::Type};
 
+#[derive(Clone)]
 pub struct Namespace(pub HashMap<String, Declaration>);
 
 #[derive(Clone)]
@@ -16,7 +17,7 @@ pub enum Declaration {
 
 impl Namespace {
   pub fn declare(&mut self, name: String, decl_type: Type) {
-    self.declare_with_precedence(name, decl_type, (None, None));
+    self.declare_with_precedence(name, decl_type, Precedence(None, None));
   }
 
   pub fn declare_with_precedence(&mut self, name: String, decl_type: Type, precedence: Precedence) {

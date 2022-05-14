@@ -104,8 +104,9 @@ pub enum Token {
   EqualEqual,
   LessEqual,
   GreaterEqual,
+  ColonEqual,
   Arrow,
-  Spread,
+  Ellipsis,
   Enum,
 
   Is,
@@ -117,7 +118,7 @@ pub enum Token {
   Type,
 
   // Literals
-  Number(i64, u64),
+  Number(u64, u64),
   Boolean(bool),
   Char(char),
   String(String),
@@ -158,7 +159,7 @@ impl Evaluatable for Token {
 }
 
 impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token {
-  fn parse(input: Self::I) -> (Self::I, Option<Self::O>) {
+  fn parse(input: TokenizationInput<T>) -> (TokenizationInput<T>, Option<Self::O>) {
     let TokenizationInput {
       mut iter,
       mut errors,
@@ -187,6 +188,7 @@ impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token
       '[' => LBrace,
       ']' => RBrace,
       ';' => Semicolon,
+      ':' if is_next!([skip] iter, '=') => ColonEqual,
       ':' => Colon,
       ',' => Comma,
       '|' => Pipe,
@@ -234,14 +236,13 @@ impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token
         }
         String(src)
       },
-      '.' if is_next!([skip] iter[2], '.', '.') => Spread,
+      '.' if is_next!([skip] iter[2], '.', '.') => Ellipsis,
       '.' => Period,
       c if c.is_ascii_digit() => {
-        let mut num = c.to_string().parse::<i64>().unwrap();
-        let mut fract = 0_u64;
+        let mut integral_part = c.to_string();
         while let Some(c) = iter.peek() {
-          if let Ok(d) = c.to_string().parse::<i64>() {
-            num = 10 * num + d;
+          if c.is_ascii_digit() {
+            integral_part += &c.to_string();
             iter.next();
           } else {
             break;
@@ -249,17 +250,22 @@ impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token
         }
 
         if is_next!([skip] iter, '.') {
+          let mut fract_part = c.to_string();
           while let Some(c) = iter.peek() {
-            if let Ok(d) = c.to_string().parse::<u64>() {
-              fract = 10 * fract + d;
+            if c.is_ascii_digit() {
+              fract_part += &c.to_string();
               iter.next();
             } else {
               break;
             }
           }
+          Number(
+            integral_part.parse::<u64>().unwrap(),
+            fract_part.parse::<u64>().unwrap(),
+          )
+        } else {
+          Number(integral_part.parse::<u64>().unwrap(), 0)
         }
-
-        Number(num, fract)
       },
       c if c.is_ascii_alphabetic() || c == '_' => {
         let mut src = c.to_string();
