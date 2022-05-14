@@ -31,17 +31,16 @@ pub enum Operator {
 impl PartialOrd for Precedence {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
     // aka r_bp1 < l_bp2
-    Some(match (self, other) {
-      (Precedence(_, r_bp1), Precedence(l_bp2, _)) => match (r_bp1, l_bp2) {
-        (None, None) => Ordering::Greater,
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Less,
-        (Some(r_bp1), Some(l_bp2)) => match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
-          (false, false) => Ordering::Equal,
-          (true, false) => Ordering::Less,
-          (false, true) => Ordering::Greater,
-          _ => return None,
-        },
+    let (Precedence(_, r_bp1), Precedence(l_bp2, _)) = (self, other);
+    Some(match (r_bp1, l_bp2) {
+      (None, None) => Ordering::Greater,
+      (Some(_), None) => Ordering::Less,
+      (None, Some(_)) => Ordering::Less,
+      (Some(r_bp1), Some(l_bp2)) => match (r_bp1 < l_bp2, r_bp1 > l_bp2) {
+        (false, false) => Ordering::Equal,
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+        _ => return None,
       },
     })
   }

@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Buffered<I: Iterator + Clone> {
   pub iterator: I,
   pub buffer:   Vec<I::Item>,

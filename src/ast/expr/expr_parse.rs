@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::{
   ast::ParsingInput,
   common::{Buf, Buffered},
@@ -38,15 +40,19 @@ impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> 
       operator: None,
     };
     let mut stack = Vec::new();
-    let top_operator_precedence = top.operator.clone().map(|x| x.precedence);
 
     loop {
       let operand = operands.peek();
 
       let operator = loop {
+        let top_operator_precedence = top.operator.clone().map(|x| x.precedence);
         let precedence = operand
           .clone()
           .and_then(|operand| operand.get_precedence(&mut context, top.lhs.is_none()));
+        println!(
+          "s1: {:?} {:?} {:?}",
+          stack, precedence, top_operator_precedence
+        );
 
         if matches!(precedence, Some(Precedence(None, None)))
           && matches!(top_operator_precedence, Some(Precedence(None, None)))
@@ -57,10 +63,13 @@ impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> 
             operator,
             precedence: precedence.clone().unwrap(),
           };
+          println!("inside {:?} {:?}", operator, precedence);
 
           loop {
+            let top_operator_precedence = top.operator.clone().map(|x| x.precedence);
             let res = top;
 
+            println!("s: {:?}", stack);
             top = match stack.pop() {
               Some(it) => it,
               None => {
@@ -75,9 +84,21 @@ impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> 
               },
             };
 
-            top.lhs = Some(match operand.clone().unwrap() {
-              Operator::Operand { .. } => {
-                todo!()
+            top.lhs = Some(match res.operator.unwrap().operator {
+              Operator::Operand { operands, op } => {
+                let operands = operands
+                  .into_iter()
+                  .map(|operands| {
+                    let input = ExpressionParsingInput {
+                      context:  context.clone(),
+                      errors:   errors.clone(),
+                      operands: operands.into_iter().buffered(),
+                    };
+                    Expression::parse(input).1.unwrap()
+                  })
+                  .collect_vec();
+
+                Expression::from_options(Expression::Mixfix { op, operands }, top.lhs, res.lhs)
               },
               Operator::Token(Token::Apply) => Expression::Prefix {
                 op:    Box::new(top.lhs.unwrap()),
@@ -126,9 +147,21 @@ impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> 
               },
             };
 
-            top.lhs = Some(match operand.clone().unwrap() {
-              Operator::Operand { .. } => {
-                todo!()
+            top.lhs = Some(match res.operator.unwrap().operator {
+              Operator::Operand { operands, op } => {
+                let operands = operands
+                  .into_iter()
+                  .map(|operands| {
+                    let input = ExpressionParsingInput {
+                      context:  context.clone(),
+                      errors:   errors.clone(),
+                      operands: operands.into_iter().buffered(),
+                    };
+                    Expression::parse(input).1.unwrap()
+                  })
+                  .collect_vec();
+
+                Expression::from_options(Expression::Mixfix { op, operands }, top.lhs, res.lhs)
               },
               Operator::Token(Token::Apply) => Expression::Prefix {
                 op:    Box::new(top.lhs.unwrap()),

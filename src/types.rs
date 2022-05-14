@@ -191,13 +191,12 @@ impl Type {
         _ => todo!(),
       },
       Expression::Record(_) => todo!(),
-      Expression::If(_, box _t_b, _f_b) => {
-        todo!()
-      },
-      Expression::For(_, _, box body) => Type::of_expr(body, context)?,
       Expression::Block(exprs) => exprs
         .last()
         .map_or(Ok(Type::Void), |expr| Type::of_expr(expr, context))?,
+      Expression::Mixfix { operands, op } => {
+        todo!()
+      },
       Expression::Prefix { op, right } => {
         if let Type::Function(box arg, box res) = Type::of_expr(op, context)? {
           if Type::of_expr(right, context)? <= arg {

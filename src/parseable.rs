@@ -5,7 +5,7 @@ use crate::{enviroment::Enviroment, map, namespace::Namespace};
 
 type Span = Range<usize>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ParsingContext {
   pub namespace: Namespace,
 }
@@ -153,7 +153,7 @@ where
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Parsed<I, T: Parseable<I>> {
   pub source: I,
   item_type:  PhantomData<T>,

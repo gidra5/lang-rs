@@ -55,6 +55,9 @@ impl Operator {
     def: Vec<Token>,
     mut input: ParsingInput<T>,
   ) -> (ParsingInput<T>, Option<Operator>) {
+    if let Some(Token::NewLine) = input.tokens.peek() {
+      input.tokens.next();
+    }
     let mut operands = vec![];
     let mut op = vec![];
     let mut iter = def.into_iter().rev();

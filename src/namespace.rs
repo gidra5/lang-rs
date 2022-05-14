@@ -5,10 +5,10 @@ use std::{
 
 use crate::{ast::Precedence, types::Type};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Namespace(pub HashMap<String, Declaration>);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Declaration {
   Variable(Type, Precedence),
   Namespace(Rc<Namespace>),

@@ -28,8 +28,10 @@ pub enum Expression {
   Record(Vec<RecordItem>),
 
   Block(Vec<Expression>),
-  If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-  For(Box<Expression>, Box<Expression>, Box<Expression>),
+  Mixfix {
+    op:       Vec<Token>,
+    operands: Vec<Expression>,
+  },
   Prefix {
     op:    Box<Expression>,
     right: Box<Expression>,
@@ -92,15 +94,18 @@ impl Display for Expression {
           write!(f, "()")
         }
       },
-      Expression::If(cond, t_b, Some(f_b)) => write!(f, "(if {}: {} else {})", cond, t_b, f_b),
-      Expression::If(cond, t_b, None) => write!(f, "(if {}: {} else None)", cond, t_b),
-      Expression::For(pat, iter, body) => write!(f, "(for {} in {}: {})", pat, iter, body),
       Expression::Block(stmts) => {
         write!(
           f,
           "{{\n{}\n}}",
           stmts.iter().map(|stmt| format!("\t{}", stmt)).join(";\n")
         )
+      },
+      Expression::Mixfix {
+        op: operator,
+        operands,
+      } => {
+        write!(f, "(mixfix {:?} {:?})", operator, operands)
       },
       Expression::Infix { left, op, right } => write!(f, "({} {} {})", op, left, right),
       Expression::Prefix { op, right } => write!(f, "({} {})", op, right),

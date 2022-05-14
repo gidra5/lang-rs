@@ -1,6 +1,6 @@
 use crate::{common::Buffered, errors::ParsingError, parseable::ParsingContext, token::Token};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ParsingInput<T: Iterator<Item = Token> + Clone> {
   pub tokens:  Buffered<T>,
   pub context: ParsingContext,
