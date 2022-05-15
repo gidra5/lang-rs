@@ -80,15 +80,18 @@ impl Operator {
     fixity: Fixity,
   ) -> Option<Precedence> {
     Some(match self {
-      Self::Operand { op, .. } => match (op, &fixity) {
-        _ => return None,
+      Self::Operand { op, .. } => match (&op[..], &fixity) {
+        ([Token::If, Token::Colon], Fixity::Prefix) => Precedence(None, Some(255)),
+        ([Token::LBrace, Token::RBrace], Fixity::Prefix) => Precedence(Some(26), None),
+        _ => Precedence(None, None),
       },
       Self::Token(token) => match (token, &fixity) {
         (Token::Identifier(src), Fixity::None) => {
-          context.namespace.get(&src).and_then(|decl| match decl {
-            Declaration::Variable(_, p) => Some(p),
-            _ => None,
-          })?
+          Precedence(None, None)
+          // context.namespace.get(&src).and_then(|decl| match decl {
+          //   Declaration::Variable(_, p) => Some(p),
+          //   _ => Some(Precedence(None, None)),
+          // })?
         },
         (
           Token::String(_)
@@ -120,11 +123,11 @@ impl Operator {
           None,
         ),
         (token, Fixity::Infix) => match token {
-          Token::LBrace => Precedence(Some(26), Some(27)),
+          Token::Else => Precedence(Some(0), Some(255)),
           Token::Period => Precedence(Some(24), Some(23)),
           Token::Equal => Precedence(Some(255), Some(1)),
           Token::ColonEqual => Precedence(Some(255), Some(1)),
-          Token::Mod => Precedence(Some(28), Some(29)),
+          Token::Mod => Precedence(Some(22), Some(21)),
           Token::Add | Token::Sub => Precedence(Some(5), Some(6)),
           Token::Mult | Token::Div => Precedence(Some(7), Some(8)),
           Token::EqualEqual => Precedence(Some(20), Some(19)),
@@ -136,7 +139,6 @@ impl Operator {
           Token::Apply => Precedence(Some(255), Some(1)),
           Token::Is => Precedence(Some(32), Some(33)),
 
-          Token::Identifier(src) if src == "mod" => Precedence(Some(22), Some(21)),
           Token::Identifier(src) if src == "and" => Precedence(Some(24), Some(23)),
           Token::Identifier(src) if src == "or" => Precedence(Some(25), Some(26)),
           _ => return None,

@@ -42,91 +42,29 @@ impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Expr
     let mut stack = Vec::new();
 
     loop {
-      let operand = operands.peek();
+      let mut operand = operands.peek();
+      let mut skip = true;
 
       let operator = loop {
         let top_operator_precedence = top.operator.clone().map(|x| x.precedence);
         let precedence = operand
           .clone()
           .and_then(|operand| operand.get_precedence(&mut context, top.lhs.is_none()));
-        println!(
-          "s1: {:?} {:?} {:?}",
-          stack, precedence, top_operator_precedence
-        );
+        let is_apply = matches!(precedence, Some(Precedence(None, None)))
+          && matches!(top_operator_precedence, Some(Precedence(None, None)));
 
-        if matches!(precedence, Some(Precedence(None, None)))
-          && matches!(top_operator_precedence, Some(Precedence(None, None)))
-        {
-          let operator = Operator::Token(Token::Apply);
-          let precedence = operator.get_precedence(&mut context, false);
-          let operator = FrameOperator {
-            operator,
-            precedence: precedence.clone().unwrap(),
-          };
-          println!("inside {:?} {:?}", operator, precedence);
-
-          loop {
-            let top_operator_precedence = top.operator.clone().map(|x| x.precedence);
-            let res = top;
-
-            println!("s: {:?}", stack);
-            top = match stack.pop() {
-              Some(it) => it,
-              None => {
-                return (
-                  ExpressionParsingInput {
-                    operands,
-                    context,
-                    errors,
-                  },
-                  res.lhs,
-                )
-              },
-            };
-
-            top.lhs = Some(match res.operator.unwrap().operator {
-              Operator::Operand { operands, op } => {
-                let operands = operands
-                  .into_iter()
-                  .map(|operands| {
-                    let input = ExpressionParsingInput {
-                      context:  context.clone(),
-                      errors:   errors.clone(),
-                      operands: operands.into_iter().buffered(),
-                    };
-                    Expression::parse(input).1.unwrap()
-                  })
-                  .collect_vec();
-
-                Expression::from_options(Expression::Mixfix { op, operands }, top.lhs, res.lhs)
-              },
-              Operator::Token(Token::Apply) => Expression::Prefix {
-                op:    Box::new(top.lhs.unwrap()),
-                right: Box::new(res.lhs.unwrap()),
-              },
-              Operator::Token(token) => {
-                Expression::from_options(Expression::Value(token), top.lhs, res.lhs)
-              },
-            });
-
-            if top_operator_precedence <= precedence {
-              break;
-            }
-          }
-
-          stack.push(top);
-          top = Frame {
-            lhs:      None,
-            operator: Some(operator),
-          };
-
-          continue;
+        if is_apply {
+          operand = Some(Operator::Token(Token::Apply));
+          skip = false;
         }
 
         match precedence {
           precedence @ Some(_) if top_operator_precedence <= precedence => {
+            if skip {
+              operands.next();
+            }
             break FrameOperator {
-              operator:   operands.next().unwrap(),
+              operator:   operand.unwrap(),
               precedence: precedence.unwrap(),
             };
           },
@@ -195,21 +133,18 @@ impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Expression {
       },
       o,
     ) = <Expression as Parseable<ExpressionParsingInput<_>>>::parse(ExpressionParsingInput {
-      operands: <ParsingInput<T> as ParseableIterator<Operator>>::parsed(input)
-        .inspect(|x| println!("{:?}", x))
-        .buffered(),
+      operands: <ParsingInput<T> as ParseableIterator<Operator>>::parsed(input).buffered(),
       context,
       errors: vec![],
     });
 
-    todo!()
-    // (
-    //   ParsingInput {
-    //     tokens: operands.iterator.source.tokens,
-    //     context,
-    //     errors,
-    //   },
-    //   o,
-    // )
+    (
+      ParsingInput {
+        tokens: operands.iterator.source.tokens,
+        context,
+        errors,
+      },
+      o,
+    )
   }
 }

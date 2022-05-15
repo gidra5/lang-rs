@@ -1,4 +1,4 @@
-use std::iter::{Filter, Inspect};
+use std::iter::Filter;
 
 use crate::{
   ast::{Expression, ParsingInput},
@@ -64,11 +64,10 @@ impl InteractiveMode {
 
           self.rl.add_history_entry(line.as_str());
           println!("{line}");
-          let tokens: Buffered<Inspect<Filter<Parsed<_, Token>, _>, _>> =
-            TokenizationInput::new(line.chars().inspect(|x| println!("\"{x}\"")).buffered())
+          let tokens: Buffered<Filter<Parsed<_, Token>, _>> =
+            TokenizationInput::new(line.chars().buffered())
               .parsed()
               .filter(|token: &Token| token.clone() != Token::Skip)
-              .inspect(|x| println!("f: {:?}", x))
               .buffered();
           let res = <Expression as Parseable<_>>::parse(ParsingInput {
             tokens,
