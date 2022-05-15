@@ -159,17 +159,17 @@ pub struct Parsed<I, T: Parseable<I>> {
   item_type:  PhantomData<T>,
 }
 
-impl<I: Sized + Iterator + Clone, T: Parseable<I>> Iterator for Parsed<I, T> {
+impl<I: Sized + Iterator, T: Parseable<I>> Iterator for Parsed<I, T> {
   type Item = T::O;
   fn next(&mut self) -> Option<Self::Item> {
     loop {
       let input =
         unsafe { std::mem::replace(&mut self.source, MaybeUninit::zeroed().assume_init()) };
-      let (mut rest, parsed) = T::parse(input);
-      self.source = rest.clone();
+      let (rest, parsed) = T::parse(input);
+      self.source = rest;
       if parsed.is_some() {
         break parsed;
-      } else if rest.next().is_none() {
+      } else {
         break None;
       }
     }

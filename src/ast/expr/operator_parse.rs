@@ -18,18 +18,11 @@ macro_rules! get_number {
   };
 }
 
-impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Operator {
+impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Operator {
   fn parse(mut input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
     match input.tokens.peek() {
       Some(Token::For) => Operator::parse(vec![Token::For, Token::In, Token::Colon], input),
-      Some(Token::If) => {
-        let res = Operator::parse(vec![Token::If, Token::Colon, Token::Else], input.clone());
-        if let (_, Some(_)) = res {
-          res
-        } else {
-          Operator::parse(vec![Token::If, Token::Colon], input)
-        }
-      },
+      Some(Token::If) => Operator::parse(vec![Token::If, Token::Colon], input),
       Some(Token::LParenthesis) => {
         Operator::parse(vec![Token::LParenthesis, Token::RParenthesis], input)
       },
@@ -37,7 +30,7 @@ impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Operator 
       Some(Token::LBracket) => Operator::parse(vec![Token::LBracket, Token::RBracket], input),
       Some(token) => {
         input.tokens.next();
-        (input, Some(Operator::new(token)))
+        (input, Some(Operator::Token(token)))
       },
       None => {
         input
@@ -51,33 +44,31 @@ impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Operator 
 
 
 impl Operator {
-  pub fn parse<T: Iterator<Item = Token> + Clone>(
-    def: Vec<Token>,
+  pub fn parse<T: Iterator<Item = Token>>(
+    op: Vec<Token>,
     mut input: ParsingInput<T>,
   ) -> (ParsingInput<T>, Option<Operator>) {
     if let Some(Token::NewLine) = input.tokens.peek() {
       input.tokens.next();
     }
     let mut operands = vec![];
-    let mut op = vec![];
-    let mut iter = def.into_iter().rev();
+    let mut iter = op.iter();
 
-    {
-      let token = iter.next().unwrap();
-      let t = input.tokens.next();
-      if t == Some(token.clone()) {
-        op.push(token);
-      } else {
-        input
-          .errors
-          .push(parse_error!("Unexpected end of expression"));
-        return (input, None);
+    if let Some(token) = iter.next() {
+      match input.tokens.next() {
+        Some(ref t) if t != token => {
+          input
+            .errors
+            .push(parse_error!("Unexpected end of expression"));
+          return (input, None);
+        },
+        _ => (),
       }
     }
 
     for token in iter {
       let mut operand = vec![];
-      while input.tokens.peek().is_some_with(|x| x.clone() != token) {
+      while input.tokens.peek().is_some_with(|x| x != token) {
         if let Some(Token::NewLine) = input.tokens.peek() {
           input.tokens.next();
         }
@@ -90,7 +81,12 @@ impl Operator {
           return (i, None);
         }
       }
-      input.tokens.next();
+      if let None = input.tokens.next() {
+        input
+          .errors
+          .push(parse_error!("Unexpected end of expression"));
+        return (input, None);
+      }
       operands.push(operand);
     }
 

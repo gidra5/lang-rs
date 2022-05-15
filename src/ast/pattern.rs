@@ -30,7 +30,7 @@ pub enum Pattern {
   Record(Vec<RecordPatternItem>),
 }
 
-impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Pattern {
+impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Pattern {
   fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
     let mut tokens = input.tokens;
     let mut errors = input.errors;
@@ -96,7 +96,7 @@ pub struct PatternBinder {
   pub alias:   Option<String>,
 }
 
-impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for PatternBinder {
+impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for PatternBinder {
   fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
     (input, None)
     // let (input, pattern) = Pattern::parse(input);

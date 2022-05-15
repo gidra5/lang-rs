@@ -22,13 +22,13 @@ struct Frame {
   lhs:      Option<Expression>,
 }
 
-pub struct ExpressionParsingInput<T: Iterator<Item = Operator> + Clone> {
+pub struct ExpressionParsingInput<T: Iterator<Item = Operator>> {
   pub operands: Buffered<T>,
   pub context:  ParsingContext,
   pub errors:   Vec<ParsingError>,
 }
 
-impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> for Expression {
+impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Expression {
   fn parse(input: ExpressionParsingInput<T>) -> (ExpressionParsingInput<T>, Option<Self::O>) {
     let ExpressionParsingInput {
       mut operands,
@@ -184,7 +184,7 @@ impl<T: Iterator<Item = Operator> + Clone> Parseable<ExpressionParsingInput<T>> 
   }
 }
 
-impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Expression {
+impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Expression {
   fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
     let context = input.context.clone();
     let (
@@ -195,18 +195,21 @@ impl<T: Iterator<Item = Token> + Clone> Parseable<ParsingInput<T>> for Expressio
       },
       o,
     ) = <Expression as Parseable<ExpressionParsingInput<_>>>::parse(ExpressionParsingInput {
-      operands: <ParsingInput<T> as ParseableIterator<Operator>>::parsed(input).buffered(),
+      operands: <ParsingInput<T> as ParseableIterator<Operator>>::parsed(input)
+        .inspect(|x| println!("{:?}", x))
+        .buffered(),
       context,
       errors: vec![],
     });
 
-    (
-      ParsingInput {
-        tokens: operands.iterator.source.tokens,
-        context,
-        errors,
-      },
-      o,
-    )
+    todo!()
+    // (
+    //   ParsingInput {
+    //     tokens: operands.iterator.source.tokens,
+    //     context,
+    //     errors,
+    //   },
+    //   o,
+    // )
   }
 }

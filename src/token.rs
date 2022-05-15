@@ -19,7 +19,7 @@ use std::{
 #[derive(Clone)]
 pub struct TokenizationInput<T>
 where
-  T: Iterator + Clone,
+  T: Iterator,
   T::Item: Clone,
 {
   pub iter:   Buffered<T>,
@@ -28,7 +28,7 @@ where
 
 impl<T> Iterator for TokenizationInput<T>
 where
-  T: Iterator + Clone,
+  T: Iterator,
   T::Item: Clone,
 {
   type Item = T::Item;
@@ -37,7 +37,7 @@ where
 
 impl<T> TokenizationInput<T>
 where
-  T: Iterator + Clone,
+  T: Iterator,
   T::Item: Clone,
 {
   pub fn new(iter: Buffered<T>) -> Self {
@@ -158,7 +158,7 @@ impl Evaluatable for Token {
   }
 }
 
-impl<T: Iterator<Item = char> + Clone> Parseable<TokenizationInput<T>> for Token {
+impl<T: Iterator<Item = char>> Parseable<TokenizationInput<T>> for Token {
   fn parse(input: TokenizationInput<T>) -> (TokenizationInput<T>, Option<Self::O>) {
     let TokenizationInput {
       mut iter,

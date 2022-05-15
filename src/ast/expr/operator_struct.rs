@@ -15,6 +15,11 @@ pub enum Fixity {
 #[derive(PartialEq, Default, Debug, Clone)]
 pub struct Precedence(pub Option<u8>, pub Option<u8>);
 
+pub struct OperatorDef {
+  /// `vec<(separator: Token, optional: bool)>`
+  pub separator_tokens: Vec<(Token, bool)>,
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum Operator {
   Operand {
@@ -47,8 +52,6 @@ impl PartialOrd for Precedence {
 }
 
 impl Operator {
-  pub fn new(token: Token) -> Self { Self::Token(token) }
-
   pub fn get_precedence(&self, context: &mut ParsingContext, prefix: bool) -> Option<Precedence> {
     self
       .get_precedence_fixity(

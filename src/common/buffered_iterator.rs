@@ -1,15 +1,15 @@
 #[derive(Clone, Debug)]
-pub struct Buffered<I: Iterator + Clone> {
+pub struct Buffered<I: Iterator> {
   pub iterator: I,
   pub buffer:   Vec<I::Item>,
   pos:          usize,
 }
 
-pub trait Buf<T: Iterator + Clone> {
+pub trait Buf<T: Iterator> {
   fn buffered(self) -> Buffered<T>;
 }
 
-impl<T: Iterator + Clone> Buf<T> for T {
+impl<T: Iterator> Buf<T> for T {
   fn buffered(self) -> Buffered<T> {
     Buffered {
       iterator: self,
@@ -19,7 +19,7 @@ impl<T: Iterator + Clone> Buf<T> for T {
   }
 }
 
-impl<T: Iterator + Clone> Iterator for Buffered<T>
+impl<T: Iterator> Iterator for Buffered<T>
 where
   T::Item: Clone,
 {
@@ -28,7 +28,7 @@ where
 }
 
 
-impl<T: Iterator + Clone> Buffered<T>
+impl<T: Iterator> Buffered<T>
 where
   T::Item: Clone,
 {
