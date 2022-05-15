@@ -79,50 +79,52 @@ impl Operator {
     context: &mut ParsingContext,
     fixity: Fixity,
   ) -> Option<Precedence> {
-    Some(match self {
-      Self::Operand { op, .. } => match (&op[..], &fixity) {
+    Some({
+      use std::slice;
+
+      let op = match self {
+        Self::Operand { op, .. } => &op[..],
+        Self::Token(token) => slice::from_ref(token),
+      };
+      match (op, &fixity) {
+        ([Token::LParenthesis, Token::RParenthesis], Fixity::None) => Precedence(None, None),
         ([Token::If, Token::Colon], Fixity::Prefix) => Precedence(None, Some(255)),
-        ([Token::LBrace, Token::RBrace], Fixity::Prefix) => Precedence(Some(26), None),
-        _ => Precedence(None, None),
-      },
-      Self::Token(token) => match (token, &fixity) {
-        (Token::Identifier(src), Fixity::None) => {
-          Precedence(None, None)
-          // context.namespace.get(&src).and_then(|decl| match decl {
-          //   Declaration::Variable(_, p) => Some(p),
-          //   _ => Some(Precedence(None, None)),
-          // })?
-        },
+        ([Token::LBrace, Token::RBrace], Fixity::Postfix) => Precedence(Some(30), None),
+        ([Token::Identifier(src)], Fixity::None) => match context.namespace.get(&src) {
+          Some(Declaration::Variable(_, p)) => Some(p),
+          _ => Some(Precedence(None, None)),
+        }?,
+        // ([Token::LParenthesis, Token::RParenthesis], Fixity::None) => Precedence(None, None),
         (
-          Token::String(_)
+          [Token::String(_)
           | Token::Char(_)
           | Token::Number(..)
           | Token::Boolean(_)
-          | Token::Placeholder,
+          | Token::Placeholder],
           Fixity::None,
         ) => Precedence(None, None),
-        (token, Fixity::Prefix) => Precedence(
+        ([token], Fixity::Prefix) => Precedence(
           None,
           Some(match token {
             Token::Add | Token::Sub => 9,
             Token::Inc | Token::Dec => 11,
             Token::Mult => 13,
-            Token::Identifier(src) if src == "not" => 29,
             Token::Async => 36,
             Token::Await => 33,
             Token::Inline => 36,
+            Token::Identifier(src) if src == "not" => 29,
             Token::Identifier(src) if src == "print" => 0,
             _ => return None,
           }),
         ),
-        (token, Fixity::Postfix) => Precedence(
+        ([token], Fixity::Postfix) => Precedence(
           Some(match token {
             Token::Bang => 15,
             _ => return None,
           }),
           None,
         ),
-        (token, Fixity::Infix) => match token {
+        ([token], Fixity::Infix) => match token {
           Token::Else => Precedence(Some(0), Some(255)),
           Token::Period => Precedence(Some(24), Some(23)),
           Token::Equal => Precedence(Some(255), Some(1)),
@@ -136,7 +138,7 @@ impl Operator {
           Token::LessEqual => Precedence(Some(20), Some(19)),
           Token::GreaterEqual => Precedence(Some(20), Some(19)),
           Token::Arrow => Precedence(Some(37), Some(0)),
-          Token::Apply => Precedence(Some(255), Some(1)),
+          Token::Apply => Precedence(Some(254), Some(255)),
           Token::Is => Precedence(Some(32), Some(33)),
 
           Token::Identifier(src) if src == "and" => Precedence(Some(24), Some(23)),
@@ -144,7 +146,7 @@ impl Operator {
           _ => return None,
         },
         _ => return None,
-      },
+      }
     })
   }
 }

@@ -42,7 +42,9 @@ where
   /// Returns next `size` items without consuming iterator
   pub fn peek_ext(&mut self, size: usize) -> Vec<Option<T::Item>> {
     let pos = self.pos;
-    let to_take = (self.pos + size) - self.buffer.len();
+    let to_take = (self.pos + size)
+      .checked_sub(self.buffer.len())
+      .unwrap_or(0);
 
     for i in (0..to_take) {
       if let Some(item) = self.iterator.next() {
@@ -59,7 +61,7 @@ where
 
   /// Returns previous `size` items in iterator
   pub fn prev_ext(&self, size: usize) -> Vec<Option<T::Item>> {
-    (self.pos - size..self.pos)
+    (self.pos.checked_sub(size).unwrap_or(0)..self.pos)
       .map(|i| self.buffer.get(i).cloned())
       .collect()
   }
@@ -67,7 +69,7 @@ where
   /// backtrack iterator `size` steps back
   pub fn backtrack_ext(&mut self, size: usize) -> Vec<Option<T::Item>> {
     let res = self.prev_ext(size);
-    self.pos = (self.pos - size).max(0);
+    self.pos = self.pos.checked_sub(size).unwrap_or(0);
     res
   }
 

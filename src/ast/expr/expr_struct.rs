@@ -1,13 +1,9 @@
+use crate::token::Token;
+use itertools::Itertools;
 use std::{
   fmt::{Display, Formatter},
   hash::Hash,
 };
-
-use itertools::Itertools;
-
-use crate::token::Token;
-
-
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum RecordKey {
@@ -104,8 +100,10 @@ impl Display for Expression {
       Expression::Mixfix {
         op: operator,
         operands,
-      } => {
-        write!(f, "(mixfix {:?} {:?})", operator, operands)
+      } => match (&operator[..], &operands[..]) {
+        ([Token::LParenthesis, Token::RParenthesis], [inner]) => write!(f, "{}", inner),
+        ([Token::LBrace, Token::RBrace], [inner]) => write!(f, "LBrace {}", inner),
+        _ => write!(f, "(mixfix {:?} {:?})", operator, operands),
       },
       Expression::Infix { left, op, right } => write!(f, "({} {} {})", op, left, right),
       Expression::Prefix { op, right } => write!(f, "({} {})", op, right),

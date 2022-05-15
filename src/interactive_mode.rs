@@ -63,7 +63,6 @@ impl InteractiveMode {
           }
 
           self.rl.add_history_entry(line.as_str());
-          println!("{line}");
           let tokens: Buffered<Filter<Parsed<_, Token>, _>> =
             TokenizationInput::new(line.chars().buffered())
               .parsed()

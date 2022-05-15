@@ -26,6 +26,12 @@ impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Operator {
       Some(Token::LParenthesis) => {
         Operator::parse(vec![Token::LParenthesis, Token::RParenthesis], input)
       },
+      Some(Token::RParenthesis) => {
+        input
+          .errors
+          .push(parse_error!("Unexpected closing parenthesis"));
+        return (input, None);
+      },
       Some(Token::LBrace) => Operator::parse(vec![Token::LBrace, Token::RBrace], input),
       Some(Token::LBracket) => Operator::parse(vec![Token::LBracket, Token::RBracket], input),
       Some(token) => {

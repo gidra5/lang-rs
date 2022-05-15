@@ -1,7 +1,3 @@
-use std::{collections::HashMap, fmt::Result, slice::SliceIndex};
-
-use itertools::Itertools;
-
 use crate::{
   ast::{Evaluatable, RuntimeError},
   common::{value, LoggerTrait, Value},
@@ -11,6 +7,8 @@ use crate::{
   token::Token,
   token_pat,
 };
+use itertools::Itertools;
+use std::{collections::HashMap, fmt::Result, slice::SliceIndex};
 
 use super::expr_struct::*;
 

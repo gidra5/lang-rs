@@ -11,5 +11,5 @@ pub use operator_struct::*;
 // pub mod native_op;
 // pub use native_op::*;
 
-// #[path = "../../tests/expr.rs"]
-// mod tests;
+#[path = "../../tests/expr.rs"]
+mod tests;

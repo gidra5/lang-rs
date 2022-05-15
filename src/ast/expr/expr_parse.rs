@@ -1,12 +1,11 @@
-use itertools::Itertools;
-
 use crate::{
-  ast::ParsingInput,
-  common::{Buf, Buffered},
+  ast::{ParsingInput, RecordItem, RecordKey},
+  common::{buffered_iterator::Buffered, Buf},
   errors::ParsingError,
   parseable::{Parseable, ParseableIterator, ParsingContext},
   token::Token,
 };
+use itertools::Itertools;
 
 use super::{Expression, Operator, Precedence};
 
@@ -33,7 +32,7 @@ impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Expr
     let ExpressionParsingInput {
       mut operands,
       mut context,
-      errors,
+      mut errors,
     } = input;
     let mut top = Frame {
       lhs:      None,
@@ -86,21 +85,59 @@ impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Expr
             };
 
             top.lhs = Some(match res.operator.unwrap().operator {
-              Operator::Operand { operands, op } => {
-                let operands = operands
-                  .into_iter()
-                  .map(|operands| {
+              Operator::Operand { operands, op } => Expression::from_options(
+                match (&op[..], &operands[..]) {
+                  ([Token::LParenthesis, Token::RParenthesis], [operands]) => {
                     let input = ExpressionParsingInput {
+                      operands: operands.clone().into_iter().buffered(),
                       context:  context.clone(),
-                      errors:   errors.clone(),
-                      operands: operands.into_iter().buffered(),
+                      errors:   vec![],
                     };
-                    Expression::parse(input).1.unwrap()
-                  })
-                  .collect_vec();
+                    let mut items = vec![];
 
-                Expression::from_options(Expression::Mixfix { op, operands }, top.lhs, res.lhs)
-              },
+                    let (mut input, item) = RecordItem::parse(input);
+                    if let Some(item) = item {
+                      items.push(item);
+
+                      while let Some(Operator::Token(Token::Comma)) = input.operands.next() {
+                        let (i, item) = RecordItem::parse(input);
+                        if let Some(item) = item {
+                          items.push(item);
+                          input = i
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+
+                    Expression::Record(items)
+                  },
+                  _ => {
+                    let operands = operands
+                      .into_iter()
+                      .map(|operands| {
+                        let input = ExpressionParsingInput {
+                          context:  context.clone(),
+                          errors:   vec![],
+                          operands: operands.into_iter().buffered(),
+                        };
+                        Expression::parse(input)
+                      })
+                      .filter_map(|(mut i, o)| match o {
+                        Some(o) => Some(o),
+                        None => {
+                          errors.append(&mut i.errors);
+                          None
+                        },
+                      })
+                      .collect_vec();
+
+                    Expression::Mixfix { op, operands }
+                  },
+                },
+                top.lhs,
+                res.lhs,
+              ),
               Operator::Token(Token::Apply) => Expression::Prefix {
                 op:    Box::new(top.lhs.unwrap()),
                 right: Box::new(res.lhs.unwrap()),
@@ -118,6 +155,78 @@ impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Expr
         lhs:      None,
         operator: Some(operator),
       };
+    }
+  }
+}
+
+
+impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for RecordItem {
+  fn parse(input: ExpressionParsingInput<T>) -> (ExpressionParsingInput<T>, Option<Self::O>) {
+    let ExpressionParsingInput {
+      mut operands,
+      context,
+      errors,
+    } = input;
+
+    if operands.peek().is_none() {
+      return (
+        ExpressionParsingInput {
+          operands,
+          context,
+          errors,
+        },
+        None,
+      );
+    }
+
+    let mut key = RecordKey::None;
+
+    if let [Some(Operator::Token(Token::Identifier(src))), Some(Operator::Token(Token::Colon))] =
+      &operands.peek_ext(2)[..]
+    {
+      key = RecordKey::Identifier(src.clone());
+      operands.next_ext(2);
+    } else if let [Some(Operator::Operand {
+      operands: _operands,
+      op,
+    }), Some(Operator::Token(Token::Colon))] = &operands.peek_ext(2)[..]
+    {
+      match (&op[..], &_operands[..]) {
+        ([Token::LBrace, Token::RBrace], [_operands]) => {
+          let mut _operands = _operands.clone().into_iter().buffered();
+          let (_, expr) = Expression::parse(ExpressionParsingInput {
+            operands: _operands,
+            context:  context.clone(),
+            errors:   vec![],
+          });
+          if let Some(expr) = expr {
+            key = RecordKey::Value(expr);
+          } else {
+            return (
+              ExpressionParsingInput {
+                operands,
+                context,
+                errors,
+              },
+              None,
+            );
+          }
+        },
+        _ => (),
+      }
+      operands.next_ext(2);
+    }
+
+    let (input, expr) = Expression::parse(ExpressionParsingInput {
+      operands,
+      context,
+      errors,
+    });
+
+    if let Some(expr) = expr {
+      (input, Some(RecordItem { key, value: expr }))
+    } else {
+      (input, None)
     }
   }
 }

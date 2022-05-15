@@ -140,6 +140,12 @@ impl Display for Token {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self {
       Token::Placeholder => write!(f, "_"),
+      Token::Char(character) => write!(f, "'{character}'"),
+      Token::String(string) => write!(f, "\"{string}\""),
+      Token::Boolean(boolean) => write!(f, "{boolean}"),
+      Token::Number(int, 0) => write!(f, "{int}"),
+      Token::Number(int, fract) => write!(f, "{int}.{fract}"),
+      Token::Identifier(id) => write!(f, "{id}"),
       token => write!(f, "{:?}", token),
     }
   }

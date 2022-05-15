@@ -8,8 +8,8 @@ use crate::{
 };
 pub use fancy_regex::Regex;
 
-// #[path = "tests/common.rs"]
-// pub mod tests;
+#[path = "tests/common.rs"]
+pub mod tests;
 
 // pub mod logger;
 // pub use logger::*;
