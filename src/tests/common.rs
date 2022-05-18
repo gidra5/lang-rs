@@ -24,7 +24,7 @@ pub fn expr(input: &str) -> Result<Expression, String> {
   match &i.errors[..] {
     [] => match o {
       Some(o) => return Ok(o),
-      None => return Err("failed to parse, with no errors".to_string()),
+      None => return Err("failed to parse, no errors".to_string()),
     },
     errors => return Err(errors.iter().map(|x| x.msg.clone()).join("\n")),
   }

@@ -16,15 +16,6 @@ pub trait LoggerTrait {
   fn error_token(&mut self, TokenizationError { msg, span }: TokenizationError) {
     Self::error(self, format!("{} at\n{}", msg, span).as_str());
   }
-
-  // fn error_parse(&mut self, (error, span): (ParsingError, Span<TokenStream>)) {
-  //   match error {
-  //     ParsingError::Generic(msg) => Self::error(self, format!("{}\n\n{}", span,
-  // msg).as_str()),     ParsingError::Aggregate(errs) => errs
-  //       .into_iter()
-  //       .for_each(|x| self.error_parse((x, span.clone()))),
-  //   }
-  // }
 }
 
 pub struct Logger {

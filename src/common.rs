@@ -17,6 +17,9 @@ pub mod tests;
 pub mod buffered_iterator;
 pub use buffered_iterator::*;
 
+pub mod group_map_iterator;
+pub use group_map_iterator::*;
+
 pub mod utils;
 use owned_chars::OwnedChars;
 pub use utils::*;
