@@ -1,4 +1,11 @@
-use crate::{ast::ParsingInput, parse_error, parseable::Parseable, token::Token};
+use crate::{
+  common::Buffered,
+  errors::ParsingError,
+  is_next,
+  parse_error,
+  parseable::ParsingContext,
+  token::Token,
+};
 
 use super::Operator;
 
@@ -18,55 +25,68 @@ macro_rules! get_number {
   };
 }
 
-impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Operator {
-  fn parse(mut input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
-    match input.tokens.peek() {
-      Some(Token::For) => Operator::parse(vec![Token::For, Token::In, Token::Colon], input),
-      Some(Token::If) => Operator::parse(vec![Token::If, Token::Colon], input),
-      Some(Token::LParenthesis) => {
-        Operator::parse(vec![Token::LParenthesis, Token::RParenthesis], input)
-      },
+/*
+
+*/
+
+#[macro_export]
+macro_rules! parse_operand {
+  ($errors: expr, $iter: expr, $ctx: expr) => {{
+    use crate::{ast::Operator, parse_error, token::Token};
+    match $iter.peek() {
+      Some(Token::For) => Operator::parse(
+        vec![Token::For, Token::In, Token::Colon],
+        $iter,
+        $errors,
+        $ctx,
+      ),
+      Some(Token::If) => Operator::parse(vec![Token::If, Token::Colon], $iter, $errors, $ctx),
+      Some(Token::LParenthesis) => Operator::parse(
+        vec![Token::LParenthesis, Token::RParenthesis],
+        $iter,
+        $errors,
+        $ctx,
+      ),
       Some(Token::RParenthesis) => {
-        input
-          .errors
-          .push(parse_error!("Unexpected closing parenthesis"));
-        return (input, None);
+        $errors.push(parse_error!("Unexpected closing parenthesis"));
+        None
       },
-      Some(Token::LBrace) => Operator::parse(vec![Token::LBrace, Token::RBrace], input),
-      Some(Token::LBracket) => Operator::parse(vec![Token::LBracket, Token::RBracket], input),
+      Some(Token::LBrace) => {
+        Operator::parse(vec![Token::LBrace, Token::RBrace], $iter, $errors, $ctx)
+      },
+      Some(Token::LBracket) => {
+        Operator::parse(vec![Token::LBracket, Token::RBracket], $iter, $errors, $ctx)
+      },
       Some(token) => {
-        input.tokens.next();
-        (input, Some(Operator::Token(token)))
+        $iter.next();
+        Some(Operator::Token(token))
       },
       None => {
-        input
-          .errors
-          .push(parse_error!("Unexpected end of expression"));
-        return (input, None);
+        $errors.push(parse_error!("Unexpected end of expression"));
+        None
       },
     }
-  }
+  }};
 }
-
 
 impl Operator {
   pub fn parse<T: Iterator<Item = Token>>(
     op: Vec<Token>,
-    mut input: ParsingInput<T>,
-  ) -> (ParsingInput<T>, Option<Operator>) {
-    if let Some(Token::NewLine) = input.tokens.peek() {
-      input.tokens.next();
+    tokens: &mut Buffered<T>,
+    errors: &mut Vec<ParsingError>,
+    context: &mut ParsingContext,
+  ) -> Option<Operator> {
+    if let Some(Token::NewLine) = tokens.peek() {
+      tokens.next();
     }
     let mut operands = vec![];
     let mut iter = op.iter();
 
     if let Some(token) = iter.next() {
-      match input.tokens.next() {
+      match tokens.next() {
         Some(ref t) if t != token => {
-          input
-            .errors
-            .push(parse_error!("Unexpected end of expression"));
-          return (input, None);
+          errors.push(parse_error!("Unexpected end of expression"));
+          return None;
         },
         _ => (),
       }
@@ -74,28 +94,24 @@ impl Operator {
 
     for token in iter {
       let mut operand = vec![];
-      while input.tokens.peek().is_some_with(|x| x != token) {
-        if let Some(Token::NewLine) = input.tokens.peek() {
-          input.tokens.next();
-        }
-        let (mut i, res) = <Operator as Parseable<_>>::parse(input);
+      while tokens.peek().is_some_with(|x| x != token) {
+        is_next!([skip] tokens, Token::NewLine);
+
+        let res = parse_operand!(errors, tokens, context);
         if let Some(t) = res {
           operand.push(t);
-          input = i;
         } else {
-          i.errors.push(parse_error!("Unexpected end of expression"));
-          return (i, None);
+          errors.push(parse_error!("Unexpected end of expression"));
+          return None;
         }
       }
-      if let None = input.tokens.next() {
-        input
-          .errors
-          .push(parse_error!("Unexpected end of expression"));
-        return (input, None);
+      if tokens.next().is_none() {
+        errors.push(parse_error!("Unexpected end of expression"));
+        return None;
       }
       operands.push(operand);
     }
 
-    (input, Some(Operator::Operand { operands, op }))
+    Some(Operator::Operand { operands, op })
   }
 }

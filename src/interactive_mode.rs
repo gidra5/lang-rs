@@ -1,11 +1,9 @@
-use std::iter::Filter;
-
 use crate::{
-  ast::{Expression, ParsingInput},
-  common::{Buf, Buffered},
-  enviroment::*,
-  parseable::{Parseable, ParseableIterator, Parsed, ParsingContext},
-  token::{Token, TokenizationInput},
+  common::{expr, group_map_iterator::GroupMapTrait, Buf},
+  enviroment::Enviroment,
+  parse_tokens,
+  parseable::ParsingContext,
+  token::Token,
 };
 use rustyline::{error::*, *};
 use rustyline_derive::*;
@@ -38,9 +36,14 @@ impl InteractiveMode {
 
   /// executes given code in interpreter
   pub fn exec(&mut self, code: String) {
-    let mut tokens: Parsed<_, Token> = TokenizationInput::new(code.chars().buffered()).parsed();
+    let mut errors = vec![];
+    let mut tokens = code
+      .chars()
+      .buffered()
+      .group_map(|iter| parse_tokens!(errors, iter))
+      .filter(|token: &Token| token.clone() != Token::Skip)
+      .buffered();
     (&mut tokens).for_each(|token| println!("{token}"));
-    let errors = tokens.source.errors;
     errors.iter().for_each(|err| println!("{err}"))
     // match Script::parse(tokens) {
     //   Ok(tree) => match tree.node.evaluate(&mut self.env) {
@@ -63,19 +66,10 @@ impl InteractiveMode {
           }
 
           self.rl.add_history_entry(line.as_str());
-          let tokens: Buffered<Filter<Parsed<_, Token>, _>> =
-            TokenizationInput::new(line.chars().buffered())
-              .parsed()
-              .filter(|token: &Token| token.clone() != Token::Skip)
-              .buffered();
-          let res = <Expression as Parseable<_>>::parse(ParsingInput {
-            tokens,
-            context: self.context.clone(),
-            errors: vec![],
-          });
+          let res = expr(&line);
           match res {
-            (_, Some(o)) => println!("res: {:?}", o),
-            (i, None) => println!("err: {:?}", i.errors),
+            Ok(o) => println!("res: {:?}", o),
+            Err(e) => println!("err: {:?}", e),
           };
         },
         Err(ReadlineError::Interrupted) => break,

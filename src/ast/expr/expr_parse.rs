@@ -1,8 +1,8 @@
 use crate::{
-  ast::{ParsingInput, RecordItem, RecordKey},
+  ast::{RecordItem, RecordKey},
   common::{buffered_iterator::Buffered, Buf},
   errors::ParsingError,
-  parseable::{Parseable, ParseableIterator, ParsingContext},
+  parseable::{Parseable, ParsingContext},
   token::Token,
 };
 use itertools::Itertools;
@@ -159,7 +159,6 @@ impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Expr
   }
 }
 
-
 impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for RecordItem {
   fn parse(input: ExpressionParsingInput<T>) -> (ExpressionParsingInput<T>, Option<Self::O>) {
     let ExpressionParsingInput {
@@ -228,32 +227,5 @@ impl<T: Iterator<Item = Operator>> Parseable<ExpressionParsingInput<T>> for Reco
     } else {
       (input, None)
     }
-  }
-}
-
-impl<T: Iterator<Item = Token>> Parseable<ParsingInput<T>> for Expression {
-  fn parse(input: ParsingInput<T>) -> (ParsingInput<T>, Option<Self::O>) {
-    let context = input.context.clone();
-    let (
-      ExpressionParsingInput {
-        operands,
-        context,
-        errors,
-      },
-      o,
-    ) = <Expression as Parseable<ExpressionParsingInput<_>>>::parse(ExpressionParsingInput {
-      operands: <ParsingInput<T> as ParseableIterator<Operator>>::parsed(input).buffered(),
-      context,
-      errors: vec![],
-    });
-
-    (
-      ParsingInput {
-        tokens: operands.iterator.source.tokens,
-        context,
-        errors,
-      },
-      o,
-    )
   }
 }

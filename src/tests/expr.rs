@@ -1,4 +1,4 @@
-use crate::{ast::expr_struct::Expression, common::tests::expr};
+use crate::{ast::expr_struct::Expression, common::expr};
 
 #[test]
 fn expr_1() {

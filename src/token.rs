@@ -1,10 +1,6 @@
 use crate::{
-  common::buffered_iterator::Buffered,
   enviroment::Enviroment,
-  errors::{ParsingError, RuntimeError},
-  is_next,
-  parse_error,
-  parseable::Parseable,
+  errors::RuntimeError,
   runtime_error,
   value::{Evaluatable, Value},
 };
@@ -15,38 +11,6 @@ use std::{
 
 // #[path = "tests/token.rs"]
 // mod tests;
-
-#[derive(Clone)]
-pub struct TokenizationInput<T>
-where
-  T: Iterator,
-  T::Item: Clone,
-{
-  pub iter:   Buffered<T>,
-  pub errors: Vec<ParsingError>,
-}
-
-impl<T> Iterator for TokenizationInput<T>
-where
-  T: Iterator,
-  T::Item: Clone,
-{
-  type Item = T::Item;
-  fn next(&mut self) -> Option<Self::Item> { self.iter.next() }
-}
-
-impl<T> TokenizationInput<T>
-where
-  T: Iterator,
-  T::Item: Clone,
-{
-  pub fn new(iter: Buffered<T>) -> Self {
-    Self {
-      iter,
-      errors: vec![],
-    }
-  }
-}
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Token {
@@ -117,7 +81,7 @@ pub enum Token {
   Inline,
   Type,
 
-  // Literals
+  // L$iterals
   Number(u64, u64),
   Boolean(bool),
   Char(char),
@@ -164,28 +128,29 @@ impl Evaluatable for Token {
   }
 }
 
-impl<T: Iterator<Item = char>> Parseable<TokenizationInput<T>> for Token {
-  fn parse(input: TokenizationInput<T>) -> (TokenizationInput<T>, Option<Self::O>) {
-    let TokenizationInput {
-      mut iter,
-      mut errors,
-    } = input;
-    use Token::*;
+#[macro_export]
+macro_rules! parse_tokens {
+  ($errors: ident, $iter: ident) => {{
+    use crate::{
+      is_next,
+      parse_error,
+      token::Token::*,
+    };
 
-    let character = iter.next();
+    let character = $iter.next();
 
     if let None = character {
-      return (TokenizationInput { iter, errors }, None);
+      return None;
     }
     let res = match character.unwrap() {
       ' ' | '\t' | '\r' => Skip,
       '\n' => {
-        while is_next!([skip] iter, (' ' | '\t' | '\r' | '\n')) {}
+        while is_next!([skip] $iter, (' ' | '\t' | '\r' | '\n')) {}
         NewLine
       },
-      '<' if is_next!([skip] iter, '=') => LessEqual,
+      '<' if is_next!([skip] $iter, '=') => LessEqual,
       '<' => LAngleBracket,
-      '>' if is_next!([skip] iter, '=') => GreaterEqual,
+      '>' if is_next!([skip] $iter, '=') => GreaterEqual,
       '>' => RAngleBracket,
       '(' => LParenthesis,
       ')' => RParenthesis,
@@ -194,7 +159,7 @@ impl<T: Iterator<Item = char>> Parseable<TokenizationInput<T>> for Token {
       '[' => LBrace,
       ']' => RBrace,
       ';' => Semicolon,
-      ':' if is_next!([skip] iter, '=') => ColonEqual,
+      ':' if is_next!([skip] $iter, '=') => ColonEqual,
       ':' => Colon,
       ',' => Comma,
       '|' => Pipe,
@@ -204,63 +169,63 @@ impl<T: Iterator<Item = char>> Parseable<TokenizationInput<T>> for Token {
       '#' => Hash,
       '$' => Dollar,
       '@' => At,
-      '+' if is_next!([skip] iter, '+') => Inc,
+      '+' if is_next!([skip] $iter, '+') => Inc,
       '+' => Add,
-      '-' if is_next!([skip] iter, '-') => Dec,
+      '-' if is_next!([skip] $iter, '-') => Dec,
       '-' => Sub,
       '*' => Mult,
-      '/' if is_next!([skip] iter, '/') => {
-        while iter.peek().is_some() && is_next!([skip not] iter, '\n') {}
+      '/' if is_next!([skip] $iter, '/') => {
+        while $iter.peek().is_some() && is_next!([skip not] $iter, '\n') {}
         Skip
       },
-      '/' if is_next!([skip] iter, '*') => {
-        while is_next!([skip not] iter[2], '*', '/') {}
+      '/' if is_next!([skip] $iter, '*') => {
+        while is_next!([skip not] $iter[2], '*', '/') {}
         Skip
       },
       '/' => Div,
       '^' => Pow,
       '%' => Mod,
-      '=' if is_next!([skip] iter, '>') => Arrow,
-      '=' if is_next!([skip] iter, '=') => EqualEqual,
+      '=' if is_next!([skip] $iter, '>') => Arrow,
+      '=' if is_next!([skip] $iter, '=') => EqualEqual,
       '=' => Equal,
       '\'' => loop {
-        if let [Some(c), Some('\'')] = iter.next_ext(2)[..] {
+        if let [Some(c), Some('\'')] = $iter.next_ext(2)[..] {
           break Char(c);
         }
-        errors.push(parse_error!("Unterminated char literal"));
-        return (TokenizationInput { iter, errors }, None);
+        $errors.push(parse_error!("Unterminated char literal"));
+        return None;
       },
       '"' => {
         let mut src = "".to_string();
-        while is_next!([not skip] iter, '"') {
-          if let Some(c) = iter.next() {
+        while is_next!([not skip] $iter, '"') {
+          if let Some(c) = $iter.next() {
             src += &c.to_string()
           } else {
-            errors.push(parse_error!("Unterminated string literal"));
-            return (TokenizationInput { iter, errors }, None);
+            $errors.push(parse_error!("Unterminated string literal"));
+            return None;
           }
         }
         String(src)
       },
-      '.' if is_next!([skip] iter[2], '.', '.') => Ellipsis,
+      '.' if is_next!([skip] $iter[2], '.', '.') => Ellipsis,
       '.' => Period,
       c if c.is_ascii_digit() => {
         let mut integral_part = c.to_string();
-        while let Some(c) = iter.peek() {
+        while let Some(c) = $iter.peek() {
           if c.is_ascii_digit() {
             integral_part += &c.to_string();
-            iter.next();
+            $iter.next();
           } else {
             break;
           }
         }
 
-        if is_next!([skip] iter, '.') {
+        if is_next!([skip] $iter, '.') {
           let mut fract_part = c.to_string();
-          while let Some(c) = iter.peek() {
+          while let Some(c) = $iter.peek() {
             if c.is_ascii_digit() {
               fract_part += &c.to_string();
-              iter.next();
+              $iter.next();
             } else {
               break;
             }
@@ -275,14 +240,14 @@ impl<T: Iterator<Item = char>> Parseable<TokenizationInput<T>> for Token {
       },
       c if c.is_ascii_alphabetic() || c == '_' => {
         let mut src = c.to_string();
-        if let Some(c) = iter.peek() {
+        if let Some(c) = $iter.peek() {
           if (c.is_ascii_alphanumeric() || c == '_') {
-            while let Some(c) = iter.peek() {
+            while let Some(c) = $iter.peek() {
               if !(c.is_ascii_alphanumeric() || c == '_') {
                 break;
               }
               src += &c.to_string();
-              iter.next();
+              $iter.next();
             }
           }
         }
@@ -318,11 +283,11 @@ impl<T: Iterator<Item = char>> Parseable<TokenizationInput<T>> for Token {
         }
       },
       _ => {
-        errors.push(parse_error!("Unrecognized input"));
-        return (TokenizationInput { iter, errors }, None);
+        $errors.push(parse_error!("Unrecognized input"));
+        return None;
       },
     };
 
-    (TokenizationInput { iter, errors }, Some(res))
-  }
+    Some(res)
+  }};
 }

@@ -1,15 +1,15 @@
 #![allow(unused)]
-use std::{mem, str::Chars};
-
-pub use crate::either::Either;
-use crate::{
-  parseable::{Parseable, ParseableIterator, ParsingContext},
+pub use crate::{
+  ast::{Expression, ExpressionParsingInput},
+  common::{buffered_iterator::Buf, group_map_iterator::GroupMapTrait, Buffered},
+  either::Either,
+  itertools::Itertools,
+  parse_operand,
+  parse_tokens,
+  parseable::{Parseable, ParsingContext},
   token::Token,
 };
 pub use fancy_regex::Regex;
-
-#[path = "tests/common.rs"]
-pub mod tests;
 
 // pub mod logger;
 // pub use logger::*;
@@ -50,4 +50,32 @@ where
   T::parse(OwnedChars::from_string(input))
     .1
     .ok_or("Failed to parse".to_string())
+}
+
+pub fn expr(input: &str) -> Result<Expression, String> {
+  let mut errors_t = vec![];
+  let mut errors = vec![];
+  let mut context = ParsingContext::new();
+
+  let operands = input
+    .chars()
+    .buffered()
+    .group_map(|iter| parse_tokens!(errors_t, iter))
+    .filter(|token| token != &Token::Skip)
+    .buffered()
+    .group_map(|iter| parse_operand!(&mut errors, iter, &mut context))
+    .buffered();
+  let (i, o) = <Expression as Parseable<_>>::parse(ExpressionParsingInput {
+    operands,
+    context: ParsingContext::new(),
+    errors: vec![],
+  });
+
+  match &i.errors[..] {
+    [] => match o {
+      Some(o) => return Ok(o),
+      None => return Err("failed to parse, no errors".to_string()),
+    },
+    errors => return Err(errors.iter().map(|x| x.msg.clone()).join("\n")),
+  }
 }
