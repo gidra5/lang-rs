@@ -1,17 +1,26 @@
 use derive_more::Display;
 
 /// matches error productions
-#[derive(Debug, Clone, Display)]
-pub struct ParsingError {
-  pub msg: String,
+#[derive(Debug, Clone, Display, PartialEq)]
+pub enum ParsingError {
+  Generic(String),
+  NoTokens,
+  NoOperands,
+  EndOfExpression,
+
+  UnexpectedParens,
+  UnexpectedBrace,
+  UnexpectedBracket,
+  MissingParens,
+  MissingBrace,
+  MissingBracket,
+  UnexpectedIndexing,
 }
 
 #[macro_export]
 macro_rules! parse_error {
   ($($rest: expr),+) => {
-    crate::errors::ParsingError {
-      msg: format!($($rest),+)
-    }
+    crate::errors::ParsingError::Generic(format!($($rest),+))
   };
 }
 

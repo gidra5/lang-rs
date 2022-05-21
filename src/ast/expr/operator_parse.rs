@@ -2,7 +2,6 @@ use crate::{
   common::Buffered,
   errors::ParsingError,
   is_next,
-  parse_error,
   parseable::ParsingContext,
   token::Token,
 };
@@ -25,47 +24,38 @@ macro_rules! get_number {
   };
 }
 
-/*
-
-*/
-
 #[macro_export]
 macro_rules! parse_operand {
   ($errors: expr, $iter: expr, $ctx: expr) => {{
-    use crate::{ast::Operator, parse_error, token::Token};
-    match $iter.peek() {
-      Some(Token::For) => Operator::parse(
-        vec![Token::For, Token::In, Token::Colon],
-        $iter,
-        $errors,
-        $ctx,
-      ),
-      Some(Token::If) => Operator::parse(vec![Token::If, Token::Colon], $iter, $errors, $ctx),
-      Some(Token::LParenthesis) => Operator::parse(
-        vec![Token::LParenthesis, Token::RParenthesis],
-        $iter,
-        $errors,
-        $ctx,
-      ),
-      Some(Token::RParenthesis) => {
-        $errors.push(parse_error!("Unexpected closing parenthesis"));
-        None
+    use crate::{ast::Operator, errors::ParsingError, token::Token};
+    Operator::parse(
+      match $iter.peek() {
+        Some(t @ Token::RParenthesis) => {
+          $errors.push(ParsingError::UnexpectedParens);
+          vec![t]
+        },
+        Some(t @ Token::RBrace) => {
+          $errors.push(ParsingError::UnexpectedBrace);
+          vec![t]
+        },
+        Some(t @ Token::RBracket) => {
+          $errors.push(ParsingError::UnexpectedBracket);
+          vec![t]
+        },
+        None => {
+          return None;
+        },
+        Some(Token::For) => vec![Token::For, Token::In, Token::Colon],
+        Some(Token::If) => vec![Token::If, Token::Colon],
+        Some(Token::LParenthesis) => vec![Token::LParenthesis, Token::RParenthesis],
+        Some(Token::LBrace) => vec![Token::LBrace, Token::RBrace],
+        Some(Token::LBracket) => vec![Token::LBracket, Token::RBracket],
+        Some(token) => vec![token],
       },
-      Some(Token::LBrace) => {
-        Operator::parse(vec![Token::LBrace, Token::RBrace], $iter, $errors, $ctx)
-      },
-      Some(Token::LBracket) => {
-        Operator::parse(vec![Token::LBracket, Token::RBracket], $iter, $errors, $ctx)
-      },
-      Some(token) => {
-        $iter.next();
-        Some(Operator::Token(token))
-      },
-      None => {
-        $errors.push(parse_error!("Unexpected end of expression"));
-        None
-      },
-    }
+      $iter,
+      $errors,
+      $ctx,
+    )
   }};
 }
 
@@ -76,17 +66,18 @@ impl Operator {
     errors: &mut Vec<ParsingError>,
     context: &mut ParsingContext,
   ) -> Option<Operator> {
-    if let Some(Token::NewLine) = tokens.peek() {
-      tokens.next();
-    }
+    is_next!([skip] tokens, Token::NewLine);
     let mut operands = vec![];
-    let mut iter = op.iter();
+    let mut iter = op.iter().peekable();
 
     if let Some(token) = iter.next() {
       match tokens.next() {
         Some(ref t) if t != token => {
-          errors.push(parse_error!("Unexpected end of expression"));
+          errors.push(ParsingError::EndOfExpression);
           return None;
+        },
+        Some(_) if iter.peek().is_none() => {
+          return Some(Operator::Token(token.clone()));
         },
         _ => (),
       }
@@ -101,12 +92,13 @@ impl Operator {
         if let Some(t) = res {
           operand.push(t);
         } else {
-          errors.push(parse_error!("Unexpected end of expression"));
+          errors.push(ParsingError::EndOfExpression);
           return None;
         }
+        is_next!([skip] tokens, Token::NewLine);
       }
       if tokens.next().is_none() {
-        errors.push(parse_error!("Unexpected end of expression"));
+        errors.push(ParsingError::EndOfExpression);
         return None;
       }
       operands.push(operand);

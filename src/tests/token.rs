@@ -1,132 +1,136 @@
-use crate::common::Logger;
+use super::{Token, Token::*};
+use crate::{
+  common::{group_map_iterator::GroupMapTrait, Buf},
+  parse_tokens,
+};
 
-use super::Token;
-
-fn tokens(input: &str) -> Result<Vec<(Token, String)>, String> {
-  let mut stream = CharStream::from_str(input);
-  let mut logger = Logger { logs: vec![] };
-
+fn tokens(input: &str) -> Result<Vec<Token>, std::string::String> {
+  let mut errors_t = vec![];
   Ok(
-    TokenStream::new(CharStream::from_str(input), &mut logger)
-      .ok_or("Failed to create TokenStream")?
-      .stream
-      .data()
-      .iter()
-      .cloned()
-      .map(|TokenExt { token, src, .. }| (token, src))
+    input
+      .chars()
+      .buffered()
+      .group_map(|iter| parse_tokens!(errors_t, iter))
+      .filter(|token| token != &Token::Skip)
       .collect(),
   )
 }
 
 macro_rules! check {
-  ($s:ident, [$(($token:ident, $str:literal)),*]) => {
-    assert!($s.iter().eq(vec![$((Token::$token,
-$str.to_string())),*].iter()))   };
+  ($s:ident, [$($token:expr),*]) => {
+    assert!($s.iter().eq(vec![$($token),*].iter()))   };
 }
 
 #[test]
 fn token_ident_1() {
   let s = tokens("a").unwrap();
-  check!(s, [(Identifier, "a")])
+  check!(s, [Identifier("a".to_string())])
 }
 
 #[test]
 fn token_ident_2() {
   let s = tokens("abd").unwrap();
-  check!(s, [(Identifier, "abd")])
+  check!(s, [Identifier("abd".to_string())])
 }
 
 #[test]
 fn token_ident_3() {
   let s = tokens("abd123").unwrap();
-  check!(s, [(Identifier, "abd123")])
+  check!(s, [Identifier("abd123".to_string())])
 }
 
 #[test]
 fn token_integer() {
   let s = tokens("123").unwrap();
-  check!(s, [(Number, "123")])
+  check!(s, [Number(123, 0)])
 }
 
 #[test]
 fn token_float() {
   let s = tokens("123.").unwrap();
-  check!(s, [(Number, "123.")])
+  check!(s, [Number(123, 0)])
 }
 
 #[test]
 fn token_float_2() {
   let s = tokens("123.123").unwrap();
-  check!(s, [(Number, "123.123")])
+  check!(s, [Number(123, 123)])
 }
 
 #[test]
 fn token_float_3() {
   let s = tokens("123.0").unwrap();
-  check!(s, [(Number, "123.0")])
+  check!(s, [Number(123, 0)])
 }
 
 #[test]
 fn token_float_6() {
   let s = tokens("123..").unwrap();
-  check!(s, [(Number, "123."), (Period, ".")])
+  check!(s, [Number(123, 0), Period])
 }
 
 #[test]
 fn token_period_number_period() {
   let s = tokens(".123.456.").unwrap();
-  check!(s, [(Period, "."), (Number, "123.456"), (Period, ".")])
+  check!(s, [Period, Number(123, 456), Period])
 }
 
 #[test]
 fn token_float_5() {
   let s = tokens("0.123").unwrap();
-  check!(s, [(Number, "0.123")])
+  check!(s, [Number(0, 123)])
 }
 
 #[test]
 fn token_boolean_true() {
   let s = tokens("true").unwrap();
-  check!(s, [(Boolean, "true")])
+  check!(s, [Boolean(true)])
 }
 
 #[test]
 fn token_boolean_false() {
   let s = tokens("false").unwrap();
-  check!(s, [(Boolean, "false")])
+  check!(s, [Boolean(false)])
 }
 
 #[test]
 fn token_string() {
   let s = tokens("\"true\"").unwrap();
-  check!(s, [(String, "\"true\"")])
+  check!(s, [String("true".to_string())])
 }
 
 #[test]
 fn token_char() {
   let s = tokens("'t'").unwrap();
-  check!(s, [(Char, "'t'")])
+  check!(s, [Char('t')])
 }
 
 #[test]
 fn token_skip_spaces() {
   let s = tokens("x   y").unwrap();
-  check!(s, [(Identifier, "x"), (Identifier, "y")])
+  check!(s, [
+    Identifier("x".to_string()),
+    Identifier("y".to_string())
+  ])
 }
 
 #[test]
 fn token_new_line() {
   let s = tokens("x \n y").unwrap();
-  check!(s, [(Identifier, "x"), (NewLine, "\n "), (Identifier, "y")])
+  check!(s, [
+    Identifier("x".to_string()),
+    NewLine,
+    Identifier("y".to_string())
+  ])
 }
 
 #[test]
 fn token_multiple_newline_counts_as_one() {
   let s = tokens("x\n\n\ny").unwrap();
   check!(s, [
-    (Identifier, "x"),
-    (NewLine, "\n\n\n"),
-    (Identifier, "y")
+    Identifier("x".to_string()),
+    NewLine,
+    Identifier("y".to_string())
   ])
 }
 
@@ -134,9 +138,9 @@ fn token_multiple_newline_counts_as_one() {
 fn token_whitespace_chars_after_new_line() {
   let s = tokens("x\n \n \ny").unwrap();
   check!(s, [
-    (Identifier, "x"),
-    (NewLine, "\n \n \n"),
-    (Identifier, "y")
+    Identifier("x".to_string()),
+    NewLine,
+    Identifier("y".to_string())
   ])
 }
 
@@ -144,8 +148,8 @@ fn token_whitespace_chars_after_new_line() {
 fn token_whitespace_chars_after_new_line_2() {
   let s = tokens("x\n\t\n \ny").unwrap();
   check!(s, [
-    (Identifier, "x"),
-    (NewLine, "\n\t\n \n"),
-    (Identifier, "y")
+    Identifier("x".to_string()),
+    NewLine,
+    Identifier("y".to_string())
   ])
 }

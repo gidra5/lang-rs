@@ -1,4 +1,4 @@
-use crate::{ast::expr_struct::Expression, common::expr};
+use crate::{ast::expr_struct::Expression, common::expr, errors::ParsingError};
 
 #[test]
 fn expr_1() {
@@ -66,25 +66,25 @@ fn expr_10() {
 #[test]
 fn expr_11() {
   let s = expr("1 + (2 * 3").unwrap_err();
-  assert_eq!(s, "Unexpected end of input");
+  assert_eq!(s, vec![ParsingError::EndOfExpression]);
 }
 
 #[test]
 fn expr_12() {
   let s = expr("1 + 2 * 3)").unwrap_err();
-  assert_eq!(s, "Unexpected closing parenthesis");
+  assert_eq!(s, vec![ParsingError::UnexpectedParens]);
 }
 
 #[test]
 fn expr_13() {
   let s = expr("1 + (2 * 3))").unwrap_err();
-  assert_eq!(s, "Unexpected closing parenthesis");
+  assert_eq!(s, vec![ParsingError::UnexpectedParens]);
 }
 
 #[test]
 fn expr_14() {
   let s = expr("(1 + (2 * 3)").unwrap_err();
-  assert_eq!(s, "Unexpected end of input");
+  assert_eq!(s, vec![ParsingError::EndOfExpression]);
 }
 
 #[test]
@@ -102,13 +102,13 @@ fn expr_16() {
 #[test]
 fn expr_17() {
   let s = expr("").unwrap_err();
-  assert_eq!(s, "Unexpected end of input");
+  assert_eq!(s, vec![ParsingError::NoTokens]);
 }
 
 #[test]
 fn expr_18() {
   let s = expr("1 + 2) * 3").unwrap_err();
-  assert_eq!(s.to_string(), "Unexpected closing parenthesis");
+  assert_eq!(s, vec![ParsingError::UnexpectedParens]);
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn expr_33() {
 #[test]
 fn expr_34() {
   let s = expr("[1+1] + 1").unwrap_err();
-  assert_eq!(s.to_string(), "Unexpected indexing position");
+  assert_eq!(s, vec![ParsingError::UnexpectedIndexing]);
 }
 
 #[test]
@@ -321,119 +321,29 @@ fn expr_49() {
   assert_eq!(s.to_string(), format!("(x 1)"));
 }
 
-// #[test]
-// fn expr_consumes_just_enough() -> Result<(), String> {
-//   let mut logger = Logger { logs: vec![] };
-//   let input = "2;";
-//   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
-//     .ok_or("Failed to create TokenStream".to_string())?;
+#[test]
+fn expr_async() {
+  let s = expr("async x").unwrap();
+  assert_eq!(s.to_string(), format!("(Async x)"));
+}
 
-//   let ASTNodeExt {
-//     node: expr_res,
-//     span,
-//   } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
-//     .map_err(|err| format!("{}", err.0))?;
+#[test]
+fn expr_await() {
+  let s = expr("await x").unwrap();
+  assert_eq!(s.to_string(), format!("(Await x)"));
+}
 
-//   assert_eq!(span.length, 1);
+#[test]
+fn expr_await_async() {
+  let s = expr("await async x").unwrap();
+  assert_eq!(s.to_string(), format!("(Await (Async x))"));
+}
 
-//   Ok(())
-// }
-
-// #[test]
-// fn expr_consumes_just_enough_2() -> Result<(), String> {
-//   let mut logger = Logger { logs: vec![] };
-//   let input = "(2);";
-//   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
-//     .ok_or("Failed to create TokenStream".to_string())?;
-
-//   let ASTNodeExt {
-//     node: expr_res,
-//     span,
-//   } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
-//     .map_err(|err| format!("{}", err.0))?;
-
-//   assert_eq!(span.length, 3);
-
-//   Ok(())
-// }
-
-// #[test]
-// fn expr_consumes_just_enough_3() -> Result<(), String> {
-//   let mut logger = Logger { logs: vec![] };
-//   let input = "();";
-//   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
-//     .ok_or("Failed to create TokenStream".to_string())?;
-
-//   let ASTNodeExt {
-//     node: expr_res,
-//     span,
-//   } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
-//     .map_err(|err| format!("{}", err.0))?;
-
-//   assert_eq!(span.length, 2);
-
-//   Ok(())
-// }
-
-// #[test]
-// fn expr_consumes_just_enough_4() -> Result<(), String> {
-//   let mut logger = Logger { logs: vec![] };
-//   let input = "{};";
-//   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
-//     .ok_or("Failed to create TokenStream".to_string())?;
-
-//   let ASTNodeExt {
-//     node: expr_res,
-//     span,
-//   } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
-//     .map_err(|err| format!("{}", err.0))?;
-
-//   assert_eq!(span.length, 2);
-
-//   Ok(())
-// }
-
-// #[test]
-// fn expr_consumes_just_enough_5() -> Result<(), String> {
-//   let mut logger = Logger { logs: vec![] };
-//   let input = "{ 5; };";
-//   let mut stream = TokenStream::new(CharStream::from_str(input), &mut logger)
-//     .ok_or("Failed to create TokenStream".to_string())?;
-
-//   let ASTNodeExt {
-//     node: expr_res,
-//     span,
-//   } = Expression::parse_ext(&mut stream, &mut ParsingContext::new())
-//     .map_err(|err| format!("{}", err.0))?;
-
-//   assert_eq!(span.length, 4);
-
-//   Ok(())
-// }
-
-// #[test]
-// fn expr_async() {
-//   let s = expr("async x").unwrap();
-//   assert_eq!(s.to_string(), format!("(Async x)"));
-// }
-
-// #[test]
-// fn expr_await() {
-//   let s = expr("await x").unwrap();
-//   assert_eq!(s.to_string(), format!("(Await x)"));
-// }
-
-// #[test]
-// fn expr_await_async() {
-//   let s = expr("await async x").unwrap();
-//   assert_eq!(s.to_string(), format!("(Await (Async x))"));
-// }
-
-// #[test]
-// fn expr_await_async_fn() {
-//   let s = expr("await async _ => 1").unwrap();
-//   assert_eq!(s.to_string(), format!("(Await (Async (Arrow _ 1)))"));
-// }
+#[test]
+fn expr_await_async_fn() {
+  let s = expr("await async _ => 1").unwrap();
+  assert_eq!(s.to_string(), format!("(Await (Async (Arrow _ 1)))"));
+}
 
 // #[test]
 // fn expr_await_apply_async_fn() {

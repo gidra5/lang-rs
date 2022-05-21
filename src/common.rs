@@ -1,18 +1,17 @@
 #![allow(unused)]
+use crate::errors::ParsingError;
 pub use crate::{
   ast::{Expression, ExpressionParsingInput},
   common::{buffered_iterator::Buf, group_map_iterator::GroupMapTrait, Buffered},
   either::Either,
   itertools::Itertools,
+  parse_error,
   parse_operand,
   parse_tokens,
   parseable::{Parseable, ParsingContext},
   token::Token,
 };
 pub use fancy_regex::Regex;
-
-// pub mod logger;
-// pub use logger::*;
 
 pub mod buffered_iterator;
 pub use buffered_iterator::*;
@@ -52,7 +51,7 @@ where
     .ok_or("Failed to parse".to_string())
 }
 
-pub fn expr(input: &str) -> Result<Expression, String> {
+pub fn expr(input: &str) -> Result<Expression, std::vec::Vec<ParsingError>> {
   let mut errors_t = vec![];
   let mut errors = vec![];
   let mut context = ParsingContext::new();
@@ -71,11 +70,20 @@ pub fn expr(input: &str) -> Result<Expression, String> {
     errors: vec![],
   });
 
-  match &i.errors[..] {
-    [] => match o {
+  match (&i.errors[..], &errors_t[..], &errors[..]) {
+    ([], [], []) => match o {
       Some(o) => return Ok(o),
-      None => return Err("failed to parse, no errors".to_string()),
+      None => return Err(vec![parse_error!("failed to parse, no errors")]),
     },
-    errors => return Err(errors.iter().map(|x| x.msg.clone()).join("\n")),
+    (errors_1, errors_2, errors_3) => {
+      return Err(
+        errors_1
+          .iter()
+          .chain(errors_2.iter())
+          .chain(errors_3.iter())
+          .cloned()
+          .collect_vec(),
+      )
+    },
   }
 }

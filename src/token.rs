@@ -9,8 +9,8 @@ use std::{
   hash::Hash,
 };
 
-// #[path = "tests/token.rs"]
-// mod tests;
+#[path = "tests/token.rs"]
+mod tests;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum Token {
@@ -32,6 +32,7 @@ pub enum Token {
   If,
   Else,
   Match,
+  Fn,
 
   // Punct
   LAngleBracket,
@@ -275,6 +276,7 @@ macro_rules! parse_tokens {
           "_" => Placeholder,
           "for" => For,
           "if" => If,
+          "fn" => Fn,
           "else" => Else,
           "async" => Async,
           "await" => Await,
